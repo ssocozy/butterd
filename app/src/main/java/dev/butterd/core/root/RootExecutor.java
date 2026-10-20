@@ -28,7 +28,7 @@ public final class RootExecutor {
         });
         Thread reader = new Thread(capture, "butterd-root-output"); reader.setDaemon(true); reader.start();
         try {
-            if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) throw new IllegalStateException("Root operation timed out");
+            if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) throw new java.util.concurrent.TimeoutException("Root operation timed out");
             String output = capture.get(1, TimeUnit.SECONDS);
             if (process.exitValue() != 0) throw new IllegalStateException("Root operation failed (" + process.exitValue() + ")");
             return output;

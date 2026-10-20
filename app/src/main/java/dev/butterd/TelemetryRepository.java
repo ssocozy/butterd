@@ -127,14 +127,38 @@ final class TelemetryRepository {
         if (rootBusy) return;
         rootBusy = true;
         worker.post(() -> {
-            try { rootData = RootInventory.read(); rootEnabled = true; rootError = ""; lastRootRead = SystemClock.elapsedRealtime(); }
-            catch (Exception failure) { rootEnabled = false; rootData = ""; rootError = context.getString(R.string.root_denied); }
+            try {
+                RootInventory.verifyAccess(); rootEnabled = true;
+                refreshRoot(SystemClock.elapsedRealtime());
+            } catch (Exception failure) {
+                rootEnabled = false; rootData = "";
+                rootError = failure instanceof java.util.concurrent.TimeoutException
+                        ? "Root request timed out. Open your root manager, check Butterd and retry."
+                        : failure instanceof java.io.IOException
+                        ? "A root shell could not be opened. Check your root installation and retry."
+                        : "Root could not be verified. Check Butterd in your root manager and try again.";
+            }
             finally { rootBusy = false; sample(); }
         });
     }
     void disableRoot() {
         rootEnabled = false;
         worker.post(() -> { rootData = ""; rootError = ""; lastRootRead = 0; sample(); });
+    }
+    private void refreshRoot(long elapsed) {
+        lastRootRead = elapsed;
+        try { rootData = RootInventory.read(); rootError = ""; }
+        catch (Exception failure) {
+            rootData = "";
+            try {
+                RootInventory.verifyAccess();
+                rootError = "Root connected; extra sensor readings could not be refreshed. Disconnect and reconnect to retry.";
+            } catch (Exception accessFailure) {
+                rootEnabled = false;
+                rootError = "Root access could not be reverified. Check your root manager and reconnect.";
+            }
+            // Verify permission separately: missing sensors do not establish revocation.
+        }
     }
     private void sample() {
         Snapshot s = new Snapshot();
@@ -182,8 +206,7 @@ final class TelemetryRepository {
             readStandard(s);
             if (rootEnabled) {
                 if (s.elapsed - lastRootRead >= (recorder.active() ? 3000 : 15000)) {
-                    try { rootData = RootInventory.read(); lastRootRead = s.elapsed; }
-                    catch (Exception failure) { rootEnabled = false; rootData = ""; rootError = context.getString(R.string.root_lost); }
+                    refreshRoot(s.elapsed);
                 }
                 if (rootEnabled) {
                     parseRoot(s, rootData);

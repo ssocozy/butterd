@@ -1,25 +1,29 @@
 <?xml version='1.0' encoding='utf-8'?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/page_gpu" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:scrollbars="none">
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="24dp" android:paddingEnd="24dp" android:paddingTop="24dp" android:paddingBottom="120dp">
-        <TextView android:id="@+id/page_gpu_title" style="@style/Title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/gpu_screen" />
-        <TextView android:id="@+id/page_gpu_intro" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/gpu_intro" android:layout_marginTop="8dp" />
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:padding="20dp" android:background="@drawable/card" android:orientation="vertical">
-            <TextView android:id="@+id/gpu_access_title" style="@style/RowValue" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/extra_readings_title" />
-            <TextView android:id="@+id/gpu_access_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" />
-            <TextView android:id="@+id/detail_gpu_freq_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/gpu_freq" android:layout_marginTop="12dp" />
-            <TextView android:id="@+id/detail_gpu_freq" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" android:textSize="22sp" android:layout_marginTop="4dp" />
-            <TextView android:id="@+id/gpu_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/gpu_note" android:layout_marginTop="16dp" />
-            <com.google.android.material.button.MaterialButton style="@style/SecondaryButton" android:id="@+id/gpu_access" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/access_options" />
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:id="@+id/page_gpu" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:scrollbars="none">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="24dp" android:paddingEnd="24dp" android:paddingTop="20dp" android:paddingBottom="144dp">
+        <com.google.android.material.button.MaterialButton android:id="@+id/feature_back" android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/TextButton" android:text="@string/ui_back_4" android:layout_marginBottom="12dp" app:icon="@drawable/ic_back" app:iconGravity="start" app:iconSize="20dp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Title" android:text="@string/ui_gpu" android:accessibilityHeading="true" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Body" android:text="@string/ui_live_clocks_and_driver_information" android:layout_marginTop="12dp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Section" android:text="@string/ui_mali_graphics" android:layout_marginTop="32dp" android:layout_marginBottom="12dp" android:accessibilityHeading="true" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Body" android:text="@string/gpu_freq" android:id="@+id/detail_gpu_freq_label" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Metric" android:text="@string/ui_pending_reading_35" android:layout_marginTop="8dp" android:id="@+id/detail_gpu_freq" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/RowValue" android:text="@string/extra_readings_title" android:layout_marginTop="16dp" android:id="@+id/gpu_access_title" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Body" android:text="@string/source_note" android:layout_marginTop="12dp" android:id="@+id/gpu_access_note" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/gpu_access" android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/SecondaryButton" android:text="@string/access_options" android:layout_marginTop="16dp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Body" android:text="@string/gpu_note" android:layout_marginTop="12dp" android:id="@+id/gpu_note" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/gpu_details_toggle" android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/TextButton" android:text="@string/ui_driver_details" android:layout_marginTop="20dp" app:icon="@drawable/ic_chevron" app:iconGravity="end" app:iconSize="20dp" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:id="@+id/gpu_details_body" android:visibility="gone">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Body" android:text="@string/ui_dvfs_timer_margin_raw" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/RowValue" android:text="@string/ui_pending_reading_36" android:layout_marginTop="6dp" android:id="@+id/gpu_margin" />
+            </LinearLayout>
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" android:importantForAccessibility="no" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Body" android:text="@string/ui_dvfs_loading_step_raw" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/RowValue" android:text="@string/ui_pending_reading_37" android:layout_marginTop="6dp" android:id="@+id/gpu_step" />
+            </LinearLayout>
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" android:importantForAccessibility="no" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Body" android:text="@string/ui_these_values_are_managed_by_the_power_hal_frequency_controls_and_" android:layout_marginTop="12dp" />
         </LinearLayout>
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="ROM GPU POLICY" style="@style/Section" android:layout_marginTop="32dp" android:layout_marginBottom="12dp" />
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="14dp" android:paddingBottom="14dp">
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="DVFS timer margin (raw)" style="@style/Body" />
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" style="@style/RowValue" android:id="@+id/gpu_margin" android:layout_marginTop="6dp" />
-        </LinearLayout>
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="14dp" android:paddingBottom="14dp">
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="DVFS loading step (raw)" style="@style/Body" />
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" style="@style/RowValue" android:id="@+id/gpu_step" android:layout_marginTop="6dp" />
-        </LinearLayout>
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="The Power HAL changes these values for system workloads. A larger value is not a proven performance or efficiency improvement." style="@style/Body" />
     </LinearLayout>
 </ScrollView>

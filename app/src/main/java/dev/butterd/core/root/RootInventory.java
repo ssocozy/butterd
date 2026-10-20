@@ -31,10 +31,16 @@ public final class RootInventory {
             script.append("; printf 'D|").append(sensor.getKey()).append("|%s\\n' \"$(head -c 160 ")
                     .append(sensor.getValue()).append(" 2>/dev/null)\"");
         script.append("; n=0; for p in /sys/devices/system/cpu/cpufreq/policy*; do printf 'A|%s|%s\\n' \"${p##*/}\" \"$(head -c 512 \"$p/scaling_available_frequencies\" 2>/dev/null)\"; n=$((n+1)); [ \"$n\" -ge 16 ] && break; done");
-        return script.toString();
+        return script.append("; exit 0").toString();
     }
+    public static void verifyAccess() throws Exception {
+        String result = RootExecutor.run("printf 'BUTTERD_UID|%s\\n' \"$(id -u)\"", 25, 2048);
+        if (!java.util.Arrays.asList(result.split("\\n")).contains("BUTTERD_UID|0"))
+            throw new SecurityException("The root shell did not verify UID 0");
+    }
+    static String command() { return SCRIPT + extras(); }
     public static String read() throws Exception {
-        String inventory = RootExecutor.run(SCRIPT + extras(), 20, 32768);
+        String inventory = RootExecutor.run(command(), 20, 32768);
         if (!inventory.startsWith("ROOT|0\n")) throw new SecurityException("Root not verified");
         return inventory;
     }

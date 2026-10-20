@@ -3,7 +3,7 @@ package dev.butterd.feature.display;
 import android.view.View;
 import android.widget.TextView;
 import com.google.android.material.button.MaterialButton;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import dev.butterd.core.ui.ChoiceDialog;
 import dev.butterd.R;
 import java.util.Locale;
 
@@ -20,6 +20,7 @@ public final class DisplayPanel {
     private final MaterialButton choose, restore;
     private float[] rates = new float[0];
     private boolean busy, rootGranted, saved;
+    private String currentMinimum, currentPeak;
     public DisplayPanel(View root, Host host) {
         this.root = root; this.host = host;
         choose = root.findViewById(R.id.display_choose); restore = root.findViewById(R.id.display_restore);
@@ -29,6 +30,7 @@ public final class DisplayPanel {
     }
     public void render(float reported, float[] supported, String minimum, String peak, boolean granted, boolean hasOriginal) {
         rates = supported.clone(); rootGranted = granted; saved = hasOriginal;
+        currentMinimum = minimum; currentPeak = peak;
         set(R.id.display_rate, Float.isFinite(reported) ? String.format(Locale.getDefault(), "%.0f Hz", reported) : "—");
         set(R.id.display_request, "Minimum " + label(minimum) + "  /  Peak " + label(peak));
         set(R.id.display_control_note, granted ? "Choose a supported rate here. Android may lower the reported rate for power, thermal or app constraints." : "Monitoring works without root. Grant root inside Butterd to change refresh preferences.");
@@ -46,13 +48,21 @@ public final class DisplayPanel {
         String[] choices = new String[offered.length + 1];
         choices[0] = String.format(Locale.getDefault(), "Adaptive up to %.0f Hz", offered[offered.length - 1]);
         for (int i = 0; i < offered.length; i++) choices[i + 1] = String.format(Locale.getDefault(), "%.0f Hz preference", offered[i]);
-        new MaterialAlertDialogBuilder(root.getContext()).setTitle("Refresh preference").setItems(choices, (dialog, item) -> {
-            float rate = item == 0 ? offered[offered.length - 1] : offered[item - 1];
-            new MaterialAlertDialogBuilder(root.getContext()).setTitle(choices[item])
-                    .setMessage("Apply this global display preference? It can remain after closing Butterd or rebooting. Restore returns the saved original values. This does not bypass display or thermal safeguards.")
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .setPositiveButton("Apply", (confirmation, which) -> change(rate, item == 0, false)).show();
-        }).show();
+        String[] previews = new String[choices.length];
+        int selected = -1;
+        for (int i = 0; i < choices.length; i++) {
+            float rate = i == 0 ? offered[offered.length - 1] : offered[i - 1];
+            previews[i] = String.format(Locale.getDefault(), i == 0
+                    ? "Allow Android to vary refresh rate up to %.0f Hz."
+                    : "Request a fixed %.0f Hz refresh rate.", rate)
+                    + " This global preference can remain after closing Butterd or rebooting. Restore returns the saved originals. Android power and thermal constraints still apply.";
+            try {
+                float min = Float.parseFloat(currentMinimum), peak = Float.parseFloat(currentPeak);
+                if (Math.abs(peak - rate) < 0.1f && (i == 0 ? min == 0 : Math.abs(min - rate) < 0.1f)) selected = i;
+            } catch (RuntimeException ignored) { }
+        }
+        ChoiceDialog.show(root.getContext(), "Refresh preference", choices, previews, selected, item ->
+                change(item == 0 ? offered[offered.length - 1] : offered[item - 1], item == 0, false));
     }
     private void change(float rate, boolean adaptive, boolean restoring) {
         busy = true; updateButtons();

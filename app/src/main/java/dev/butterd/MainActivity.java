@@ -1,6 +1,7 @@
 package dev.butterd;
 
 import dev.butterd.feature.cpu.CpuPanel;
+import dev.butterd.core.ui.Disclosure;
 import dev.butterd.feature.kernel.KernelSensors;
 
 import dev.butterd.feature.display.DisplayPanel;
@@ -71,12 +72,23 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
             View bar = findViewById(R.id.bottom_bar);
             ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) bar.getLayoutParams();
             params.bottomMargin = bars.bottom + dp(12); bar.setLayoutParams(params);
-            for (int id : pages) findViewById(id).setPadding(0, 0, 0, bars.bottom);
+            for (int id : pages) {
+                View pane = findViewById(id);
+                if (pane instanceof android.widget.ScrollView) {
+                    View inner = ((android.widget.ScrollView) pane).getChildAt(0);
+                    inner.setPadding(inner.getPaddingLeft(), inner.getPaddingTop(), inner.getPaddingRight(),
+                            bars.bottom + Math.max(bar.getHeight(), dp(72)) + dp(36));
+                }
+            }
             return insets;
         });
         for (int i = 0; i < navigation.length; i++) {
             final int tab = i; findViewById(navigation[i]).setOnClickListener(view -> selectPage(tab));
         }
+        findViewById(R.id.bottom_bar).addOnLayoutChangeListener((view, l, t, r, b, ol, ot, or, ob) -> {
+            if (b - t != ob - ot) ViewCompat.requestApplyInsets(findViewById(R.id.root));
+        });
+        Disclosure.bind(findViewById(R.id.page_overview), R.id.home_details_toggle, R.id.home_details_body);
         pendingRecording = state != null && state.getBoolean("pending_recording", false);
         findViewById(R.id.home_cpu).setOnClickListener(view -> selectPage(3));
         findViewById(R.id.home_battery).setOnClickListener(view -> selectPage(4));
@@ -150,7 +162,7 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         ViewCompat.requestApplyInsets(findViewById(R.id.root));
         if (currentSnapshot != null) renderContext(currentSnapshot);
         if (previous != page && android.animation.ValueAnimator.areAnimatorsEnabled()) {
-            View pane = findViewById(pages[page]); pane.setAlpha(0f); pane.setTranslationY(dp(8));
+            View pane = findViewById(pages[page]); pane.setAlpha(0.65f); pane.setTranslationY(dp(6));
             pane.animate().alpha(1f).translationY(0f).setDuration(180)
                     .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
         }
@@ -218,11 +230,12 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         visible(R.id.device_sensors_heading, sensorCount > 0);
         visible(R.id.source_note, sensorCount < 6);
         text(R.id.source_note, accessMessage(s));
-        text(R.id.root_state, getString(s.root ? R.string.root_active : R.string.root_standard));
+        text(R.id.root_state, s.rootBusy ? getString(R.string.root_checking) : getString(s.root ? R.string.root_active : R.string.root_standard));
+        text(R.id.root_note, !s.error.isEmpty() ? s.error : getString(R.string.root_note));
         rootButton.setEnabled(!s.rootBusy);
         rootButton.setText(s.rootBusy ? R.string.root_checking : s.root ? R.string.disconnect_root : R.string.request_root);
         if (rootRequested && !s.rootBusy) {
-            rootRequested = false; message(getString(s.root ? R.string.root_granted : R.string.root_denied));
+            rootRequested = false; message(s.error.isEmpty() ? getString(s.root ? R.string.root_granted : R.string.root_denied) : s.error);
         } else if (!s.error.isEmpty() && !s.error.equals(lastError)) message(s.error);
         lastError = s.error;
         if (s.elapsed != lastGraphTime) { ((PowerGraph) findViewById(R.id.graph)).add(s.watts); lastGraphTime = s.elapsed; }
@@ -232,6 +245,16 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         syncNotification();
     }
     private void setupContextPage(int selected) {
+        View pane = findViewById(pages[selected]);
+        pane.findViewById(R.id.feature_back).setOnClickListener(view -> selectPage(0));
+        if (selected == 3) Disclosure.bind(pane, R.id.cpu_details_toggle, R.id.cpu_details_body);
+        if (selected == 4) {
+            Disclosure.bind(pane, R.id.battery_capacity_details_toggle, R.id.battery_capacity_details_body);
+            Disclosure.bind(pane, R.id.charging_details_toggle, R.id.charging_details_body);
+        }
+        if (selected == 5) Disclosure.bind(pane, R.id.gpu_details_toggle, R.id.gpu_details_body);
+        if (selected == 6) Disclosure.bind(pane, R.id.display_details_toggle, R.id.display_details_body);
+        if (selected == 7) Disclosure.bind(pane, R.id.kernel_details_toggle, R.id.kernel_details_body);
         if (selected == 7) findViewById(R.id.kernel_access).setOnClickListener(view -> selectPage(1));
         if (selected == 6) displayPanel = new DisplayPanel(findViewById(R.id.page_display), new DisplayPanel.Host() {
             @Override public void change(float hz, boolean adaptive, boolean restore, DisplayPanel.Result callback) {

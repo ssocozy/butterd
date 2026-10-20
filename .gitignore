@@ -10,3 +10,6 @@ local.properties
 # Keep research and agent instructions local; publish the project README.
 *.[mM][dD]
 !/README.md
+
+# Local design workflow context.
+.impeccable/

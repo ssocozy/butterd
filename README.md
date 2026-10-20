@@ -106,3 +106,5 @@ transition. This reduces conflicts; it is not a lock shared with ROM services.
 Readback confirms preference storage, not that Android must display the selected
 rate. No preferences are reasserted on a timer or at boot. Restore before clearing
 app data or uninstalling if you want to retain the original values.
+
+The interface uses open reading sections, expandable technical details and explicit preview-and-apply dialogs for supported CPU governors and display preferences. Root permission is checked independently from optional sensor reads.
