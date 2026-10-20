@@ -7,5 +7,6 @@ local.properties
 *.keystore
 
 
-# Keep documentation, research and agent instructions on this machine.
+# Keep research and agent instructions local; publish the project README.
 *.[mM][dD]
+!/README.md
