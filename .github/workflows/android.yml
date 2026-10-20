@@ -94,10 +94,10 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            ./gradlew --no-daemon :app:connectedDebugAndroidTest
-      - name: Collect screenshots
-        if: always()
-        run: adb pull /sdcard/Android/data/dev.butterd/files/screenshots screenshots || true
+            status=0
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest || status=$?
+            adb pull /sdcard/Android/data/dev.butterd/files/screenshots screenshots || true
+            exit "$status"
       - name: Upload device reports
         if: always()
         uses: actions/upload-artifact@v4
