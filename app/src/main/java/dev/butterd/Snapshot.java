@@ -7,7 +7,8 @@ final class Snapshot {
     java.util.List<CpuPolicy> policies = new java.util.ArrayList<>();
     String onlineCores = "Unavailable", bypassCommand = "Unavailable", logStatus = "", recordingError = "";
     String chargingSource = "Unavailable";
-    double chargeLimitAmps = Double.NaN, currentAmps = Double.NaN;
+    double chargeLimitAmps = Double.NaN, currentAmps = Double.NaN, rawCurrentAmps = Double.NaN;
+    boolean currentSignCalibrated;
     String powerPath = "Unavailable";
     long chargingSampleAge = -1;
     boolean recording;

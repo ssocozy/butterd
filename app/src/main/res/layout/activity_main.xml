@@ -70,34 +70,34 @@
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/kernel" android:layout_marginTop="5dp" />
                     </LinearLayout>
                 </LinearLayout>
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Sensors" style="@style/Section" android:layout_marginTop="28dp" />
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="@drawable/card" android:paddingStart="20dp" android:paddingEnd="20dp" android:layout_marginTop="12dp">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Sensors" style="@style/Section" android:layout_marginTop="28dp" android:id="@+id/device_sensors_heading" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="@drawable/card" android:paddingStart="20dp" android:paddingEnd="20dp" android:layout_marginTop="12dp" android:id="@+id/device_sensors">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cpu_temp" style="@style/Body" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/cpu_temp" android:layout_marginTop="5dp" />
                     </LinearLayout>
-                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cpu_freq" style="@style/Body" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/cpu_freq" android:layout_marginTop="5dp" />
                     </LinearLayout>
-                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/gpu_freq" style="@style/Body" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/gpu_freq" android:layout_marginTop="5dp" />
                     </LinearLayout>
-                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/profile" style="@style/Body" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/profile" android:layout_marginTop="5dp" />
                     </LinearLayout>
-                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/adapter_voltage" style="@style/Body" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/adapter_voltage" android:layout_marginTop="5dp" />
                     </LinearLayout>
-                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/adapter_current" style="@style/Body" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/adapter_current" android:layout_marginTop="5dp" />
                     </LinearLayout>
@@ -112,8 +112,8 @@
                 <TextView style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="28dp" android:text="@string/rom_controls" android:letterSpacing="0.08" />
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:padding="20dp" android:orientation="vertical" android:background="@drawable/card">
                     <TextView android:id="@+id/rom_controls_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/rom_controls_note" />
-                    <com.google.android.material.button.MaterialButton android:id="@+id/rom_thermal" style="@style/NavigationRow" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="12dp" android:textAllCaps="false" android:text="@string/rom_thermal" app:icon="@drawable/ic_chevron" app:iconGravity="end" app:iconSize="18dp" app:iconTint="@color/secondary" />
-                    <com.google.android.material.button.MaterialButton android:id="@+id/rom_parts" style="@style/NavigationRow" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:textAllCaps="false" android:text="@string/rom_parts" app:icon="@drawable/ic_chevron" app:iconGravity="end" app:iconSize="18dp" app:iconTint="@color/secondary" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/rom_thermal" style="@style/NavigationRow" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp" android:layout_marginTop="12dp" android:textAllCaps="false" android:text="@string/rom_thermal" app:icon="@drawable/ic_chevron" app:iconGravity="end" app:iconSize="18dp" app:iconTint="@color/secondary" app:backgroundTint="@color/button_secondary" app:cornerRadius="14dp" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/rom_parts" style="@style/NavigationRow" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp" android:textAllCaps="false" android:text="@string/rom_parts" app:icon="@drawable/ic_chevron" app:iconGravity="end" app:iconSize="18dp" app:iconTint="@color/secondary" android:layout_marginTop="12dp" app:backgroundTint="@color/button_secondary" app:cornerRadius="14dp" />
                 </LinearLayout>
             </LinearLayout>
         </ScrollView>

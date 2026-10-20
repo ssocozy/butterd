@@ -20,7 +20,11 @@ has not been verified. White, black and system themes are available.
   XiaomiParts screens. Butterd does not edit XiaomiParts private preferences.
 - **Settings:** appearance and a permission-gated, quiet live notification with Stop.
 
-Battery power is net power **at the battery**, not adapter wattage. Missing data
+Battery power is net power **at the battery**, not adapter wattage.
+An unplugged nonzero current sample calibrates vendor sign conventions for the
+current app process. Until then, the Android-reported sign is used. Connected
+chargers can still coincide with negative net battery power. Diagnostic logs keep
+the raw current and calibration state. Missing data
 stays unavailable. Deep sleep estimates device suspend over the app-process
 session, not screen-off time or Doze. Polling does not hold a wake lock; notification
 values remain the latest sample while the CPU is suspended.

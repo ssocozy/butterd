@@ -9,17 +9,17 @@
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/battery_power" style="@style/Body" />
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/detail_battery_power" android:layout_marginTop="5dp" />
             </LinearLayout>
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" android:visibility="gone" />
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Battery current" style="@style/Body" />
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/detail_current" android:layout_marginTop="5dp" />
             </LinearLayout>
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" android:visibility="gone" />
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/battery_voltage" style="@style/Body" />
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/detail_voltage" android:layout_marginTop="5dp" />
             </LinearLayout>
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" android:visibility="gone" />
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/battery_temp" style="@style/Body" />
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/detail_temp" android:layout_marginTop="5dp" />
@@ -32,22 +32,22 @@
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/adapter_voltage" style="@style/Body" />
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/detail_usb_voltage" android:layout_marginTop="5dp" />
             </LinearLayout>
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" android:visibility="gone" />
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/adapter_current" style="@style/Body" />
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/detail_usb_current" android:layout_marginTop="5dp" />
             </LinearLayout>
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" android:visibility="gone" />
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/charge_limit" style="@style/Body" />
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/detail_charge_limit" android:layout_marginTop="5dp" />
             </LinearLayout>
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" android:visibility="gone" />
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/bypass_command" style="@style/Body" />
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/detail_bypass" android:layout_marginTop="5dp" />
             </LinearLayout>
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" android:visibility="gone" />
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Primary power path" style="@style/Body" />
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/detail_power_path" android:layout_marginTop="5dp" />

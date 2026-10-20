@@ -4,9 +4,12 @@
         <TextView android:id="@+id/page_gpu_title" style="@style/Title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/gpu_screen" />
         <TextView android:id="@+id/page_gpu_intro" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/gpu_intro" android:layout_marginTop="8dp" />
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:padding="20dp" android:background="@drawable/card" android:orientation="vertical">
+            <TextView android:id="@+id/gpu_access_title" style="@style/RowValue" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/extra_readings_title" />
+            <TextView android:id="@+id/gpu_access_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" />
             <TextView android:id="@+id/detail_gpu_freq_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/gpu_freq" android:layout_marginTop="12dp" />
             <TextView android:id="@+id/detail_gpu_freq" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" android:textSize="22sp" android:layout_marginTop="4dp" />
             <TextView android:id="@+id/gpu_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/gpu_note" android:layout_marginTop="16dp" />
+            <com.google.android.material.button.MaterialButton style="@style/SecondaryButton" android:id="@+id/gpu_access" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/access_options" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

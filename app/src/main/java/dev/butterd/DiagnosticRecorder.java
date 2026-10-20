@@ -35,7 +35,7 @@ final class DiagnosticRecorder {
         writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(current), StandardCharsets.UTF_8));
         started = elapsed; bytes = 0; samples = 0;
         status = "Recording · 0 samples";
-        JSONObject header = new JSONObject().put("type", "session").put("schema", 1).put("app_version", "0.2.1")
+        JSONObject header = new JSONObject().put("type", "session").put("schema", 1).put("app_version", "0.2.2")
                 .put("time_utc", Instant.now().toString())
                 .put("note", "Battery watts are net battery power, not adapter wattage. Markers are user observations, not verified bypass state.");
         for (java.util.Map.Entry<String, String> entry : metadata.entrySet()) header.put(entry.getKey(), entry.getValue());
@@ -50,6 +50,7 @@ final class DiagnosticRecorder {
                 .put("minimum", p.minimum).put("maximum", p.maximum));
         JSONObject data = new JSONObject().put("type", "sample").put("time_utc", Instant.now().toString())
                 .put("elapsed_ms", s.elapsed).put("session_ms", s.elapsed - started)
+                .put("battery_current_raw_a", number(s.rawCurrentAmps)).put("current_sign_calibrated", s.currentSignCalibrated)
                 .put("battery_w", number(s.watts)).put("battery_current_a", number(s.currentAmps)).put("battery_v", number(s.voltage))
                 .put("battery_c", number(s.batteryTemperature)).put("battery_percent", s.capacity < 0 ? JSONObject.NULL : s.capacity)
                 .put("plugged", s.plugged).put("charging_reported", s.charging)

@@ -9,7 +9,7 @@
     <string name="battery_power">Battery power</string>
     <string name="power_note">− using battery  ·  + charging battery</string>
     <string name="unavailable">Unavailable</string>
-    <string name="waiting">Waiting for a reading</string>
+    <string name="waiting">—</string>
     <string name="battery_temp">Battery temperature</string>
     <string name="battery_voltage">Battery voltage</string>
     <string name="sleep">Deep sleep</string>
@@ -40,7 +40,7 @@
     <string name="reduce_transparency_note">Use an opaque surface for greater contrast.</string>
     <string name="safety_title">Observation comes first.</string>
     <string name="safety_note">Device data is read-only unless you explicitly change a supported CPU governor. Charging overrides, thermal bypass, frequency writes and boot scripts are not included.</string>
-    <string name="about">Butterd 0.2.1 · Built for Duchamp</string>
+    <string name="about">Butterd 0.2.2 · Built for Duchamp</string>
     <string name="monitor_channel">Live device monitor</string>
     <string name="monitor_channel_description">Quiet updates for the monitoring session you started.</string>
     <string name="stop">Stop</string>
@@ -106,4 +106,15 @@
     <string name="switch_on">On</string>
     <string name="switch_off">Off</string>
     <string name="device_subtitle">Hardware, sensors and access.</string>
+    <string name="extra_readings_title">More device readings</string>
+    <string name="extra_readings_standard">You’re using standard monitoring. Some extra sensors need root or support from your ROM. Your battery monitor works without root.</string>
+    <string name="extra_readings_root">Showing the readings your ROM provides. Some sensors aren’t reported, even with root access.</string>
+    <string name="extra_readings_checking">Checking optional sensor access…</string>
+    <string name="access_options">Access options</string>
+    <string name="power_not_reported">Battery power isn’t reported by this device.</string>
+    <string name="cpu_empty_standard">Cluster details need readable kernel sensors. Optional root access may reveal more; standard monitoring stays available.</string>
+    <string name="cpu_empty_root">This ROM isn’t reporting CPU policy details. Other monitoring features are still available.</string>
+    <string name="cpu_empty_checking">Checking for readable CPU policies…</string>
+    <string name="cpu_root_required">Root required for governor changes. You can keep using the monitor without it.</string>
+    <string name="sensor_not_reported">Not reported</string>
 </resources>

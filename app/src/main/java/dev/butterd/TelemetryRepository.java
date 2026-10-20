@@ -24,6 +24,7 @@ final class TelemetryRepository {
     private final Context context;
     private final DiagnosticRecorder recorder;
     private final CpuController cpuController;
+    private final BatteryFlow batteryFlow = new BatteryFlow();
     private volatile boolean recording;
     private String recordingError = "";
     interface Result { void complete(String error); }
@@ -140,8 +141,10 @@ final class TelemetryRepository {
                 s.charging = battery.getIntExtra(BatteryManager.EXTRA_STATUS, -1) == BatteryManager.BATTERY_STATUS_CHARGING;
                 BatteryManager manager = (BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
                 int microamps = manager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
-                if (microamps != Integer.MIN_VALUE) s.currentAmps = microamps / 1_000_000d;
-                s.watts = Measurements.batteryWatts(microamps, voltage);
+                if (microamps != Integer.MIN_VALUE) s.rawCurrentAmps = microamps / 1_000_000d;
+                s.currentAmps = batteryFlow.amperes(microamps, s.plugged);
+                s.currentSignCalibrated = batteryFlow.calibrated();
+                s.watts = Double.isFinite(s.voltage) ? s.currentAmps * s.voltage : Double.NaN;
             }
             if (Build.VERSION.SDK_INT >= 29) {
                 int status = ((PowerManager) context.getSystemService(Context.POWER_SERVICE)).getCurrentThermalStatus();

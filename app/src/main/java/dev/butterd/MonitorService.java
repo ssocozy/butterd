@@ -57,10 +57,10 @@ public final class MonitorService extends Service implements TelemetryRepository
         long now = SystemClock.elapsedRealtime();
         if (now - lastUpdate < 15000 && lastUpdate != 0) return;
         lastUpdate = now;
-        String power = Measurements.signedPower(s.watts);
+        String power = Double.isFinite(s.watts) ? Measurements.signedPower(s.watts) : "—";
         String direction = Double.isFinite(s.watts) ? (s.watts >= 0 ? "into battery" : "from battery") : "battery power";
-        String sleep = Double.isFinite(s.sleepPercent) ? String.format(Locale.getDefault(), "%.0f%%", s.sleepPercent) : "Unavailable";
-        String text = (s.recording ? "Recording · " : "") + Measurements.value(s.batteryTemperature, "°C") + " · Deep sleep " + sleep + " · " + Measurements.duration(s.sleepingMillis) + " this session";
+        String sleep = Double.isFinite(s.sleepPercent) ? String.format(Locale.getDefault(), "%.0f%%", s.sleepPercent) : "—";
+        String text = (s.recording ? "Recording · " : "") + (Double.isFinite(s.batteryTemperature) ? Measurements.value(s.batteryTemperature, "°C") : "Temperature not reported") + " · Deep sleep " + sleep + " · " + Measurements.duration(s.sleepingMillis) + " this session";
         try { getSystemService(NotificationManager.class).notify(ID, build(power + " " + direction, text)); }
         catch (RuntimeException failure) { stopSelf(); }
     }

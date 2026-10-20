@@ -192,17 +192,25 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
     }
     @Override public void onSnapshot(Snapshot s) {
         currentSnapshot = s;
-        text(R.id.power, Measurements.signedPower(s.watts));
-        text(R.id.power_direction, !Double.isFinite(s.watts) ? getString(R.string.unavailable) : s.watts > 0 ? "Flowing into the battery" : s.watts < 0 ? "Drawing from the battery" : "No net battery flow reported");
+        text(R.id.power, publicReading(Measurements.signedPower(s.watts)));
+        text(R.id.power_direction, !Double.isFinite(s.watts) ? getString(R.string.power_not_reported) : s.watts > 0 ? "Flowing into the battery" : s.watts < 0 ? "Drawing from the battery" : "No net battery flow reported");
         text(R.id.battery_state, (s.capacity >= 0 ? s.capacity + "%" : "—") + "  ·  " + (s.charging ? "Charging" : s.plugged ? "Plugged in" : "On battery"));
-        text(R.id.battery_temp, Measurements.value(s.batteryTemperature, "°C"));
-        text(R.id.battery_voltage, Measurements.value(s.voltage, "V"));
+        text(R.id.battery_temp, publicReading(Measurements.value(s.batteryTemperature, "°C")));
+        text(R.id.battery_voltage, publicReading(Measurements.value(s.voltage, "V")));
         text(R.id.sleep, Double.isFinite(s.sleepPercent) ? String.format(Locale.getDefault(), "%.0f%%", s.sleepPercent) : "—");
         text(R.id.sleep_note, getString(R.string.sleep_note) + " Suspended: " + Measurements.duration(s.sleepingMillis) + ".");
-        text(R.id.thermal, s.thermal);
-        text(R.id.cpu_temp, Measurements.value(s.cpuTemperature, "°C") + (s.cpuSource.isEmpty() ? "" : " · " + s.cpuSource));
-        text(R.id.cpu_freq, s.frequencies); text(R.id.gpu_freq, s.gpuFrequency); text(R.id.profile, s.profile);
-        text(R.id.adapter_voltage, Measurements.value(s.usbVoltage, "V")); text(R.id.adapter_current, Measurements.value(s.usbCurrent, "A"));
+        text(R.id.thermal, publicReading(s.thermal));
+        int sensorCount = 0;
+        if (optionalRow(R.id.cpu_temp, Measurements.value(s.cpuTemperature, "°C") + (s.cpuSource.isEmpty() ? "" : " · " + s.cpuSource))) sensorCount++;
+        if (optionalRow(R.id.cpu_freq, s.frequencies)) sensorCount++;
+        if (optionalRow(R.id.gpu_freq, s.gpuFrequency)) sensorCount++;
+        if (optionalRow(R.id.profile, s.profile)) sensorCount++;
+        if (optionalRow(R.id.adapter_voltage, Measurements.value(s.usbVoltage, "V"))) sensorCount++;
+        if (optionalRow(R.id.adapter_current, Measurements.value(s.usbCurrent, "A"))) sensorCount++;
+        visible(R.id.device_sensors, sensorCount > 0);
+        visible(R.id.device_sensors_heading, sensorCount > 0);
+        visible(R.id.source_note, sensorCount < 6);
+        text(R.id.source_note, accessMessage(s));
         text(R.id.root_state, getString(s.root ? R.string.root_active : R.string.root_standard));
         rootButton.setEnabled(!s.rootBusy);
         rootButton.setText(s.rootBusy ? R.string.root_checking : s.root ? R.string.disconnect_root : R.string.request_root);
@@ -217,6 +225,7 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         syncNotification();
     }
     private void setupContextPage(int selected) {
+        if (selected == 5) findViewById(R.id.gpu_access).setOnClickListener(view -> selectPage(1));
         if (selected == 3) findViewById(R.id.cpu_access).setOnClickListener(view -> selectPage(1));
         if (selected == 4) {
             findViewById(R.id.battery_rom).setOnClickListener(view -> openRomScreen(RomIntegration.Screen.PARTS));
@@ -248,36 +257,47 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         }
     }
     private void renderContext(Snapshot s) {
-        text(R.id.cpu_online, s.onlineCores);
-        text(R.id.detail_battery_power, Measurements.signedPower(s.watts));
-        text(R.id.detail_current, Measurements.value(s.currentAmps, "A"));
-        text(R.id.detail_power_path, s.powerPath);
-        text(R.id.detail_voltage, Measurements.value(s.voltage, "V"));
-        text(R.id.detail_temp, Measurements.value(s.batteryTemperature, "°C"));
-        text(R.id.detail_usb_voltage, Measurements.value(s.usbVoltage, "V"));
-        text(R.id.detail_usb_current, Measurements.value(s.usbCurrent, "A"));
-        text(R.id.detail_charge_limit, Measurements.value(s.chargeLimitAmps, "A"));
-        text(R.id.detail_bypass, s.bypassCommand);
-        text(R.id.detail_charging_source, s.chargingSource + (s.chargingSampleAge < 0 ? "" : " · sample age " + s.chargingSampleAge / 1000 + " s"));
-        text(R.id.detail_gpu_freq, s.gpuFrequency);
+        text(R.id.cpu_online, publicReading(s.onlineCores));
+        text(R.id.cpu_control_note, getString(s.root ? R.string.cpu_control_note : R.string.cpu_root_required));
+        text(R.id.detail_battery_power, publicReading(Measurements.signedPower(s.watts)));
+        text(R.id.detail_current, publicReading(Measurements.value(s.currentAmps, "A")));
+        text(R.id.detail_voltage, publicReading(Measurements.value(s.voltage, "V")));
+        text(R.id.detail_temp, publicReading(Measurements.value(s.batteryTemperature, "°C")));
+        int chargingCount = 0;
+        if (optionalRow(R.id.detail_usb_voltage, Measurements.value(s.usbVoltage, "V"))) chargingCount++;
+        if (optionalRow(R.id.detail_usb_current, Measurements.value(s.usbCurrent, "A"))) chargingCount++;
+        if (optionalRow(R.id.detail_charge_limit, Measurements.value(s.chargeLimitAmps, "A"))) chargingCount++;
+        if (optionalRow(R.id.detail_bypass, s.bypassCommand)) chargingCount++;
+        if (optionalRow(R.id.detail_power_path, s.powerPath)) chargingCount++;
+        text(R.id.detail_charging_source, chargingCount < 5 ? accessMessage(s) : s.chargingSource + (s.chargingSampleAge < 0 ? "" : " · sample age " + s.chargingSampleAge / 1000 + " s"));
+        boolean gpuReported = reported(s.gpuFrequency);
+        visible(R.id.detail_gpu_freq, gpuReported);
+        visible(R.id.detail_gpu_freq_label, gpuReported);
+        visible(R.id.gpu_access_title, !gpuReported);
+        visible(R.id.gpu_access_note, !gpuReported);
+        visible(R.id.gpu_access, !gpuReported && !s.root && !s.rootBusy);
+        text(R.id.gpu_access_note, accessMessage(s));
+        text(R.id.detail_gpu_freq, publicReading(s.gpuFrequency));
         text(R.id.record_status, s.logStatus);
         MaterialButton record = findViewById(R.id.record_button);
         if (record != null) { record.setText(s.recording ? R.string.record_stop : R.string.record_start); findViewById(R.id.marker_button).setEnabled(s.recording); }
         LinearLayout list = findViewById(R.id.cpu_policies);
         if (list == null) return;
-        StringBuilder signature = new StringBuilder().append(s.root).append(cpuBusy);
+        StringBuilder signature = new StringBuilder().append(s.root).append(s.rootBusy).append(cpuBusy);
         for (CpuPolicy p : s.policies) signature.append(p.id).append(p.governor).append(p.governors).append(p.cores).append(p.minimum).append(p.maximum).append(repository.hasCpuOriginal(p.id));
         if (signature.toString().equals(cpuSignature)) return;
         cpuSignature = signature.toString(); list.removeAllViews();
         if (s.policies.isEmpty()) {
-            TextView unavailable = new TextView(this); unavailable.setText(R.string.cpu_unavailable);
+            TextView unavailable = new TextView(this); unavailable.setText(s.rootBusy ? R.string.cpu_empty_checking : s.root ? R.string.cpu_empty_root : R.string.cpu_empty_standard);
             unavailable.setTextColor(ContextCompat.getColor(this, R.color.secondary)); unavailable.setPadding(0, dp(20), 0, 0); list.addView(unavailable);
         }
         for (CpuPolicy policy : s.policies) {
             View row = getLayoutInflater().inflate(R.layout.cpu_policy, list, false);
-            ((TextView) row.findViewById(R.id.policy_title)).setText(policy.id + " · cores " + policy.cores);
-            ((TextView) row.findViewById(R.id.policy_details)).setText("Governor: " + policy.governor + "\nROM frequency range: " + policy.minimum + " – " + policy.maximum + "\nAvailable: " + String.join(", ", policy.governors));
+            ((TextView) row.findViewById(R.id.policy_title)).setText(policy.id + " · cores " + publicReading(policy.cores));
+            ((TextView) row.findViewById(R.id.policy_details)).setText("Governor: " + policy.governor + "\nROM frequency range: " + publicReading(policy.minimum) + " – " + publicReading(policy.maximum) + "\nAvailable: " + String.join(", ", policy.governors));
             MaterialButton choose = row.findViewById(R.id.policy_governor), restore = row.findViewById(R.id.policy_restore);
+            choose.setVisibility(s.root ? View.VISIBLE : View.GONE);
+            restore.setVisibility(s.root && repository.hasCpuOriginal(policy.id) ? View.VISIBLE : View.GONE);
             choose.setEnabled(s.root && !cpuBusy && !policy.selectableGovernors().isEmpty());
             restore.setEnabled(s.root && !cpuBusy && repository.hasCpuOriginal(policy.id));
             choose.setOnClickListener(view -> {
@@ -299,6 +319,20 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
             if (currentSnapshot != null) renderContext(currentSnapshot);
             message(error.isEmpty() ? getString(restore ? R.string.cpu_restored : R.string.cpu_changed) : error);
         });
+    }
+    private static boolean reported(String value) { return value != null && !value.isEmpty() && !value.equals("Unavailable"); }
+    private static String publicReading(String value) { return reported(value) ? value : "—"; }
+    private String accessMessage(Snapshot s) {
+        return getString(s.rootBusy ? R.string.extra_readings_checking : s.root ? R.string.extra_readings_root : R.string.extra_readings_standard);
+    }
+    private void visible(int id, boolean shown) {
+        View view = findViewById(id); if (view != null) view.setVisibility(shown ? View.VISIBLE : View.GONE);
+    }
+    private boolean optionalRow(int id, String value) {
+        View view = findViewById(id);
+        boolean present = reported(value);
+        if (view != null) { ((View) view.getParent()).setVisibility(present ? View.VISIBLE : View.GONE); text(id, publicReading(value)); }
+        return present;
     }
     private void text(int id, String value) {
         TextView view = findViewById(id); if (view != null && !value.contentEquals(view.getText())) view.setText(value);
