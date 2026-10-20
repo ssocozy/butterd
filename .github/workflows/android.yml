@@ -63,7 +63,22 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Check emulator image availability
+        id: image
+        run: |
+          sdkmanager --list > "$RUNNER_TEMP/sdk-packages.txt"
+          if grep -Fq 'system-images;android-${{ matrix.api }};default;x86_64' "$RUNNER_TEMP/sdk-packages.txt"; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          elif [ '${{ matrix.api }}' = '37' ]; then
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::Android 17 image unavailable; compatibility remains unverified.'
+            echo 'Android 17: emulator image unavailable; tests not run.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '::error::Required emulator image is unavailable.'
+            exit 1
+          fi
       - name: Run permission, lifecycle and interface smoke tests
+        if: steps.image.outputs.available == 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api }}

@@ -2,7 +2,8 @@
 
 A monochrome, read-only device monitor for POCO X6 Pro / Redmi K70E (Duchamp).
 Java and XML, with white, black and system themes. Android 14 is the minimum;
-Android 14–17 are the intended compatibility range. CI emulator results, rather
+Android 14–17 are the intended compatibility range. Android 17 tests skip with an
+explicit notice if its emulator image is not published. CI emulator results, rather
 than the presence of an SDK number, determine tested compatibility.
 
 ## Included in 0.1
