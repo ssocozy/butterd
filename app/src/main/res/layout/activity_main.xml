@@ -71,33 +71,28 @@
                     </LinearLayout>
                 </LinearLayout>
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Sensors" style="@style/Section" android:layout_marginTop="28dp" android:id="@+id/device_sensors_heading" />
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="@drawable/card" android:paddingStart="20dp" android:paddingEnd="20dp" android:layout_marginTop="12dp" android:id="@+id/device_sensors">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="@drawable/card" android:paddingStart="20dp" android:paddingEnd="20dp" android:layout_marginTop="12dp" android:id="@+id/device_sensors" android:divider="@drawable/sensor_divider" android:showDividers="middle">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cpu_temp" style="@style/Body" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/cpu_temp" android:layout_marginTop="5dp" />
                     </LinearLayout>
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
-                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cpu_freq" style="@style/Body" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/cpu_freq" android:layout_marginTop="5dp" />
                     </LinearLayout>
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
-                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/gpu_freq" style="@style/Body" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/gpu_freq" android:layout_marginTop="5dp" />
                     </LinearLayout>
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
-                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/profile" style="@style/Body" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/profile" android:layout_marginTop="5dp" />
                     </LinearLayout>
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
-                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/adapter_voltage" style="@style/Body" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/adapter_voltage" android:layout_marginTop="5dp" />
                     </LinearLayout>
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
-                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/adapter_current" style="@style/Body" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/adapter_current" android:layout_marginTop="5dp" />
                     </LinearLayout>
