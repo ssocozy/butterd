@@ -1,0 +1,17 @@
+<resources>
+    <style name="Theme.Butterd" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/ink</item><item name="colorPrimaryVariant">@color/ink</item>
+        <item name="colorOnPrimary">@color/surface</item><item name="colorSecondary">@color/ink</item>
+        <item name="colorOnSecondary">@color/surface</item><item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/ink</item><item name="android:colorBackground">@color/background</item>
+        <item name="android:windowBackground">@color/background</item><item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item><item name="android:statusBarColor">@color/background</item>
+        <item name="android:navigationBarColor">@color/background</item><item name="android:windowLightNavigationBar">true</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+    <style name="Title"><item name="android:textColor">@color/ink</item><item name="android:textSize">34sp</item><item name="android:fontFamily">sans-serif-medium</item><item name="android:letterSpacing">-0.04</item></style>
+    <style name="Body"><item name="android:textColor">@color/secondary</item><item name="android:textSize">14sp</item><item name="android:lineSpacingExtra">4dp</item></style>
+    <style name="Section"><item name="android:textColor">@color/secondary</item><item name="android:textSize">11sp</item><item name="android:letterSpacing">0.16</item><item name="android:fontFamily">sans-serif-medium</item></style>
+    <style name="Metric"><item name="android:textColor">@color/ink</item><item name="android:textSize">27sp</item><item name="android:fontFamily">sans-serif-medium</item><item name="android:fontFeatureSettings">tnum</item></style>
+    <style name="Nav" parent="Widget.MaterialComponents.Button.TextButton"><item name="android:textColor">@color/ink</item><item name="android:textSize">12sp</item><item name="android:textAllCaps">false</item><item name="android:layout_height">60dp</item><item name="android:layout_width">0dp</item><item name="android:layout_weight">1</item><item name="android:minWidth">48dp</item><item name="android:insetTop">0dp</item><item name="android:insetBottom">0dp</item></style>
+</resources>
