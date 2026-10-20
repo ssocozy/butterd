@@ -64,6 +64,9 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         selectPage(state == null ? 0 : state.getInt("page", 0));
         text(R.id.model, Build.MANUFACTURER + " " + Build.MODEL + " · " + Build.DEVICE);
         text(R.id.rom, "Android " + Build.VERSION.RELEASE + " · " + System.getProperty("os.version", "Unknown"));
+        findViewById(R.id.rom_thermal).setOnClickListener(view -> openRomScreen(RomIntegration.Screen.THERMAL));
+        findViewById(R.id.rom_parts).setOnClickListener(view -> openRomScreen(RomIntegration.Screen.PARTS));
+        refreshRomScreens();
         rootButton = findViewById(R.id.root_button);
         rootButton.setOnClickListener(view -> {
             if (repository.isRootEnabled()) { repository.disableRoot(); message(getString(R.string.root_disabled)); }
@@ -99,8 +102,20 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
     }
     @Override protected void onStart() { super.onStart(); repository.add(this); syncNotification(); }
     @Override protected void onStop() { repository.remove(this); super.onStop(); }
-    @Override protected void onResume() { super.onResume(); if (notificationSwitch != null) syncNotification(); }
+    @Override protected void onResume() { super.onResume(); if (notificationSwitch != null) { syncNotification(); refreshRomScreens(); } }
     @Override protected void onSaveInstanceState(@NonNull Bundle state) { state.putInt("page", page); super.onSaveInstanceState(state); }
+    private void refreshRomScreens() {
+        boolean thermal = RomIntegration.isAvailable(this, RomIntegration.Screen.THERMAL);
+        boolean parts = RomIntegration.isAvailable(this, RomIntegration.Screen.PARTS);
+        findViewById(R.id.rom_thermal).setEnabled(thermal);
+        findViewById(R.id.rom_parts).setEnabled(parts);
+        text(R.id.rom_controls_note, getString(thermal || parts ? R.string.rom_controls_note : R.string.rom_controls_missing));
+    }
+    private void openRomScreen(RomIntegration.Screen screen) {
+        if (!RomIntegration.open(this, screen)) {
+            refreshRomScreens(); message(getString(R.string.rom_screen_unavailable));
+        }
+    }
     private void setSolid(boolean solid) { findViewById(R.id.bottom_bar).setBackgroundResource(solid ? R.drawable.solid_nav : R.drawable.glass); }
     private void selectPage(int selected) {
         page = Math.max(0, Math.min(2, selected));

@@ -42,3 +42,17 @@ The existing bypass controller catches write failures without returning success,
 uses two independent writes without rollback, and equates a command flag with
 actual bypass. Its screen can remain stale after service-side unplug handling.
 Butterd does not reproduce those behaviors or offer a bypass toggle in 0.1.
+
+## XiaomiParts integration boundary
+
+The inspected manifest exports PartsActivity and thermal.ThermalProfileActivity.
+TurboChargingActivity and PerAppThermalActivity are not exported. Thermal services
+are private, and the charge service has no Binder API (onBind returns null).
+Per-app configuration lives in XiaomiParts private SharedPreferences. No public
+profile-control provider or callable command receiver was found in this revision.
+Butterd opens the two exported screens using explicit components, checks their
+availability/export status/permissions, and handles denied or missing activities.
+It does not edit XiaomiParts preferences or impersonate its system UID.
+Embedded controls need a separate permission-protected ROM-side interface with
+state verification and ownership coordination; direct sysfs writes are not an
+API to XiaomiParts.

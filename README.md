@@ -12,6 +12,8 @@ than the presence of an SDK number, determine tested compatibility.
 - Session deep-sleep estimate from elapsed time minus uptime, without root.
 - Android thermal severity; readable SoC temperature, CPU policy clocks, GED GPU
   frequency, ROM thermal profile and USB input voltage/current where available.
+- Shortcuts to compatible XiaomiParts and thermal-profile screens, with no root
+  required. ROM screens own their settings; Butterd does not alter private prefs.
 - Explicit, optional root access for a fixed list of read-only sensors. Denial,
   timeout or loss falls back to standard access. No root prompt on launch.
 - A user-started, quiet live notification with a Stop action. Notification permission

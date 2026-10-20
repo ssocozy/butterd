@@ -29,4 +29,10 @@
     <string name="root_standard">Standard access</string><string name="root_active">Root · read only</string>
     <string name="root_disabled">Root sensor access disabled</string>
     <string name="read_error">Some sensors could not be read. Available readings will continue.</string>
+    <string name="rom_controls">ROM CONTROLS</string>
+    <string name="rom_controls_note">Open your ROM’s controls. XiaomiParts handles changes and keeps its automation in sync.</string>
+    <string name="rom_thermal">Thermal profiles</string>
+    <string name="rom_parts">Open XiaomiParts</string>
+    <string name="rom_controls_missing">XiaomiParts is not installed or does not expose compatible screens on this ROM.</string>
+    <string name="rom_screen_unavailable">That ROM screen is unavailable. No settings were changed.</string>
 </resources>
