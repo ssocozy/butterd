@@ -238,7 +238,8 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
                 try {
                     android.net.Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".files", file);
                     Intent share = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_STREAM, uri)
-                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).setClipData(ClipData.newRawUri("Butterd diagnostics", uri));
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    share.setClipData(ClipData.newRawUri("Butterd diagnostics", uri));
                     startActivity(Intent.createChooser(share, getString(R.string.share_recording)));
                 } catch (RuntimeException unavailable) { message("Could not open the share sheet. The recording remains saved."); }
             }));
