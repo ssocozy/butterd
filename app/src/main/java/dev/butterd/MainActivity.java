@@ -45,11 +45,15 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
     private String cpuSignature = "", lastRecordingError = "";
     private int page;
     private long lastGraphTime;
-    private final int[] pages = {R.id.page_overview, R.id.page_device, R.id.page_settings, R.id.page_cpu, R.id.page_battery, R.id.page_gpu};
+    private final int[] pages = {R.id.page_overview, R.id.page_device, R.id.page_settings, R.id.page_cpu, R.id.page_battery, R.id.page_gpu, R.id.page_display, R.id.page_kernel};
     private final int[] navigation = {R.id.nav_overview, R.id.nav_device, R.id.nav_settings};
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getSplashScreen().setOnExitAnimationListener(splash -> {
+            if (!android.animation.ValueAnimator.areAnimatorsEnabled()) { splash.remove(); return; }
+            splash.animate().alpha(0f).setDuration(160).withEndAction(splash::remove).start();
+        });
         setContentView(R.layout.activity_main);
         prefs = getSharedPreferences("ui", MODE_PRIVATE);
         repository = ((ButterdApp) getApplication()).repository();
@@ -72,6 +76,8 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         findViewById(R.id.home_cpu).setOnClickListener(view -> selectPage(3));
         findViewById(R.id.home_battery).setOnClickListener(view -> selectPage(4));
         findViewById(R.id.home_gpu).setOnClickListener(view -> selectPage(5));
+        findViewById(R.id.home_display).setOnClickListener(view -> selectPage(6));
+        findViewById(R.id.home_kernel).setOnClickListener(view -> selectPage(7));
         selectPage(state == null ? 0 : state.getInt("page", 0));
         text(R.id.model, Build.MODEL);
         text(R.id.device_codename, Build.DEVICE);
@@ -132,12 +138,15 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
     }
     private void setSolid(boolean solid) { findViewById(R.id.bottom_bar).setBackgroundResource(solid ? R.drawable.solid_nav : R.drawable.glass); }
     private void selectPage(int selected) {
+        int previous = page;
         page = Math.max(0, Math.min(pages.length - 1, selected));
         View target = findViewById(pages[page]);
         if (target instanceof ViewStub) { ((ViewStub) target).inflate(); setupContextPage(page); }
         int activeTab = page > 2 ? 1 : page;
         for (int i = 0; i < pages.length; i++) {
-            findViewById(pages[i]).setVisibility(i == page ? View.VISIBLE : View.GONE);
+            View pane = findViewById(pages[i]);
+            pane.animate().cancel(); pane.setAlpha(1f); pane.setTranslationY(0f);
+            pane.setVisibility(i == page ? View.VISIBLE : View.GONE);
         }
         for (int i = 0; i < navigation.length; i++) {
             MaterialButton button = findViewById(navigation[i]); button.setSelected(i == activeTab);
@@ -147,6 +156,11 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         }
         ViewCompat.requestApplyInsets(findViewById(R.id.root));
         if (currentSnapshot != null) renderContext(currentSnapshot);
+        if (previous != page && android.animation.ValueAnimator.areAnimatorsEnabled()) {
+            View pane = findViewById(pages[page]); pane.setAlpha(0f); pane.setTranslationY(dp(8));
+            pane.animate().alpha(1f).translationY(0f).setDuration(180)
+                    .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+        }
     }
     private void requestMonitor(boolean forRecording) {
         pendingRecording = forRecording;
@@ -194,14 +208,14 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         currentSnapshot = s;
         text(R.id.power, publicReading(Measurements.signedPower(s.watts)));
         text(R.id.power_direction, !Double.isFinite(s.watts) ? getString(R.string.power_not_reported) : s.watts > 0 ? "Flowing into the battery" : s.watts < 0 ? "Drawing from the battery" : "No net battery flow reported");
-        text(R.id.battery_state, (s.capacity >= 0 ? s.capacity + "%" : "—") + "  ·  " + (s.charging ? "Charging" : s.plugged ? "Plugged in" : "On battery"));
+        text(R.id.battery_state, (s.capacity >= 0 ? s.capacity + "%" : "—") + "  /  " + (s.charging ? "Charging" : s.plugged ? "Plugged in" : "On battery"));
         text(R.id.battery_temp, publicReading(Measurements.value(s.batteryTemperature, "°C")));
         text(R.id.battery_voltage, publicReading(Measurements.value(s.voltage, "V")));
         text(R.id.sleep, Double.isFinite(s.sleepPercent) ? String.format(Locale.getDefault(), "%.0f%%", s.sleepPercent) : "—");
         text(R.id.sleep_note, getString(R.string.sleep_note) + " Suspended: " + Measurements.duration(s.sleepingMillis) + ".");
         text(R.id.thermal, publicReading(s.thermal));
         int sensorCount = 0;
-        if (optionalRow(R.id.cpu_temp, Measurements.value(s.cpuTemperature, "°C") + (s.cpuSource.isEmpty() ? "" : " · " + s.cpuSource))) sensorCount++;
+        if (optionalRow(R.id.cpu_temp, Measurements.value(s.cpuTemperature, "°C") + (s.cpuSource.isEmpty() ? "" : " / " + s.cpuSource))) sensorCount++;
         if (optionalRow(R.id.cpu_freq, s.frequencies)) sensorCount++;
         if (optionalRow(R.id.gpu_freq, s.gpuFrequency)) sensorCount++;
         if (optionalRow(R.id.profile, s.profile)) sensorCount++;
@@ -225,6 +239,15 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         syncNotification();
     }
     private void setupContextPage(int selected) {
+        if (selected == 7) findViewById(R.id.kernel_access).setOnClickListener(view -> selectPage(1));
+        if (selected == 6) {
+            findViewById(R.id.display_parts).setOnClickListener(view -> openRomScreen(RomIntegration.Screen.PARTS));
+            findViewById(R.id.display_settings).setOnClickListener(view -> {
+                try { startActivity(new Intent(Settings.ACTION_DISPLAY_SETTINGS)); }
+                catch (RuntimeException missing) { message("Display settings could not be opened"); }
+            });
+        }
+        if (selected == 5) findViewById(R.id.gpu_profiles).setOnClickListener(view -> openRomScreen(RomIntegration.Screen.THERMAL));
         if (selected == 5) findViewById(R.id.gpu_access).setOnClickListener(view -> selectPage(1));
         if (selected == 3) findViewById(R.id.cpu_access).setOnClickListener(view -> selectPage(1));
         if (selected == 4) {
@@ -257,6 +280,7 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         }
     }
     private void renderContext(Snapshot s) {
+        renderExtended(s);
         text(R.id.cpu_online, publicReading(s.onlineCores));
         text(R.id.cpu_control_note, getString(s.root ? R.string.cpu_control_note : R.string.cpu_root_required));
         text(R.id.detail_battery_power, publicReading(Measurements.signedPower(s.watts)));
@@ -269,7 +293,7 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         if (optionalRow(R.id.detail_charge_limit, Measurements.value(s.chargeLimitAmps, "A"))) chargingCount++;
         if (optionalRow(R.id.detail_bypass, s.bypassCommand)) chargingCount++;
         if (optionalRow(R.id.detail_power_path, s.powerPath)) chargingCount++;
-        text(R.id.detail_charging_source, chargingCount < 5 ? accessMessage(s) : s.chargingSource + (s.chargingSampleAge < 0 ? "" : " · sample age " + s.chargingSampleAge / 1000 + " s"));
+        text(R.id.detail_charging_source, chargingCount < 5 ? accessMessage(s) : s.chargingSource + (s.chargingSampleAge < 0 ? "" : " / sample age " + s.chargingSampleAge / 1000 + " s"));
         boolean gpuReported = reported(s.gpuFrequency);
         visible(R.id.detail_gpu_freq, gpuReported);
         visible(R.id.detail_gpu_freq_label, gpuReported);
@@ -283,7 +307,7 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         if (record != null) { record.setText(s.recording ? R.string.record_stop : R.string.record_start); findViewById(R.id.marker_button).setEnabled(s.recording); }
         LinearLayout list = findViewById(R.id.cpu_policies);
         if (list == null) return;
-        StringBuilder signature = new StringBuilder().append(s.root).append(s.rootBusy).append(cpuBusy);
+        StringBuilder signature = new StringBuilder().append(s.root).append(s.rootBusy).append(cpuBusy).append(s.frequencyTables);
         for (CpuPolicy p : s.policies) signature.append(p.id).append(p.governor).append(p.governors).append(p.cores).append(p.minimum).append(p.maximum).append(repository.hasCpuOriginal(p.id));
         if (signature.toString().equals(cpuSignature)) return;
         cpuSignature = signature.toString(); list.removeAllViews();
@@ -293,8 +317,8 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         }
         for (CpuPolicy policy : s.policies) {
             View row = getLayoutInflater().inflate(R.layout.cpu_policy, list, false);
-            ((TextView) row.findViewById(R.id.policy_title)).setText(policy.id + " · cores " + publicReading(policy.cores));
-            ((TextView) row.findViewById(R.id.policy_details)).setText("Governor: " + policy.governor + "\nROM frequency range: " + publicReading(policy.minimum) + " – " + publicReading(policy.maximum) + "\nAvailable: " + String.join(", ", policy.governors));
+            ((TextView) row.findViewById(R.id.policy_title)).setText(policy.id + " / cores " + publicReading(policy.cores));
+            ((TextView) row.findViewById(R.id.policy_details)).setText("Governor: " + policy.governor + "\nROM frequency range: " + publicReading(policy.minimum) + " – " + publicReading(policy.maximum) + "\nAvailable: " + String.join(", ", policy.governors) + "\nSupported clocks: " + clockTable(s.frequencyTables.get(policy.id)));
             MaterialButton choose = row.findViewById(R.id.policy_governor), restore = row.findViewById(R.id.policy_restore);
             choose.setVisibility(s.root ? View.VISIBLE : View.GONE);
             restore.setVisibility(s.root && repository.hasCpuOriginal(policy.id) ? View.VISIBLE : View.GONE);
@@ -302,7 +326,7 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
             restore.setEnabled(s.root && !cpuBusy && repository.hasCpuOriginal(policy.id));
             choose.setOnClickListener(view -> {
                 String[] choices = policy.selectableGovernors().toArray(new String[0]);
-                new MaterialAlertDialogBuilder(this).setTitle(policy.id + " · " + getString(R.string.cpu_select))
+                new MaterialAlertDialogBuilder(this).setTitle(policy.id + " / " + getString(R.string.cpu_select))
                         .setItems(choices, (dialog, which) -> new MaterialAlertDialogBuilder(this)
                                 .setTitle(choices[which]).setMessage(R.string.cpu_confirm).setNegativeButton(android.R.string.cancel, null)
                                 .setPositiveButton(android.R.string.ok, (confirmation, ok) -> changeGovernor(policy.id, choices[which], false)).show()).show();
@@ -319,6 +343,38 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
             if (currentSnapshot != null) renderContext(currentSnapshot);
             message(error.isEmpty() ? getString(restore ? R.string.cpu_restored : R.string.cpu_changed) : error);
         });
+    }
+    private void renderExtended(Snapshot s) {
+        text(R.id.display_rate, publicReading(Measurements.value(s.refreshRate, "Hz")));
+        text(R.id.display_modes, publicReading(s.displayModes));
+        String touch = s.kernel.get("htsr");
+        text(R.id.touch_state, touch == null ? "—" : touch.equals("1") ? "Enabled by ROM" : "Disabled by ROM");
+        text(R.id.kernel_release, System.getProperty("os.version", "—"));
+        text(R.id.tcp_current, publicReading(s.kernel.get("tcp")));
+        text(R.id.tcp_available, publicReading(s.kernel.get("tcp_available")));
+        text(R.id.tcp_allowed, publicReading(s.kernel.get("tcp_allowed")));
+        text(R.id.kernel_qdisc, publicReading(s.kernel.get("qdisc")));
+        text(R.id.kernel_access_note, accessMessage(s));
+        text(R.id.gpu_margin, publicReading(s.kernel.get("gpu_margin")));
+        text(R.id.gpu_step, publicReading(s.kernel.get("gpu_step")));
+        text(R.id.battery_health, publicReading(s.health));
+        text(R.id.battery_cycles, s.cycles >= 0 ? Integer.toString(s.cycles) : publicReading(s.kernel.get("cycles")));
+        double full = KernelSensors.capacityMah(s.kernel.get("full"));
+        double design = KernelSensors.capacityMah(s.kernel.get("design"));
+        text(R.id.battery_capacity, Double.isFinite(full) && Double.isFinite(design)
+                ? String.format(Locale.getDefault(), "%.0f / %.0f mAh", full, design) : "—");
+        text(R.id.battery_retention, publicReading(Measurements.value(KernelSensors.remainingCapacity(s.kernel.get("full"), s.kernel.get("design")), "%")));
+    }
+    private static String clockTable(String table) {
+        if (table == null || !table.matches("[0-9 ]{1,512}")) return "Not reported";
+        java.util.List<String> values = new java.util.ArrayList<>();
+        for (String value : table.trim().split(" +")) {
+            try {
+                long khz = Long.parseLong(value);
+                if (khz > 0 && khz < 10000000) values.add(String.format(Locale.getDefault(), "%.2f", khz / 1000000d));
+            } catch (NumberFormatException ignored) { }
+        }
+        return values.isEmpty() ? "Not reported" : String.join(", ", values) + " GHz";
     }
     private static boolean reported(String value) { return value != null && !value.isEmpty() && !value.equals("Unavailable"); }
     private static String publicReading(String value) { return reported(value) ? value : "—"; }

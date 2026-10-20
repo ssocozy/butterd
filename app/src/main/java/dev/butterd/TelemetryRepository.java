@@ -128,6 +128,17 @@ final class TelemetryRepository {
         try {
             Intent battery = context.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
             if (battery != null && battery.getBooleanExtra(BatteryManager.EXTRA_PRESENT, true)) {
+                s.cycles = battery.getIntExtra(BatteryManager.EXTRA_CYCLE_COUNT, -1);
+                int health = battery.getIntExtra(BatteryManager.EXTRA_HEALTH, BatteryManager.BATTERY_HEALTH_UNKNOWN);
+                switch (health) {
+                    case BatteryManager.BATTERY_HEALTH_GOOD: s.health = "Good"; break;
+                    case BatteryManager.BATTERY_HEALTH_OVERHEAT: s.health = "Overheated"; break;
+                    case BatteryManager.BATTERY_HEALTH_DEAD: s.health = "Dead"; break;
+                    case BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE: s.health = "Over-voltage"; break;
+                    case BatteryManager.BATTERY_HEALTH_UNSPECIFIED_FAILURE: s.health = "Driver reports a fault"; break;
+                    case BatteryManager.BATTERY_HEALTH_COLD: s.health = "Cold"; break;
+                    default: break;
+                }
                 int scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
                 int level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
                 if (level >= 0 && scale > 0 && level <= scale) s.capacity = Math.round(level * 100f / scale);
@@ -163,6 +174,10 @@ final class TelemetryRepository {
                 }
             }
         } catch (RuntimeException failure) { s.error = context.getString(R.string.read_error); }
+        if (s.cycles < 0 && s.kernel.containsKey("cycles")) {
+            try { s.cycles = Integer.parseInt(s.kernel.get("cycles")); }
+            catch (NumberFormatException ignored) { }
+        }
         s.root = rootEnabled; s.rootBusy = rootBusy;
         if (!rootError.isEmpty()) s.error = rootError;
         try { recorder.sample(s); }
@@ -181,9 +196,24 @@ final class TelemetryRepository {
             String type = read(new File(zones[i], "type"));
             acceptTemperature(s, type, read(new File(zones[i], "temp")));
         }
+        android.hardware.display.DisplayManager displays = context.getSystemService(android.hardware.display.DisplayManager.class);
+        android.view.Display display = displays.getDisplay(android.view.Display.DEFAULT_DISPLAY);
+        if (display != null) {
+            s.refreshRate = display.getRefreshRate();
+            java.util.Set<String> modes = new java.util.LinkedHashSet<>();
+            for (android.view.Display.Mode mode : display.getSupportedModes())
+                modes.add(mode.getPhysicalWidth() + " × " + mode.getPhysicalHeight() + " / " + Measurements.value(mode.getRefreshRate(), "Hz"));
+            s.displayModes = String.join("\n", modes);
+        }
+        for (java.util.Map.Entry<String, String> sensor : KernelSensors.PATHS.entrySet()) {
+            String value = KernelSensors.clean(sensor.getKey(), read(new File(sensor.getValue())));
+            if (!value.isEmpty()) s.kernel.put(sensor.getKey(), value);
+        }
         List<String> frequencies = new ArrayList<>();
         File[] policies = new File("/sys/devices/system/cpu/cpufreq").listFiles((dir, name) -> name.matches("policy[0-9]+"));
         if (policies != null) for (int i = 0; i < Math.min(policies.length, 16); i++) {
+            String table = read(new File(policies[i], "scaling_available_frequencies"));
+            if (table.matches("[0-9 ]{1,512}")) s.frequencyTables.put(policies[i].getName(), table);
             String value = frequency(policies[i].getName(), read(new File(policies[i], "scaling_cur_freq")));
             if (!value.isEmpty()) frequencies.add(value);
             try { s.policies.add(new CpuPolicy(policies[i].getName(), read(new File(policies[i], "scaling_governor")),
@@ -212,6 +242,12 @@ final class TelemetryRepository {
         List<CpuPolicy> rootPolicies = new ArrayList<>();
         for (String line : data.split("\n")) {
             String[] parts = line.split("\\|", -1);
+            if (parts.length == 3 && parts[0].equals("D")) {
+                String value = KernelSensors.clean(parts[1], parts[2]);
+                if (!value.isEmpty()) s.kernel.put(parts[1], value);
+            }
+            if (parts.length == 3 && parts[0].equals("A") && CpuPolicy.validId(parts[1]) && parts[2].matches("[0-9 ]{1,512}"))
+                s.frequencyTables.put(parts[1], parts[2]);
             if (parts.length == 3 && parts[0].equals("T")) acceptTemperature(s, parts[1], parts[2]);
             if (parts.length == 3 && parts[0].equals("F")) {
                 String value = frequency(parts[1], parts[2]); if (!value.isEmpty()) frequencies.add(value);
@@ -251,7 +287,7 @@ final class TelemetryRepository {
     }
     private static String read(File file) {
         try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-            char[] buffer = new char[160]; int count = reader.read(buffer);
+            char[] buffer = new char[1024]; int count = reader.read(buffer);
             return count > 0 ? new String(buffer, 0, count).trim() : "";
         } catch (Exception ignored) { return ""; }
     }
@@ -267,7 +303,7 @@ final class TelemetryRepository {
     private static String frequency(String policy, String raw) {
         try {
             long khz = Long.parseLong(raw.trim());
-            return khz > 0 && khz < 10000000 ? policy + "  ·  " + khz / 1000 + " MHz" : "";
+            return khz > 0 && khz < 10000000 ? policy + " / " + khz / 1000 + " MHz" : "";
         } catch (RuntimeException ignored) { return ""; }
     }
     private static String gpu(String raw) {

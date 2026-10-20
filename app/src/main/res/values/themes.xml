@@ -17,11 +17,13 @@
         <item name="android:windowLightNavigationBar">true</item>
         <item name="android:forceDarkAllowed">false</item>
         <item name="android:scrollbars">none</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/butter_logo</item>
+        <item name="android:windowSplashScreenBackground">@color/background</item>
     </style>
     <style name="Title">
         <item name="android:textColor">@color/ink</item>
         <item name="android:textSize">34sp</item>
-        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:fontFamily">sans-serif-black</item>
         <item name="android:letterSpacing">-0.02</item>
     </style>
     <style name="Body">
@@ -51,7 +53,7 @@
         <item name="android:minWidth">48dp</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
-        <item name="android:stateListAnimator">@null</item>
+        <item name="android:stateListAnimator">@animator/button_press</item>
         <item name="android:elevation">0dp</item>
         <item name="android:translationZ">0dp</item>
         <item name="android:minHeight">64dp</item>
@@ -77,7 +79,7 @@
         <item name="rippleColor">@color/line</item>
         <item name="backgroundTint">@color/button_primary</item>
         <item name="android:textColor">@color/button_primary_text</item>
-        <item name="android:stateListAnimator">@null</item>
+        <item name="android:stateListAnimator">@animator/button_press</item>
         <item name="android:translationZ">0dp</item>
     </style>
     <style name="SecondaryButton" parent="Widget.MaterialComponents.Button">
@@ -97,7 +99,7 @@
         <item name="rippleColor">@color/line</item>
         <item name="backgroundTint">@color/button_secondary</item>
         <item name="android:textColor">@color/button_secondary_text</item>
-        <item name="android:stateListAnimator">@null</item>
+        <item name="android:stateListAnimator">@animator/button_press</item>
         <item name="android:translationZ">0dp</item>
     </style>
     <style name="NavigationRow" parent="SecondaryButton">
@@ -123,7 +125,7 @@
         <item name="android:elevation">0dp</item>
         <item name="rippleColor">@color/line</item>
         <item name="strokeColor">@color/line</item>
-        <item name="android:stateListAnimator">@null</item>
+        <item name="android:stateListAnimator">@animator/button_press</item>
         <item name="android:translationZ">0dp</item>
     </style>
     <style name="RowValue" parent="Body">

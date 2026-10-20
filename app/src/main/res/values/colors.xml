@@ -1,6 +1,13 @@
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <color name="background">#F5F5F5</color><color name="surface">#FFFFFF</color>
-    <color name="ink">#111111</color><color name="secondary">#636363</color>
-    <color name="line">#E4E4E4</color><color name="chip">#EDEDED</color>
-    <color name="glass">#EEFFFFFF</color><color name="hero">#111111</color><color name="hero_ink">#FFFFFF</color>
+    <color name="background">#F5F5F5</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="ink">#111111</color>
+    <color name="secondary">#636363</color>
+    <color name="line">#E4E4E4</color>
+    <color name="chip">#EDEDED</color>
+    <color name="glass">#EEFFFFFF</color>
+    <color name="hero">#111111</color>
+    <color name="hero_ink">#FFFFFF</color>
+    <color name="launcher_background">#1D1B1B</color>
 </resources>

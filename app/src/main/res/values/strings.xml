@@ -4,10 +4,10 @@
     <string name="overview">Overview</string>
     <string name="device">Device</string>
     <string name="settings">Settings</string>
-    <string name="intro">Your device, at a glance.</string>
+    <string name="intro">Know your device. Tune with care.</string>
     <string name="live">BATTERY POWER</string>
     <string name="battery_power">Battery power</string>
-    <string name="power_note">− using battery  ·  + charging battery</string>
+    <string name="power_note">− using battery  /  + charging battery</string>
     <string name="unavailable">Unavailable</string>
     <string name="waiting">—</string>
     <string name="battery_temp">Battery temperature</string>
@@ -16,7 +16,7 @@
     <string name="sleep_note">Estimated time suspended since this monitoring session began. Device suspend is different from Doze.</string>
     <string name="thermal_status">Thermal status</string>
     <string name="activity">RECENT POWER</string>
-    <string name="session_note">Net battery power · recent samples</string>
+    <string name="session_note">Net battery power / recent samples</string>
     <string name="hardware">HARDWARE</string>
     <string name="access">ACCESS</string>
     <string name="cpu_temp">SoC / CPU temperature</string>
@@ -40,7 +40,7 @@
     <string name="reduce_transparency_note">Use an opaque surface for greater contrast.</string>
     <string name="safety_title">Observation comes first.</string>
     <string name="safety_note">Device data is read-only unless you explicitly change a supported CPU governor. Charging overrides, thermal bypass, frequency writes and boot scripts are not included.</string>
-    <string name="about">Butterd 0.2.3 · Built for Duchamp</string>
+    <string name="about">Butterd 0.3 / Built for Duchamp</string>
     <string name="monitor_channel">Live device monitor</string>
     <string name="monitor_channel_description">Quiet updates for the monitoring session you started.</string>
     <string name="stop">Stop</string>
@@ -50,7 +50,7 @@
     <string name="open_settings">Settings</string>
     <string name="monitor_failed">Could not start the monitor. Try again while Butterd is open.</string>
     <string name="root_checking">Waiting for root permission…</string>
-    <string name="root_granted">Root granted · read-only sensors enabled</string>
+    <string name="root_granted">Root granted / read-only sensors enabled</string>
     <string name="root_denied">Root unavailable or denied. Standard monitoring still works.</string>
     <string name="root_lost">Root read failed. Standard monitoring remains available; check access to retry.</string>
     <string name="root_standard">Standard access</string>

@@ -34,8 +34,8 @@ final class DiagnosticRecorder {
         if (current.exists()) Files.move(current.toPath(), previous.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(current), StandardCharsets.UTF_8));
         started = elapsed; bytes = 0; samples = 0;
-        status = "Recording · 0 samples";
-        JSONObject header = new JSONObject().put("type", "session").put("schema", 1).put("app_version", "0.2.3")
+        status = "Recording / 0 samples";
+        JSONObject header = new JSONObject().put("type", "session").put("schema", 1).put("app_version", "0.3.0")
                 .put("time_utc", Instant.now().toString())
                 .put("note", "Battery watts are net battery power, not adapter wattage. Markers are user observations, not verified bypass state.");
         for (java.util.Map.Entry<String, String> entry : metadata.entrySet()) header.put(entry.getKey(), entry.getValue());
@@ -53,6 +53,9 @@ final class DiagnosticRecorder {
                 .put("battery_current_raw_a", number(s.rawCurrentAmps)).put("current_sign_calibrated", s.currentSignCalibrated)
                 .put("battery_w", number(s.watts)).put("battery_current_a", number(s.currentAmps)).put("battery_v", number(s.voltage))
                 .put("battery_c", number(s.batteryTemperature)).put("battery_percent", s.capacity < 0 ? JSONObject.NULL : s.capacity)
+                .put("battery_cycles", s.cycles < 0 ? JSONObject.NULL : s.cycles).put("battery_health_status", s.health)
+                .put("reported_display_hz", number(s.refreshRate)).put("kernel_readings", new JSONObject(s.kernel))
+                .put("cpu_frequency_tables_khz", new JSONObject(s.frequencyTables))
                 .put("plugged", s.plugged).put("charging_reported", s.charging)
                 .put("usb_input_v", number(s.usbVoltage)).put("usb_input_a", number(s.usbCurrent))
                 .put("charge_limit_a", number(s.chargeLimitAmps)).put("bypass_command", s.bypassCommand).put("primary_power_path_reported", s.powerPath)
@@ -62,7 +65,7 @@ final class DiagnosticRecorder {
                 .put("online_cores", s.onlineCores).put("cpu_policies", policies).put("cpu_frequencies", s.frequencies)
                 .put("gpu_frequency", s.gpuFrequency).put("suspend_ms_process_session", s.sleepingMillis)
                 .put("suspend_percent_process_session", number(s.sleepPercent));
-        write(data); samples++; status = "Recording · " + samples + " samples";
+        write(data); samples++; status = "Recording / " + samples + " samples";
     }
     void marker(String marker, long elapsed) throws Exception {
         if (!active()) throw new IllegalStateException("Start a recording first");

@@ -60,7 +60,7 @@ public final class MonitorService extends Service implements TelemetryRepository
         String power = Double.isFinite(s.watts) ? Measurements.signedPower(s.watts) : "—";
         String direction = Double.isFinite(s.watts) ? (s.watts >= 0 ? "into battery" : "from battery") : "battery power";
         String sleep = Double.isFinite(s.sleepPercent) ? String.format(Locale.getDefault(), "%.0f%%", s.sleepPercent) : "—";
-        String text = (s.recording ? "Recording · " : "") + (Double.isFinite(s.batteryTemperature) ? Measurements.value(s.batteryTemperature, "°C") : "Temperature not reported") + " · Deep sleep " + sleep + " · " + Measurements.duration(s.sleepingMillis) + " this session";
+        String text = (s.recording ? "Recording / " : "") + (Double.isFinite(s.batteryTemperature) ? Measurements.value(s.batteryTemperature, "°C") : "Temperature not reported") + " / Deep sleep " + sleep + " / " + Measurements.duration(s.sleepingMillis) + " this session";
         try { getSystemService(NotificationManager.class).notify(ID, build(power + " " + direction, text)); }
         catch (RuntimeException failure) { stopSelf(); }
     }

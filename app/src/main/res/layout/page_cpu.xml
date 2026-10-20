@@ -3,15 +3,16 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="24dp" android:paddingEnd="24dp" android:paddingTop="24dp" android:paddingBottom="120dp">
         <TextView android:id="@+id/page_cpu_title" style="@style/Title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cpu_screen" />
         <TextView android:id="@+id/page_cpu_intro" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cpu_intro" android:layout_marginTop="8dp" />
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:padding="20dp" android:background="@drawable/card" android:orientation="vertical">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:padding="20dp" android:orientation="vertical">
             <TextView android:id="@+id/cpu_online_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cpu_online" android:layout_marginTop="12dp" />
             <TextView android:id="@+id/cpu_online" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" android:textSize="22sp" android:layout_marginTop="4dp" />
             <TextView android:id="@+id/cpu_policy_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cpu_policy_note" android:layout_marginTop="12dp" />
         </LinearLayout>
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:padding="20dp" android:background="@drawable/card" android:orientation="vertical">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:padding="20dp" android:orientation="vertical">
             <TextView android:id="@+id/cpu_control_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cpu_control_note" />
             <com.google.android.material.button.MaterialButton android:id="@+id/cpu_access" style="@style/SecondaryButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="@string/cpu_access" android:textAllCaps="false" />
         </LinearLayout>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="CPU CLUSTERS" style="@style/Section" android:layout_marginTop="32dp" android:layout_marginBottom="12dp" />
         <LinearLayout android:id="@+id/cpu_policies" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" />
     </LinearLayout>
 </ScrollView>

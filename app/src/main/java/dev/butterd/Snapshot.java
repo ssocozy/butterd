@@ -12,7 +12,11 @@ final class Snapshot {
     String powerPath = "Unavailable";
     long chargingSampleAge = -1;
     boolean recording;
-    int capacity = -1;
+    int capacity = -1, cycles = -1;
+    String health = "", displayModes = "";
+    double refreshRate = Double.NaN;
+    java.util.Map<String, String> kernel = new java.util.HashMap<>();
+    java.util.Map<String, String> frequencyTables = new java.util.HashMap<>();
     long elapsed, sleepingMillis;
     boolean plugged, charging, root, rootBusy;
     String thermal = "Unavailable", cpuSource = "", frequencies = "Unavailable";

@@ -28,8 +28,16 @@ final class RootReader {
             "printf 'I|%s\\n' \"$(head -c 24 /sys/class/power_supply/usb/current_now 2>/dev/null)\"; " +
             "printf 'G|%s\\n' \"$(head -c 80 /sys/kernel/ged/hal/current_freqency 2>/dev/null)\"";
 
+    private static String extras() {
+        StringBuilder script = new StringBuilder();
+        for (java.util.Map.Entry<String, String> sensor : KernelSensors.PATHS.entrySet())
+            script.append("; printf 'D|").append(sensor.getKey()).append("|%s\\n' \"$(head -c 160 ")
+                    .append(sensor.getValue()).append(" 2>/dev/null)\"");
+        script.append("; n=0; for p in /sys/devices/system/cpu/cpufreq/policy*; do printf 'A|%s|%s\\n' \"${p##*/}\" \"$(head -c 512 \"$p/scaling_available_frequencies\" 2>/dev/null)\"; n=$((n+1)); [ \"$n\" -ge 16 ] && break; done");
+        return script.toString();
+    }
     static String read() throws Exception {
-        Process process = new ProcessBuilder("su", "-c", SCRIPT).redirectErrorStream(true).start();
+        Process process = new ProcessBuilder("su", "-c", SCRIPT + extras()).redirectErrorStream(true).start();
         try {
             if (!process.waitFor(20, TimeUnit.SECONDS)) throw new IllegalStateException("Root request timed out");
             if (process.exitValue() != 0) throw new SecurityException("Root unavailable");
