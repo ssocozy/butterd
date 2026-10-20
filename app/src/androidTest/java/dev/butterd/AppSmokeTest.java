@@ -40,6 +40,12 @@ public class AppSmokeTest {
             screenshot("overview-black");
             scenario.onActivity(activity -> { activity.findViewById(R.id.nav_device).performClick(); });
             screenshot("device-black");
+            scenario.onActivity(activity -> { activity.findViewById(R.id.nav_overview).performClick(); activity.findViewById(R.id.home_cpu).performClick(); });
+            screenshot("cpu-black");
+            scenario.onActivity(activity -> { activity.findViewById(R.id.nav_overview).performClick(); activity.findViewById(R.id.home_battery).performClick(); });
+            screenshot("battery-black");
+            scenario.onActivity(activity -> { activity.findViewById(R.id.nav_overview).performClick(); activity.findViewById(R.id.home_gpu).performClick(); });
+            screenshot("gpu-black");
             scenario.onActivity(activity -> activity.findViewById(R.id.nav_settings).performClick());
             screenshot("settings-black");
             scenario.recreate();

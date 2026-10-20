@@ -22,6 +22,13 @@ import java.util.concurrent.CopyOnWriteArraySet;
 final class TelemetryRepository {
     interface Listener { void onSnapshot(Snapshot snapshot); }
     private final Context context;
+    private final DiagnosticRecorder recorder;
+    private final CpuController cpuController;
+    private volatile boolean recording;
+    private String recordingError = "";
+    interface Result { void complete(String error); }
+    interface Export { void complete(java.io.File file, String error); }
+
     private final Handler worker, main = new Handler(Looper.getMainLooper());
     private final CopyOnWriteArraySet<Listener> listeners = new CopyOnWriteArraySet<>();
     private final long startElapsed = SystemClock.elapsedRealtime(), startUptime = SystemClock.uptimeMillis();
@@ -34,11 +41,16 @@ final class TelemetryRepository {
             if (listeners.isEmpty()) return;
             sample();
             PowerManager power = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-            worker.postDelayed(this, power.isInteractive() ? 3000 : 15000);
+            worker.postDelayed(this, recorder.active() || power.isInteractive() ? 3000 : 15000);
         }
     };
     TelemetryRepository(Context context) {
         this.context = context.getApplicationContext();
+        recorder = new DiagnosticRecorder(new File(context.getFilesDir(), "diagnostics"), java.util.Map.of(
+                "device", Build.DEVICE, "model", Build.MODEL, "android", Build.VERSION.RELEASE,
+                "build_id", Build.ID, "security_patch", Build.VERSION.SECURITY_PATCH,
+                "kernel", System.getProperty("os.version", "Unknown")));
+        cpuController = new CpuController(context);
         HandlerThread thread = new HandlerThread("butterd-sensors", android.os.Process.THREAD_PRIORITY_BACKGROUND);
         thread.start(); worker = new Handler(thread.getLooper());
     }
@@ -50,6 +62,46 @@ final class TelemetryRepository {
     void remove(Listener listener) {
         listeners.remove(listener);
         if (listeners.isEmpty()) worker.removeCallbacks(tick);
+    }
+    boolean isRecording() { return recording; }
+    boolean hasCpuOriginal(String policy) { return cpuController.hasSaved(policy); }
+    void changeGovernor(String policy, String governor, boolean restore, Result result) {
+        worker.post(() -> {
+            String error = "";
+            if (!rootEnabled) error = "Grant root access first. No CPU settings were changed.";
+            else try {
+                cpuController.apply(policy, governor, restore); lastRootRead = 0;
+                if (recorder.active()) try {
+                    recorder.marker("CPU " + policy + (restore ? " restore requested" : " governor selected: " + governor), SystemClock.elapsedRealtime());
+                } catch (Exception recordingFailure) { recordingError = "CPU change verified, but its log marker could not be saved"; }
+            } catch (Exception failure) { error = failure.getMessage() == null ? "CPU change could not be verified" : failure.getMessage(); }
+            String message = error; sample(); main.post(() -> result.complete(message));
+        });
+    }
+    void startRecording() {
+        worker.post(() -> {
+            try { recorder.start(SystemClock.elapsedRealtime()); recordingError = ""; }
+            catch (Exception failure) { recorder.stop("Recording failed"); recordingError = "Could not create the diagnostic recording"; }
+            recording = recorder.active(); lastRootRead = 0; sample();
+        });
+    }
+    void stopRecording() { worker.post(() -> { recorder.stop("Recording saved"); recording = false; if (!listeners.isEmpty()) sample(); }); }
+    void marker(String label, Result result) {
+        worker.post(() -> {
+            String error = "";
+            try { recorder.marker(label, SystemClock.elapsedRealtime()); }
+            catch (Exception failure) { error = "Could not save the marker. Check whether recording is still active."; }
+            sample(); String message = error; main.post(() -> result.complete(message));
+        });
+    }
+    void exportLog(Export result) {
+        worker.post(() -> {
+            java.io.File file = null; String error = "";
+            try { file = recorder.export(new File(context.getCacheDir(), "exports")); }
+            catch (Exception failure) { error = failure.getMessage() == null ? "Could not export recording" : failure.getMessage(); }
+            java.io.File exported = file; String message = error;
+            main.post(() -> result.complete(exported, message));
+        });
     }
     boolean isRootEnabled() { return rootEnabled; }
     boolean isRootBusy() { return rootBusy; }
@@ -87,7 +139,9 @@ final class TelemetryRepository {
                 s.plugged = battery.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0;
                 s.charging = battery.getIntExtra(BatteryManager.EXTRA_STATUS, -1) == BatteryManager.BATTERY_STATUS_CHARGING;
                 BatteryManager manager = (BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
-                s.watts = Measurements.batteryWatts(manager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW), voltage);
+                int microamps = manager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
+                if (microamps != Integer.MIN_VALUE) s.currentAmps = microamps / 1_000_000d;
+                s.watts = Measurements.batteryWatts(microamps, voltage);
             }
             if (Build.VERSION.SDK_INT >= 29) {
                 int status = ((PowerManager) context.getSystemService(Context.POWER_SERVICE)).getCurrentThermalStatus();
@@ -96,15 +150,25 @@ final class TelemetryRepository {
             }
             readStandard(s);
             if (rootEnabled) {
-                if (s.elapsed - lastRootRead >= 15000) {
+                if (s.elapsed - lastRootRead >= (recorder.active() ? 3000 : 15000)) {
                     try { rootData = RootReader.read(); lastRootRead = s.elapsed; }
                     catch (Exception failure) { rootEnabled = false; rootData = ""; rootError = context.getString(R.string.root_lost); }
                 }
-                if (rootEnabled) parseRoot(s, rootData);
+                if (rootEnabled) {
+                    parseRoot(s, rootData);
+                    if (s.chargingSource.equals("Root snapshot")) s.chargingSampleAge = Math.max(0, s.elapsed - lastRootRead);
+                }
             }
         } catch (RuntimeException failure) { s.error = context.getString(R.string.read_error); }
         s.root = rootEnabled; s.rootBusy = rootBusy;
         if (!rootError.isEmpty()) s.error = rootError;
+        try { recorder.sample(s); }
+        catch (Exception failure) {
+            if (failure instanceof DiagnosticRecorder.SizeLimit) recordingError = "";
+            else { recorder.stop("Recording stopped after a write error"); recordingError = "Recording stopped: storage could not be written"; }
+        }
+        recording = recorder.active(); s.recording = recording;
+        s.logStatus = recorder.status(); s.recordingError = recordingError;
         latest = s;
         main.post(() -> { for (Listener listener : listeners) listener.onSnapshot(s); });
     }
@@ -119,29 +183,68 @@ final class TelemetryRepository {
         if (policies != null) for (int i = 0; i < Math.min(policies.length, 16); i++) {
             String value = frequency(policies[i].getName(), read(new File(policies[i], "scaling_cur_freq")));
             if (!value.isEmpty()) frequencies.add(value);
+            try { s.policies.add(new CpuPolicy(policies[i].getName(), read(new File(policies[i], "scaling_governor")),
+                    read(new File(policies[i], "scaling_available_governors")), read(new File(policies[i], "related_cpus")),
+                    read(new File(policies[i], "scaling_min_freq")), read(new File(policies[i], "scaling_max_freq")))); }
+            catch (IllegalArgumentException ignored) { }
         }
         if (!frequencies.isEmpty()) s.frequencies = String.join("\n", frequencies);
         String profile = read(new File("/sys/class/thermal/thermal_message/sconfig"));
         if (profile.matches("[0-9]{1,4}")) s.profile = Measurements.thermalProfile(profile);
         s.usbVoltage = Measurements.positiveMicro(read(new File("/sys/class/power_supply/usb/voltage_now")), 50);
         s.usbCurrent = Measurements.positiveMicro(read(new File("/sys/class/power_supply/usb/current_now")), 30);
+        String online = read(new File("/sys/devices/system/cpu/online"));
+        if (online.matches("[0-9,\\-]{1,64}")) s.onlineCores = online;
+        String chargeLimit = read(new File("/sys/class/power_supply/battery/constant_charge_current"));
+        s.chargeLimitAmps = Measurements.positiveMicro(chargeLimit, 30);
+        s.bypassCommand = bypassState(read(new File("/proc/mtk_battery_cmd/current_cmd")));
+        s.powerPath = powerPathState(read(new File("/proc/mtk_battery_cmd/en_power_path")));
+        if (Double.isFinite(s.chargeLimitAmps) || !s.bypassCommand.equals("Unavailable") || !s.powerPath.equals("Unavailable")) {
+            s.chargingSource = "Standard access"; s.chargingSampleAge = 0;
+        }
         s.gpuFrequency = gpu(read(new File("/sys/kernel/ged/hal/current_freqency")));
     }
     private static void parseRoot(Snapshot s, String data) {
         List<String> frequencies = new ArrayList<>();
+        List<CpuPolicy> rootPolicies = new ArrayList<>();
         for (String line : data.split("\n")) {
             String[] parts = line.split("\\|", -1);
             if (parts.length == 3 && parts[0].equals("T")) acceptTemperature(s, parts[1], parts[2]);
             if (parts.length == 3 && parts[0].equals("F")) {
                 String value = frequency(parts[1], parts[2]); if (!value.isEmpty()) frequencies.add(value);
             }
+            if (parts.length == 8 && parts[0].equals("C")) {
+                try { rootPolicies.add(new CpuPolicy(parts[1], parts[2], parts[3], parts[4], parts[5], parts[6])); }
+                catch (IllegalArgumentException ignored) { }
+            }
             if (parts.length != 2) continue;
+            if (parts[0].equals("O") && parts[1].matches("[0-9,\\-]{1,64}")) s.onlineCores = parts[1];
+            if (parts[0].equals("H")) {
+                String state = powerPathState(parts[1]);
+                if (!state.equals("Unavailable")) { s.powerPath = state; s.chargingSource = "Root snapshot"; }
+            }
+            if (parts[0].equals("K")) {
+                double limit = Measurements.positiveMicro(parts[1], 30);
+                if (Double.isFinite(limit)) { s.chargeLimitAmps = limit; s.chargingSource = "Root snapshot"; }
+            }
+            if (parts[0].equals("B")) {
+                String bypass = bypassState(parts[1]);
+                if (!bypass.equals("Unavailable")) { s.bypassCommand = bypass; s.chargingSource = "Root snapshot"; }
+            }
             if (parts[0].equals("P") && parts[1].matches("[0-9]{1,4}")) s.profile = Measurements.thermalProfile(parts[1]);
-            if (parts[0].equals("V")) s.usbVoltage = Measurements.positiveMicro(parts[1], 50);
-            if (parts[0].equals("I")) s.usbCurrent = Measurements.positiveMicro(parts[1], 30);
-            if (parts[0].equals("G")) s.gpuFrequency = gpu(parts[1]);
+            if (parts[0].equals("V")) { double value = Measurements.positiveMicro(parts[1], 50); if (Double.isFinite(value)) s.usbVoltage = value; }
+            if (parts[0].equals("I")) { double value = Measurements.positiveMicro(parts[1], 30); if (Double.isFinite(value)) s.usbCurrent = value; }
+            if (parts[0].equals("G")) { String value = gpu(parts[1]); if (!value.equals("Unavailable")) s.gpuFrequency = value; }
         }
         if (!frequencies.isEmpty()) s.frequencies = String.join("\n", frequencies);
+        if (!rootPolicies.isEmpty()) s.policies = rootPolicies;
+    }
+    private static String powerPathState(String raw) {
+        return raw.equals("1") ? "Reported enabled" : raw.equals("0") ? "Reported disabled" : "Unavailable";
+    }
+    private static String bypassState(String raw) {
+        if (!raw.trim().matches("[01]\\s+[01]")) return "Unavailable";
+        return raw.trim().split("\\s+")[1].equals("1") ? "Charging disable requested" : "Charging disable not requested";
     }
     private static String read(File file) {
         try (BufferedReader reader = new BufferedReader(new FileReader(file))) {

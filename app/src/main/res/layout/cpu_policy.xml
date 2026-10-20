@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:padding="20dp" android:background="@drawable/card" android:orientation="vertical">
+    <TextView android:id="@+id/policy_title" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="CPU cluster" android:textSize="22sp"/>
+    <TextView android:id="@+id/policy_details" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="" android:layout_marginTop="8dp"/>
+    <com.google.android.material.button.MaterialButton android:id="@+id/policy_governor" style="?attr/materialButtonOutlinedStyle" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="@string/cpu_select" android:textAllCaps="false"/>
+    <com.google.android.material.button.MaterialButton android:id="@+id/policy_restore" style="?attr/materialButtonOutlinedStyle" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="@string/cpu_restore" android:textAllCaps="false"/>
+</LinearLayout>

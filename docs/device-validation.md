@@ -23,3 +23,20 @@ Before recommending the development APK on Duchamp:
    root enabled. No smoothness or thermal/power improvements are claimed yet.
 8. Confirm ROM thermal-profile changes appear in Butterd without Butterd writing
    back or fighting XiaomiParts. Confirm no kernel settings change on exit.
+
+For 0.2, also check:
+
+9. Open each detail screen from Overview, navigate back, rotate, and test large
+   fonts. CPU changes must be disabled without root. GPU frequency writes and
+   charging overrides must not be offered.
+10. If testing a CPU governor, record the original, choose one exposed allowlisted
+    governor, verify readback and restore it. Repeat after reopening the app. Do
+    not assume ROM concurrency is solved: unexpected external changes must produce
+    a conflict instead of forced restoration. No governor is applied at boot.
+11. Start/stop a recording, add markers and share it. Inspect JSONL for unavailable
+    null values, charging sample ages and expected sensor values. Confirm Stop in
+    the notification ends recording and revoking notification permission stops it.
+    Check storage/time limits and ensure sharing requires an explicit user action.
+12. To investigate the existing ROM bypass, record normal charging, the lower-current
+    selection, bypass on/off, screen changes and reconnect. Use markers and compare
+    battery flow with adapter measurements. Butterd does not enact the sequence.

@@ -8,7 +8,8 @@ there is no independent polling loop per screen. Android APIs provide standard
 battery telemetry and thermal severity. Readable sysfs supplies optional sensors.
 Root is requested only from the user's access button and is not persisted across
 process restarts. A failed root read clears privileged data and falls back to
-standard telemetry. su receives a fixed command, never paths or commands from an
+standard telemetry. Applied CPU governors are not automatically restored on root
+revocation; a saved original remains available for explicit restoration. su receives a fixed command, never paths or commands from an
 Intent, preference, network, or text field. It only reads bounded sensor files.
 The root process has a timeout and is destroyed afterward. Permissions granted
 in an external root manager are managed by that manager, not revoked by the app's
@@ -30,7 +31,8 @@ purpose and is not misclassified as dataSync, health or connectedDevice. It post
 immediately, then updates quietly at most once per fifteen seconds while executing.
 There is no auto-start on boot or process death: START_NOT_STICKY is intentional.
 Stopping the monitor removes its observer and notification. Force stop and reboot
-leave nothing to restore because no device settings are written.
+leave nothing to restore without reapplying device settings. A manual CPU governor change can remain until
+restored or until ROM boot initialization resets it.
 
 ## Interface
 
@@ -61,5 +63,37 @@ loop or bitmap effect runs while scrolling.
 Thermal or charging controls need a separate, reviewed design with verified driver
 semantics, readback, partial-failure handling, ownership coordination with
 XiaomiParts and hardware testing. There is no “enable all writes with root” switch.
-No unsupported safety guarantees such as “cannot brick” are made; the first
-version removes kernel writes from the application entirely.
+No unsupported safety guarantees such as “cannot brick” are made. CPU governor
+selection is the sole explicit, bounded write path; other tuning remains deferred.
+
+## Context panels, CPU changes and diagnostics
+
+CPU, Battery and GPU detail screens inflate lazily on first visit. Overview keeps
+summary readings and contextual shortcuts. The CPU screen is the only write-capable
+surface: explicit confirmation may change one CPUFreq scaling_governor to a
+supported allowlisted governor. Performance and userspace governors are excluded
+from selection. Frequency limits, core online state, thermal and charging nodes
+remain untouched. The worker saves original/expected governor and boot UUID in a
+private journal before writing, validates paths and values, compares the current
+governor before a write and checks readback afterward. Restore refuses to overwrite
+an unexpected external state. This is optimistic coordination, not proof that no
+other controller can race a change. No background reassertion or boot application
+exists. Closing the app does not automatically restore an applied governor.
+
+Diagnostics use a bounded private JSONL recorder on the existing worker thread.
+A recording requires the explicitly started foreground notification. The service
+must acknowledge startForegroundService before rejecting a denied-permission
+request; stopping before that acknowledgement caused a crash in the initial
+Android 14 emulator check and was corrected. No further emulator runs are used.
+
+Each recording is capped at 30 minutes or 2 MiB. A current session and one previous
+session are retained. Exports are immutable snapshots in a dedicated cache folder,
+limited to three files. FileProvider grants read access only to the chosen export.
+There is no external-storage permission, logcat capture or upload. Markers are user
+observations, never device-state verification. CPU governor actions can also add
+markers. JSON invalid/missing numeric data is null, not a fabricated zero.
+
+The battery screen also reads en_power_path. Its kernel show handler initializes
+its result true and ignores the charger driver's error return, so even a reported
+one is diagnostic evidence only, not a guarantee of physical bypass. The raw
+charging-disable request and signed battery current are logged alongside it.

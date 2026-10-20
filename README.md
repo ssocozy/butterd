@@ -1,59 +1,76 @@
 # Butterd
 
-A monochrome, read-only device monitor for POCO X6 Pro / Redmi K70E (Duchamp).
-Java and XML, with white, black and system themes. Android 14 is the minimum;
-Android 14–17 are the intended compatibility range. Optional Android 17 tests skip with an
-explicit notice if its emulator image is not published. CI emulator results, rather
-than the presence of an SDK number, determine tested compatibility.
+A monochrome device monitor for POCO X6 Pro / Redmi K70E (Duchamp), built with
+Java and XML. Android 14 minimum, compile/target SDK 36. Android 17 compatibility
+has not been verified. White, black and system themes are available.
 
-## Included in 0.1
+## Screens
 
-- Battery percentage, temperature, voltage and signed net battery power.
-- Session deep-sleep estimate from elapsed time minus uptime, without root.
-- Android thermal severity; readable SoC temperature, CPU policy clocks, GED GPU
-  frequency, ROM thermal profile and USB input voltage/current where available.
-- Shortcuts to compatible XiaomiParts and thermal-profile screens, with no root
-  required. ROM screens own their settings; Butterd does not alter private prefs.
-- Explicit, optional root access for a fixed list of read-only sensors. Denial,
-  timeout or loss falls back to standard access. No root prompt on launch.
-- A user-started, quiet live notification with a Stop action. Notification permission
-  is requested only when enabling it; denied/blocked notifications leave it off.
-- Rounded cards, scalable text, monochrome navigation icons and a translucent
-  floating bottom bar with an opaque accessibility option. The bar uses a tinted
-  surface, not expensive continuous backdrop capture or a claimed native iOS blur.
+- **Overview:** net battery power, temperature, voltage, thermal status and session
+  deep sleep. Shortcuts open the detail screens.
+- **CPU:** online cores, per-policy governors and ROM frequency ranges. With explicit
+  root access, choose a supported allowlisted dynamic/power-saving governor or
+  restore the original saved for this boot. There is no automatic application at
+  boot, core hotplug, voltage tuning or frequency-limit write.
+- **Battery:** signed battery current, USB readings, requested charging-current
+  limit, ROM charging-disable flag and driver-reported primary power path, where
+  readable. These flags do not prove physical bypass charging.
+- **GPU:** readable driver frequency. GPU tuning remains ROM-managed.
+- **Device:** hardware and access information, plus shortcuts to compatible
+  XiaomiParts screens. Butterd does not edit XiaomiParts private preferences.
+- **Settings:** appearance and a permission-gated, quiet live notification with Stop.
 
-Battery power is **net power at the battery**, not wall/adapter wattage. Positive
-current means entering the battery under Android's API contract; OEM sensor bugs
-can still affect readings. USB voltage/current are separately labeled. Missing
-or inaccessible measurements display “Unavailable”, never guessed values.
-Deep sleep means device suspend, not screen-off time or Android Doze. The session
-starts with the app process and resets when that process ends. Notification values
-are the latest sample, not a promise of updates while the CPU is suspended.
+Battery power is net power **at the battery**, not adapter wattage. Missing data
+stays unavailable. Deep sleep estimates device suspend over the app-process
+session, not screen-off time or Doze. Polling does not hold a wake lock; notification
+values remain the latest sample while the CPU is suspended.
 
-## Safety boundary
+## Record a charging test
 
-This version has **no kernel-setting write path**, charging override, thermal
-bypass, boot receiver, root module, partition access, SELinux changes, reboot
-command, wake lock or network permission. Root only expands read access; it does
-not unlock hidden dangerous controls. Butterd leaves ROM automation in charge.
-Observation does not guarantee zero battery overhead: polling itself costs work.
+1. Open **Battery → Record diagnostics** and review what will be recorded.
+2. Allow notifications. Optional root access on Device unlocks more sensor reads.
+3. Open XiaomiParts and reproduce the lower-current/bypass sequence there.
+4. Return to Battery and add a marker after each change.
+5. Stop recording, then **Share recording** to send the `.jsonl` file yourself.
 
-## Get a build
+Recordings are opt-in and private until shared. They contain sensor readings,
+CPU state, model and software versions, not serial numbers, IMEI, account data,
+app lists or logcat. Maximum 30 minutes or 2 MB; the latest two sessions are kept.
+Three export snapshots are retained in app cache. Sampling is approximately every
+three seconds during recording, so short transitions may be missed. Root readings
+are cached up to fifteen seconds otherwise. Sample age is included in reports.
+Stopping the notification stops recording; stopping recording alone leaves the
+live monitor enabled until you turn it off. No recording restarts after process
+termination or reboot. There is no network permission or automatic upload.
 
-Open [GitHub Actions](https://github.com/ssocozy/butterd/actions/workflows/android.yml),
-select a successful run, and download `butterd-debug`. Extract and install the APK.
-These are development APKs signed using the runner's debug key; signatures can
-change between runs, requiring uninstall/reinstall. A stable release signing key
-must be configured before distributing updateable production releases.
+## Control boundaries
 
-All compilation and execution of Android tests happens in **GitHub Actions**.
-No local build is required or performed. Each push runs one job for JVM conversion tests, Android lint and APK assembly.
-Emulator permission/navigation/theme/lifecycle tests are manual-only: use Run
-workflow and enable `device_tests`. Those jobs run one at a time, after the build
-passes. Device-test artifacts include screenshots and reports. Emulators
-cannot verify Duchamp sensor availability, root managers, physical charging
-accuracy, real suspend, thermal behavior or frame pacing on the phone.
+Only an explicit CPU governor change writes a kernel setting. It is restricted to
+validated CPUFreq policy paths and supported allowlisted governors. Originals are
+saved before writes, readback is checked, and restoration rejects an unexpected
+external governor change instead of overwriting it. This check reduces races; it
+is not a lock shared with ROM services. No setting is repeatedly forced.
 
-See [design and safety decisions](docs/architecture.md),
-[device source findings](docs/device-research.md), and
-[manual acceptance checks](docs/device-validation.md).
+Governor changes may persist after closing the app until restored or rebooted.
+“Stop using root” stops privileged access; it does not restore a governor. Restore
+before revoking access if desired. Reboot returns to ROM initialization. Nothing
+is applied during boot. Device/kernel bugs and competing controllers still need
+physical testing; zero-risk or guaranteed performance claims are not made.
+
+Charging limits, thermal protections, CPU/GPU frequency limits, core online state,
+partitions and SELinux are never written. There is no root module or boot receiver.
+Charging bypass replacement remains deferred until the recorded hardware results
+support a verified transition design owned by the ROM controller.
+
+## Build and install
+
+All compilation runs in [GitHub Actions](https://github.com/ssocozy/butterd/actions/workflows/android.yml).
+Each push runs **one job**: unit tests, lint and APK assembly. No emulators run.
+Download `butterd-debug` from a successful run and extract the installable APK.
+Development APKs use runner debug keys, which can change between runs and require
+uninstall/reinstall. Stable release signing must be configured before distributing
+updateable production builds.
+
+Physical sensor accuracy, root managers, charging behavior and frame pacing must
+be checked on the phone. See [architecture](docs/architecture.md),
+[source findings](docs/device-research.md), and [device checks](docs/device-validation.md).

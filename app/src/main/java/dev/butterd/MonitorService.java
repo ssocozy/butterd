@@ -19,7 +19,7 @@ import java.util.Locale;
 
 /** Explicit, user-started monitoring. No boot receiver, wake lock, alarm, or root request. */
 public final class MonitorService extends Service implements TelemetryRepository.Listener {
-    static final String CHANNEL = "live_monitor", STOP = "dev.butterd.STOP";
+    static final String CHANNEL = "live_monitor", STOP = "dev.butterd.STOP", START_LOG = "dev.butterd.START_LOG";
     private static final int ID = 1;
     private static volatile boolean running;
     private TelemetryRepository repository;
@@ -34,12 +34,15 @@ public final class MonitorService extends Service implements TelemetryRepository
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && STOP.equals(intent.getAction())) { stopSelf(); return START_NOT_STICKY; }
-        if (!notificationsAllowed()) { stopSelf(); return START_NOT_STICKY; }
         try {
             Notification notification = build(getString(R.string.waiting), getString(R.string.notifications_note));
             if (Build.VERSION.SDK_INT >= 34) startForeground(ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
             else startForeground(ID, notification);
+            // A startForegroundService request must always be acknowledged before stopping,
+            // including denied-notification races. Permission denial still prevents sampling.
+            if (!notificationsAllowed()) { stopSelf(); return START_NOT_STICKY; }
             running = true; lastUpdate = 0; repository.add(this);
+            if (intent != null && START_LOG.equals(intent.getAction())) repository.startRecording();
         } catch (RuntimeException failure) { stopSelf(); }
         return START_NOT_STICKY;
     }
@@ -57,7 +60,7 @@ public final class MonitorService extends Service implements TelemetryRepository
         String power = Double.isFinite(s.watts) ? String.format(Locale.getDefault(), "%.1f W", Math.abs(s.watts)) : "Unavailable";
         String direction = Double.isFinite(s.watts) ? (s.watts >= 0 ? "into battery" : "from battery") : "battery power";
         String sleep = Double.isFinite(s.sleepPercent) ? String.format(Locale.getDefault(), "%.0f%%", s.sleepPercent) : "Unavailable";
-        String text = Measurements.value(s.batteryTemperature, "°C") + " · Deep sleep " + sleep + " · " + Measurements.duration(s.sleepingMillis) + " this session";
+        String text = (s.recording ? "Recording · " : "") + Measurements.value(s.batteryTemperature, "°C") + " · Deep sleep " + sleep + " · " + Measurements.duration(s.sleepingMillis) + " this session";
         try { getSystemService(NotificationManager.class).notify(ID, build(power + " " + direction, text)); }
         catch (RuntimeException failure) { stopSelf(); }
     }
@@ -72,7 +75,7 @@ public final class MonitorService extends Service implements TelemetryRepository
                 .addAction(0, getString(R.string.stop), stop).build();
     }
     @Override public void onDestroy() {
-        running = false; if (repository != null) repository.remove(this);
+        running = false; if (repository != null) { repository.stopRecording(); repository.remove(this); }
         stopForeground(STOP_FOREGROUND_REMOVE); super.onDestroy();
     }
     @Override public IBinder onBind(Intent intent) { return null; }

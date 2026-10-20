@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 final class RootReader {
     private static final String SCRIPT =
             "[ \"$(id -u)\" = 0 ] || exit 1; printf 'ROOT|0\\n'; " +
+            "printf 'BOOT|%s\\n' \"$(head -c 40 /proc/sys/kernel/random/boot_id)\"; " +
             "n=0; for z in /sys/class/thermal/thermal_zone*; do " +
             "[ -r \"$z/type\" ] && [ -r \"$z/temp\" ] || continue; " +
             "printf 'T|%s|%s\\n' \"$(head -c 64 \"$z/type\")\" \"$(head -c 24 \"$z/temp\")\"; " +
@@ -16,7 +17,12 @@ final class RootReader {
             "n=0; for p in /sys/devices/system/cpu/cpufreq/policy*; do " +
             "[ -r \"$p/scaling_cur_freq\" ] || continue; " +
             "printf 'F|%s|%s\\n' \"${p##*/}\" \"$(head -c 24 \"$p/scaling_cur_freq\")\"; " +
+            "printf 'C|%s|%s|%s|%s|%s|%s|1\\n' \"${p##*/}\" \"$(head -c 32 \"$p/scaling_governor\")\" \"$(head -c 160 \"$p/scaling_available_governors\")\" \"$(head -c 64 \"$p/related_cpus\")\" \"$(head -c 24 \"$p/scaling_min_freq\")\" \"$(head -c 24 \"$p/scaling_max_freq\")\"; " +
             "n=$((n+1)); [ \"$n\" -ge 16 ] && break; done; " +
+            "printf 'K|%s\\n' \"$(head -c 24 /sys/class/power_supply/battery/constant_charge_current 2>/dev/null)\"; " +
+            "printf 'B|%s\\n' \"$(head -c 32 /proc/mtk_battery_cmd/current_cmd 2>/dev/null)\"; " +
+            "printf 'H|%s\\n' \"$(head -c 16 /proc/mtk_battery_cmd/en_power_path 2>/dev/null)\"; " +
+            "printf 'O|%s\\n' \"$(head -c 64 /sys/devices/system/cpu/online 2>/dev/null)\"; " +
             "printf 'P|%s\\n' \"$(head -c 24 /sys/class/thermal/thermal_message/sconfig 2>/dev/null)\"; " +
             "printf 'V|%s\\n' \"$(head -c 24 /sys/class/power_supply/usb/voltage_now 2>/dev/null)\"; " +
             "printf 'I|%s\\n' \"$(head -c 24 /sys/class/power_supply/usb/current_now 2>/dev/null)\"; " +

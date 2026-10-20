@@ -1,33 +1,61 @@
+<?xml version="1.0" ?>
 <resources>
     <string name="app_name">Butterd</string>
-    <string name="overview">Overview</string><string name="device">Device</string><string name="settings">Settings</string>
-    <string name="intro">A quieter view of your device.</string><string name="live">LIVE · READ ONLY</string>
-    <string name="battery_power">Battery power</string><string name="power_note">Net power at the battery. This is not adapter wattage.</string>
-    <string name="unavailable">Unavailable</string><string name="waiting">Waiting for a reading</string>
-    <string name="battery_temp">Battery temperature</string><string name="battery_voltage">Battery voltage</string>
-    <string name="sleep">Deep sleep</string><string name="sleep_note">Estimated time suspended since this monitoring session began. Device suspend is different from Doze.</string>
-    <string name="thermal_status">Thermal status</string><string name="activity">RECENT POWER</string>
-    <string name="session_note">A live, in-memory view. No history is uploaded or stored.</string>
-    <string name="hardware">HARDWARE</string><string name="access">ACCESS</string>
-    <string name="cpu_temp">SoC / CPU temperature</string><string name="gpu_freq">GPU frequency</string>
-    <string name="profile">ROM thermal profile</string><string name="cpu_freq">CPU policies</string>
-    <string name="adapter_voltage">USB input voltage</string><string name="adapter_current">USB input current</string>
+    <string name="overview">Overview</string>
+    <string name="device">Device</string>
+    <string name="settings">Settings</string>
+    <string name="intro">A quieter view of your device.</string>
+    <string name="live">LIVE · MONITORING</string>
+    <string name="battery_power">Battery power</string>
+    <string name="power_note">Net power at the battery. This is not adapter wattage.</string>
+    <string name="unavailable">Unavailable</string>
+    <string name="waiting">Waiting for a reading</string>
+    <string name="battery_temp">Battery temperature</string>
+    <string name="battery_voltage">Battery voltage</string>
+    <string name="sleep">Deep sleep</string>
+    <string name="sleep_note">Estimated time suspended since this monitoring session began. Device suspend is different from Doze.</string>
+    <string name="thermal_status">Thermal status</string>
+    <string name="activity">RECENT POWER</string>
+    <string name="session_note">The graph stays in memory. Diagnostic recordings are saved only when you start one.</string>
+    <string name="hardware">HARDWARE</string>
+    <string name="access">ACCESS</string>
+    <string name="cpu_temp">SoC / CPU temperature</string>
+    <string name="gpu_freq">GPU frequency</string>
+    <string name="profile">ROM thermal profile</string>
+    <string name="cpu_freq">CPU policies</string>
+    <string name="adapter_voltage">USB input voltage</string>
+    <string name="adapter_current">USB input current</string>
     <string name="source_note">Only readable, identified sensors appear. Missing data stays unavailable.</string>
-    <string name="request_root">Check root access</string><string name="root_note">Optional. Your root manager may ask for permission. Butterd only reads a fixed list of sensors; it never changes kernel settings.</string>
+    <string name="request_root">Check root access</string>
+    <string name="root_note">Optional. Your root manager may ask for permission. Root unlocks more sensor readings and supported CPU governor controls. Each governor change needs a separate confirmation.</string>
     <string name="disconnect_root">Stop using root</string>
-    <string name="notifications">Live notification</string><string name="notifications_note">Battery power, temperature and session deep sleep. Updates every 15 seconds while awake; no wake lock.</string>
-    <string name="appearance">APPEARANCE</string><string name="theme">Theme</string><string name="theme_system">System</string><string name="theme_light">White</string><string name="theme_dark">Black</string>
-    <string name="reduce_transparency">Solid navigation</string><string name="reduce_transparency_note">Use an opaque surface for greater contrast.</string>
-    <string name="safety_title">Observation comes first.</string><string name="safety_note">This version reads device data. Charging overrides, thermal bypass, frequency writes and boot scripts are not included.</string>
-    <string name="about">Butterd 0.1 · Built for Duchamp</string>
-    <string name="monitor_channel">Live device monitor</string><string name="monitor_channel_description">Quiet updates for the monitoring session you started.</string>
-    <string name="stop">Stop</string><string name="notification_started">Live monitoring started</string><string name="notification_stopped">Live monitoring stopped</string>
+    <string name="notifications">Live notification</string>
+    <string name="notifications_note">Battery power, temperature and session deep sleep. Updates every 15 seconds while awake; no wake lock.</string>
+    <string name="appearance">APPEARANCE</string>
+    <string name="theme">Theme</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">White</string>
+    <string name="theme_dark">Black</string>
+    <string name="reduce_transparency">Solid navigation</string>
+    <string name="reduce_transparency_note">Use an opaque surface for greater contrast.</string>
+    <string name="safety_title">Observation comes first.</string>
+    <string name="safety_note">Device data is read-only unless you explicitly change a supported CPU governor. Charging overrides, thermal bypass, frequency writes and boot scripts are not included.</string>
+    <string name="about">Butterd 0.2 · Built for Duchamp</string>
+    <string name="monitor_channel">Live device monitor</string>
+    <string name="monitor_channel_description">Quiet updates for the monitoring session you started.</string>
+    <string name="stop">Stop</string>
+    <string name="notification_started">Live monitoring started</string>
+    <string name="notification_stopped">Live monitoring stopped</string>
     <string name="notification_denied">Notifications are off. Enable them in Android settings to use the live monitor.</string>
-    <string name="open_settings">Settings</string><string name="monitor_failed">Could not start the monitor. Try again while Butterd is open.</string>
-    <string name="root_checking">Waiting for root permission…</string><string name="root_granted">Root granted · read-only sensors enabled</string><string name="root_denied">Root unavailable or denied. Standard monitoring still works.</string>
+    <string name="open_settings">Settings</string>
+    <string name="monitor_failed">Could not start the monitor. Try again while Butterd is open.</string>
+    <string name="root_checking">Waiting for root permission…</string>
+    <string name="root_granted">Root granted · read-only sensors enabled</string>
+    <string name="root_denied">Root unavailable or denied. Standard monitoring still works.</string>
     <string name="root_lost">Root read failed. Standard monitoring remains available; check access to retry.</string>
-    <string name="root_standard">Standard access</string><string name="root_active">Root · read only</string>
-    <string name="root_disabled">Root sensor access disabled</string>
+    <string name="root_standard">Standard access</string>
+    <string name="root_active">Root access granted</string>
+    <string name="root_disabled">Root access disabled. Applied governors are unchanged.</string>
     <string name="read_error">Some sensors could not be read. Available readings will continue.</string>
     <string name="rom_controls">ROM CONTROLS</string>
     <string name="rom_controls_note">Open your ROM’s controls. XiaomiParts handles changes and keeps its automation in sync.</string>
@@ -35,4 +63,44 @@
     <string name="rom_parts">Open XiaomiParts</string>
     <string name="rom_controls_missing">XiaomiParts is not installed or does not expose compatible screens on this ROM.</string>
     <string name="rom_screen_unavailable">That ROM screen is unavailable. No settings were changed.</string>
+    <string name="cpu_screen">CPU</string>
+    <string name="battery_screen">Battery</string>
+    <string name="gpu_screen">GPU</string>
+    <string name="open_cpu">CPU details and governors</string>
+    <string name="open_battery">Battery and charging diagnostics</string>
+    <string name="open_gpu">GPU details</string>
+    <string name="context_title">EXPLORE YOUR DEVICE</string>
+    <string name="cpu_intro">Core status, cluster clocks and manual governor selection.</string>
+    <string name="cpu_online">Online cores</string>
+    <string name="cpu_policy_note">Frequency limits are managed by the ROM. Online cores are available to Android; this does not mean they are all busy.</string>
+    <string name="cpu_control_note">Root enables supported governor choices. Changes can remain after closing Butterd until restored or rebooted. Nothing is applied at boot. ROM changes take priority.</string>
+    <string name="cpu_unavailable">No readable CPU policies. Check root access on the Device screen if you want to inspect more.</string>
+    <string name="cpu_access">Access settings</string>
+    <string name="cpu_select">Choose governor</string>
+    <string name="cpu_restore">Restore original</string>
+    <string name="cpu_confirm">Change this cluster’s governor? This may affect responsiveness and battery use. Frequency and thermal limits remain with the ROM.</string>
+    <string name="cpu_changed">Governor verified</string>
+    <string name="cpu_restored">Original governor checked and restored</string>
+    <string name="cpu_pending">Checking CPU state…</string>
+    <string name="battery_intro">See what charging is doing, then record a diagnostic session.</string>
+    <string name="charge_limit">Requested battery current limit</string>
+    <string name="bypass_command">ROM charging-disable command</string>
+    <string name="bypass_note">A charging-disable flag does not prove hardware bypass. Power-path transitions and actual battery current still need verification.</string>
+    <string name="diagnostics">DIAGNOSTICS</string>
+    <string name="record_start">Record diagnostics</string>
+    <string name="record_stop">Stop recording</string>
+    <string name="record_marker">Add test marker</string>
+    <string name="record_share">Share recording</string>
+    <string name="record_intro">Record battery power, temperatures, USB readings, charging commands and CPU state. Root adds readings only after you grant it.</string>
+    <string name="record_privacy">Recordings stay on this phone until you choose to share. They contain device model, software versions and sensor readings, but no account information, serial number, IMEI or app list. Maximum 30 minutes or 2 MB. The latest two sessions are kept. A live notification is required; stopping it ends recording. Stopping recording leaves the live monitor on until you turn it off.</string>
+    <string name="record_start_action">Start</string>
+    <string name="record_started">Diagnostic recording requested</string>
+    <string name="record_stopped">Recording saved</string>
+    <string name="record_no_session">No recording yet</string>
+    <string name="record_marker_saved">Test marker saved</string>
+    <string name="share_recording">Share Butterd diagnostics</string>
+    <string name="bypass_test_title">CHECKING ROM BYPASS</string>
+    <string name="bypass_test_steps">Start recording before changing anything. In XiaomiParts, reproduce your normal lower-power selection and bypass toggle. Add a marker after each change, then return here, stop recording and share the file. Butterd observes this test; it does not alter charging.</string>
+    <string name="gpu_intro">Readings from the driver, with the ROM in control.</string>
+    <string name="gpu_note">GPU frequency controls remain ROM-managed in this version. Butterd does not lock clocks or override thermal and battery limits.</string>
 </resources>
