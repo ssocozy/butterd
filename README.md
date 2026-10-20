@@ -2,7 +2,7 @@
 
 A monochrome, read-only device monitor for POCO X6 Pro / Redmi K70E (Duchamp).
 Java and XML, with white, black and system themes. Android 14 is the minimum;
-Android 14–17 are the intended compatibility range. Android 17 tests skip with an
+Android 14–17 are the intended compatibility range. Optional Android 17 tests skip with an
 explicit notice if its emulator image is not published. CI emulator results, rather
 than the presence of an SDK number, determine tested compatibility.
 
@@ -45,9 +45,10 @@ change between runs, requiring uninstall/reinstall. A stable release signing key
 must be configured before distributing updateable production releases.
 
 All compilation and execution of Android tests happens in **GitHub Actions**.
-No local build is required or performed. The workflow runs JVM conversion tests,
-Android lint, APK assembly, and emulator permission/navigation/theme/lifecycle
-smoke tests. Device-test artifacts include screenshots and reports. Emulators
+No local build is required or performed. Each push runs one job for JVM conversion tests, Android lint and APK assembly.
+Emulator permission/navigation/theme/lifecycle tests are manual-only: use Run
+workflow and enable `device_tests`. Those jobs run one at a time, after the build
+passes. Device-test artifacts include screenshots and reports. Emulators
 cannot verify Duchamp sensor availability, root managers, physical charging
 accuracy, real suspend, thermal behavior or frame pacing on the phone.
 

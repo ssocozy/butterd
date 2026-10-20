@@ -4,6 +4,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      device_tests:
+        description: Run emulator tests (uses extra Actions minutes)
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -25,7 +30,7 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
       - name: Build, unit tests and lint
-        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
       - name: Upload installable development APK
         uses: actions/upload-artifact@v4
         with:
@@ -41,10 +46,13 @@ jobs:
             app/build/reports/
             app/build/test-results/
   device-tests:
+    if: github.event_name == 'workflow_dispatch' && inputs.device_tests
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         api: [34, 35, 36, 37]
     steps:
