@@ -16,22 +16,22 @@ public final class PowerGraph extends View {
     private final Path path = new Path();
     public PowerGraph(Context context, AttributeSet attrs) { super(context, attrs); }
     public void add(double value) {
-        values[next] = Double.isFinite(value) ? (float) Math.abs(value) : Float.NaN;
+        values[next] = Double.isFinite(value) ? (float) value : Float.NaN;
         next = (next + 1) % values.length; count = Math.min(count + 1, values.length); invalidate();
     }
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         float width = getWidth(), height = getHeight() - 10;
         paint.setColor(ContextCompat.getColor(getContext(), R.color.line)); paint.setStrokeWidth(1);
-        for (int i = 1; i <= 3; i++) canvas.drawLine(0, height * i / 3, width, height * i / 3, paint);
+        canvas.drawLine(0, height / 2, width, height / 2, paint);
         if (count < 2) return;
         float max = 5;
-        for (float value : values) if (Float.isFinite(value)) max = Math.max(max, value * 1.15f);
+        for (float value : values) if (Float.isFinite(value)) max = Math.max(max, Math.abs(value) * 1.15f);
         path.reset(); boolean pen = false;
         for (int i = 0; i < count; i++) {
             float value = values[(next - count + i + values.length) % values.length];
             if (!Float.isFinite(value)) { pen = false; continue; }
-            float x = width * i / (values.length - 1), y = height - value / max * (height - 8);
+            float x = width * i / (values.length - 1), y = height / 2 - value / max * (height / 2 - 8);
             if (pen) path.lineTo(x, y); else path.moveTo(x, y);
             pen = true;
         }

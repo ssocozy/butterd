@@ -1,138 +1,157 @@
-<?xml version="1.0" ?>
+<?xml version='1.0' encoding='utf-8'?>
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:id="@+id/root" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/background">
     <FrameLayout android:id="@+id/content" android:layout_width="match_parent" android:layout_height="match_parent">
         <ScrollView android:id="@+id/page_overview" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:visibility="visible">
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingStart="24dp" android:paddingEnd="24dp" android:paddingTop="24dp" android:paddingBottom="120dp" android:orientation="vertical">
-                <TextView android:id="@+id/page_overview_title" style="@style/Title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/app_name"/>
-                <TextView android:id="@+id/page_overview_subtitle" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/intro" android:layout_marginTop="6dp"/>
+                <TextView android:id="@+id/page_overview_title" style="@style/Title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/app_name" />
+                <TextView android:id="@+id/page_overview_subtitle" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/intro" android:layout_marginTop="6dp" />
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="28dp" android:padding="24dp" android:orientation="vertical" android:background="@drawable/hero">
-                    <TextView android:id="@+id/live" style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/live" android:textColor="@color/hero_ink"/>
-                    <TextView android:id="@+id/power" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:textSize="56sp" android:textColor="@color/hero_ink" android:layout_marginTop="20dp"/>
-                    <TextView android:id="@+id/power_direction" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/battery_power" android:textColor="@color/hero_ink"/>
-                    <TextView android:id="@+id/battery_state" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" android:textColor="@color/hero_ink" android:layout_marginTop="16dp"/>
+                    <TextView android:id="@+id/live" style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/live" android:textColor="@color/hero_ink" android:letterSpacing="0.08" />
+                    <TextView android:id="@+id/power" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:textSize="48sp" android:textColor="@color/hero_ink" android:layout_marginTop="20dp" android:fontFamily="sans-serif-light" />
+                    <TextView android:id="@+id/power_direction" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/battery_power" android:textColor="@color/hero_ink" />
+                    <TextView android:id="@+id/battery_state" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" android:textColor="@color/hero_ink" android:layout_marginTop="16dp" />
                 </LinearLayout>
-                <TextView android:id="@+id/power_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/power_note" android:layout_marginTop="12dp"/>
+                <TextView android:id="@+id/power_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/power_note" android:layout_marginTop="12dp" />
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:baselineAligned="false" android:layout_marginTop="12dp">
                     <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:layout_marginEnd="12dp" android:padding="16dp" android:orientation="vertical" android:background="@drawable/card">
-                        <TextView android:id="@+id/battery_temp_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/battery_temp"/>
-                        <TextView android:id="@+id/battery_temp" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:layout_marginTop="12dp" android:textSize="24sp"/>
+                        <TextView android:id="@+id/battery_temp_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/battery_temp" />
+                        <TextView android:id="@+id/battery_temp" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:layout_marginTop="12dp" android:textSize="24sp" />
                     </LinearLayout>
                     <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:layout_marginEnd="0dp" android:padding="16dp" android:orientation="vertical" android:background="@drawable/card">
-                        <TextView android:id="@+id/battery_voltage_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/battery_voltage"/>
-                        <TextView android:id="@+id/battery_voltage" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:layout_marginTop="12dp" android:textSize="24sp"/>
+                        <TextView android:id="@+id/battery_voltage_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/battery_voltage" />
+                        <TextView android:id="@+id/battery_voltage" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:layout_marginTop="12dp" android:textSize="24sp" />
                     </LinearLayout>
                 </LinearLayout>
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:baselineAligned="false" android:layout_marginTop="12dp">
                     <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:layout_marginEnd="12dp" android:padding="16dp" android:orientation="vertical" android:background="@drawable/card">
-                        <TextView android:id="@+id/sleep_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/sleep"/>
-                        <TextView android:id="@+id/sleep" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:layout_marginTop="12dp" android:textSize="24sp"/>
+                        <TextView android:id="@+id/sleep_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/sleep" />
+                        <TextView android:id="@+id/sleep" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:layout_marginTop="12dp" android:textSize="24sp" />
                     </LinearLayout>
                     <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:layout_marginEnd="0dp" android:padding="16dp" android:orientation="vertical" android:background="@drawable/card">
-                        <TextView android:id="@+id/thermal_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/thermal_status"/>
-                        <TextView android:id="@+id/thermal" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:layout_marginTop="12dp" android:textSize="24sp"/>
+                        <TextView android:id="@+id/thermal_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/thermal_status" />
+                        <TextView android:id="@+id/thermal" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" android:layout_marginTop="12dp" android:textSize="24sp" />
                     </LinearLayout>
                 </LinearLayout>
-                <TextView android:id="@+id/activity_label" style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/activity" android:layout_marginTop="28dp" android:layout_marginBottom="4dp"/>
+                <TextView android:id="@+id/activity_label" style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/activity" android:layout_marginTop="28dp" android:layout_marginBottom="4dp" android:letterSpacing="0.08" />
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:padding="20dp" android:orientation="vertical" android:background="@drawable/card">
-                    <dev.butterd.PowerGraph android:id="@+id/graph" android:layout_width="match_parent" android:layout_height="96dp" android:importantForAccessibility="no"/>
-                    <TextView android:id="@+id/history_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/session_note"/>
+                    <dev.butterd.PowerGraph android:id="@+id/graph" android:layout_width="match_parent" android:layout_height="96dp" android:importantForAccessibility="no" />
+                    <TextView android:id="@+id/history_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/session_note" />
                 </LinearLayout>
-                <TextView android:id="@+id/sleep_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/sleep_note" android:layout_marginTop="16dp"/>
-                <TextView android:id="@+id/explore_heading" style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/context_title" android:layout_marginTop="24dp"/>
-                <com.google.android.material.button.MaterialButton android:id="@+id/home_cpu" style="?attr/materialButtonOutlinedStyle" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="@string/open_cpu" android:textAllCaps="false"/>
-                <com.google.android.material.button.MaterialButton android:id="@+id/home_battery" style="?attr/materialButtonOutlinedStyle" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="@string/open_battery" android:textAllCaps="false"/>
-                <com.google.android.material.button.MaterialButton android:id="@+id/home_gpu" style="?attr/materialButtonOutlinedStyle" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="@string/open_gpu" android:textAllCaps="false"/>
+                <TextView android:id="@+id/sleep_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/sleep_note" android:layout_marginTop="16dp" />
+                <TextView android:id="@+id/explore_heading" style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/context_title" android:layout_marginTop="24dp" android:letterSpacing="0.08" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/home_cpu" style="@style/NavigationRow" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="@string/open_cpu" android:textAllCaps="false" app:icon="@drawable/ic_chevron" app:iconGravity="end" app:iconSize="18dp" app:iconTint="@color/secondary" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/home_battery" style="@style/NavigationRow" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="@string/open_battery" android:textAllCaps="false" app:icon="@drawable/ic_chevron" app:iconGravity="end" app:iconSize="18dp" app:iconTint="@color/secondary" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/home_gpu" style="@style/NavigationRow" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="@string/open_gpu" android:textAllCaps="false" app:icon="@drawable/ic_chevron" app:iconGravity="end" app:iconSize="18dp" app:iconTint="@color/secondary" />
             </LinearLayout>
         </ScrollView>
         <ScrollView android:id="@+id/page_device" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:visibility="gone">
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingStart="24dp" android:paddingEnd="24dp" android:paddingTop="24dp" android:paddingBottom="120dp" android:orientation="vertical">
-                <TextView android:id="@+id/page_device_title" style="@style/Title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/device"/>
-                <TextView android:id="@+id/page_device_subtitle" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/source_note" android:layout_marginTop="6dp"/>
-                <TextView android:id="@+id/hardware_label" style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/hardware" android:layout_marginTop="28dp" android:layout_marginBottom="4dp"/>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:padding="20dp" android:orientation="vertical" android:background="@drawable/card">
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="12dp" android:paddingBottom="12dp" android:orientation="vertical">
-                        <TextView android:id="@+id/model_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Model"/>
-                        <TextView android:id="@+id/model" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" android:textSize="20sp" android:layout_marginTop="4dp"/>
+                <TextView android:id="@+id/page_device_title" style="@style/Title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/device" />
+                <TextView android:id="@+id/page_device_subtitle" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/device_subtitle" android:layout_marginTop="6dp" />
+                <TextView android:id="@+id/hardware_label" style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/hardware" android:layout_marginTop="28dp" android:layout_marginBottom="4dp" android:letterSpacing="0.08" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="@drawable/card" android:paddingStart="20dp" android:paddingEnd="20dp" android:layout_marginTop="12dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Model" style="@style/Body" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/model" android:layout_marginTop="5dp" />
                     </LinearLayout>
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="12dp" android:paddingBottom="12dp" android:orientation="vertical">
-                        <TextView android:id="@+id/rom_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Android / kernel"/>
-                        <TextView android:id="@+id/rom" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" android:textSize="20sp" android:layout_marginTop="4dp"/>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Device" style="@style/Body" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/device_codename" android:layout_marginTop="5dp" />
                     </LinearLayout>
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="12dp" android:paddingBottom="12dp" android:orientation="vertical">
-                        <TextView android:id="@+id/cpu_temp_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cpu_temp"/>
-                        <TextView android:id="@+id/cpu_temp" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" android:textSize="20sp" android:layout_marginTop="4dp"/>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Android" style="@style/Body" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/rom" android:layout_marginTop="5dp" />
                     </LinearLayout>
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="12dp" android:paddingBottom="12dp" android:orientation="vertical">
-                        <TextView android:id="@+id/cpu_freq_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cpu_freq"/>
-                        <TextView android:id="@+id/cpu_freq" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" android:textSize="20sp" android:layout_marginTop="4dp"/>
-                    </LinearLayout>
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="12dp" android:paddingBottom="12dp" android:orientation="vertical">
-                        <TextView android:id="@+id/gpu_freq_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/gpu_freq"/>
-                        <TextView android:id="@+id/gpu_freq" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" android:textSize="20sp" android:layout_marginTop="4dp"/>
-                    </LinearLayout>
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="12dp" android:paddingBottom="12dp" android:orientation="vertical">
-                        <TextView android:id="@+id/profile_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/profile"/>
-                        <TextView android:id="@+id/profile" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" android:textSize="20sp" android:layout_marginTop="4dp"/>
-                    </LinearLayout>
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="12dp" android:paddingBottom="12dp" android:orientation="vertical">
-                        <TextView android:id="@+id/adapter_voltage_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/adapter_voltage"/>
-                        <TextView android:id="@+id/adapter_voltage" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" android:textSize="20sp" android:layout_marginTop="4dp"/>
-                    </LinearLayout>
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="12dp" android:paddingBottom="12dp" android:orientation="vertical">
-                        <TextView android:id="@+id/adapter_current_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/adapter_current"/>
-                        <TextView android:id="@+id/adapter_current" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" android:textSize="20sp" android:layout_marginTop="4dp"/>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Kernel" style="@style/Body" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/kernel" android:layout_marginTop="5dp" />
                     </LinearLayout>
                 </LinearLayout>
-                <TextView android:id="@+id/source_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/source_note" android:layout_marginTop="12dp"/>
-                <TextView android:id="@+id/access_label" style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/access" android:layout_marginTop="28dp" android:layout_marginBottom="4dp"/>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:padding="20dp" android:orientation="vertical" android:background="@drawable/card">
-                    <TextView android:id="@+id/root_state" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/root_standard" android:textSize="20sp"/>
-                    <TextView android:id="@+id/root_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/root_note" android:layout_marginTop="8dp"/>
-                    <com.google.android.material.button.MaterialButton android:id="@+id/root_button" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:text="@string/request_root" android:textAllCaps="false" android:layout_marginTop="12dp"/>
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Sensors" style="@style/Section" android:layout_marginTop="28dp" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="@drawable/card" android:paddingStart="20dp" android:paddingEnd="20dp" android:layout_marginTop="12dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cpu_temp" style="@style/Body" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/cpu_temp" android:layout_marginTop="5dp" />
+                    </LinearLayout>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cpu_freq" style="@style/Body" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/cpu_freq" android:layout_marginTop="5dp" />
+                    </LinearLayout>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/gpu_freq" style="@style/Body" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/gpu_freq" android:layout_marginTop="5dp" />
+                    </LinearLayout>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/profile" style="@style/Body" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/profile" android:layout_marginTop="5dp" />
+                    </LinearLayout>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/adapter_voltage" style="@style/Body" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/adapter_voltage" android:layout_marginTop="5dp" />
+                    </LinearLayout>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="16dp" android:paddingBottom="16dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/adapter_current" style="@style/Body" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/waiting" style="@style/RowValue" android:id="@+id/adapter_current" android:layout_marginTop="5dp" />
+                    </LinearLayout>
                 </LinearLayout>
-                <TextView style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="28dp" android:text="@string/rom_controls"/>
+                <TextView android:id="@+id/source_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/source_note" android:layout_marginTop="12dp" />
+                <TextView android:id="@+id/access_label" style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/access" android:layout_marginTop="28dp" android:layout_marginBottom="4dp" android:letterSpacing="0.08" />
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:padding="20dp" android:orientation="vertical" android:background="@drawable/card">
-                    <TextView android:id="@+id/rom_controls_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/rom_controls_note"/>
-                    <com.google.android.material.button.MaterialButton android:id="@+id/rom_thermal" style="?attr/materialButtonOutlinedStyle" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="12dp" android:textAllCaps="false" android:text="@string/rom_thermal"/>
-                    <com.google.android.material.button.MaterialButton android:id="@+id/rom_parts" style="?attr/materialButtonOutlinedStyle" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:textAllCaps="false" android:text="@string/rom_parts"/>
+                    <TextView android:id="@+id/root_state" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/root_standard" android:textSize="20sp" />
+                    <TextView android:id="@+id/root_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/root_note" android:layout_marginTop="8dp" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/root_button" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:text="@string/request_root" android:textAllCaps="false" android:layout_marginTop="12dp" style="@style/PrimaryButton" />
+                </LinearLayout>
+                <TextView style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="28dp" android:text="@string/rom_controls" android:letterSpacing="0.08" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:padding="20dp" android:orientation="vertical" android:background="@drawable/card">
+                    <TextView android:id="@+id/rom_controls_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/rom_controls_note" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/rom_thermal" style="@style/NavigationRow" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="12dp" android:textAllCaps="false" android:text="@string/rom_thermal" app:icon="@drawable/ic_chevron" app:iconGravity="end" app:iconSize="18dp" app:iconTint="@color/secondary" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/rom_parts" style="@style/NavigationRow" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:textAllCaps="false" android:text="@string/rom_parts" app:icon="@drawable/ic_chevron" app:iconGravity="end" app:iconSize="18dp" app:iconTint="@color/secondary" />
                 </LinearLayout>
             </LinearLayout>
         </ScrollView>
         <ScrollView android:id="@+id/page_settings" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:visibility="gone">
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingStart="24dp" android:paddingEnd="24dp" android:paddingTop="24dp" android:paddingBottom="120dp" android:orientation="vertical">
-                <TextView android:id="@+id/page_settings_title" style="@style/Title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings"/>
-                <TextView android:id="@+id/page_settings_subtitle" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Make yourself at home." android:layout_marginTop="6dp"/>
+                <TextView android:id="@+id/page_settings_title" style="@style/Title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings" />
+                <TextView android:id="@+id/page_settings_subtitle" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Make yourself at home." android:layout_marginTop="6dp" />
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:padding="20dp" android:orientation="vertical" android:background="@drawable/card">
-                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/notification_switch" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp" android:text="@string/notifications" android:textColor="@color/ink" android:textSize="16sp"/>
-                    <TextView android:id="@+id/notification_switch_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/notifications_note"/>
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/notification_switch" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp" android:text="@string/notifications" android:textColor="@color/ink" android:textSize="16sp" app:showText="false" android:textOn="@string/switch_on" android:textOff="@string/switch_off" />
+                    <TextView android:id="@+id/notification_switch_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/notifications_note" />
                 </LinearLayout>
-                <TextView android:id="@+id/appearance_label" style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/appearance" android:layout_marginTop="28dp" android:layout_marginBottom="4dp"/>
+                <TextView android:id="@+id/appearance_label" style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/appearance" android:layout_marginTop="28dp" android:layout_marginBottom="4dp" android:letterSpacing="0.08" />
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:padding="20dp" android:orientation="vertical" android:background="@drawable/card">
-                    <TextView android:id="@+id/theme_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/theme"/>
+                    <TextView android:id="@+id/theme_label" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/theme" />
                     <com.google.android.material.button.MaterialButtonToggleGroup android:id="@+id/theme_group" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" app:singleSelection="true" app:selectionRequired="true">
-                        <com.google.android.material.button.MaterialButton android:id="@+id/theme_system" style="?attr/materialButtonOutlinedStyle" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp" android:minHeight="52dp" android:paddingStart="4dp" android:paddingEnd="4dp" android:text="@string/theme_system" android:textAllCaps="false"/>
-                        <com.google.android.material.button.MaterialButton android:id="@+id/theme_light" style="?attr/materialButtonOutlinedStyle" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp" android:minHeight="52dp" android:paddingStart="4dp" android:paddingEnd="4dp" android:text="@string/theme_light" android:textAllCaps="false"/>
-                        <com.google.android.material.button.MaterialButton android:id="@+id/theme_dark" style="?attr/materialButtonOutlinedStyle" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp" android:minHeight="52dp" android:paddingStart="4dp" android:paddingEnd="4dp" android:text="@string/theme_dark" android:textAllCaps="false"/>
+                        <com.google.android.material.button.MaterialButton android:id="@+id/theme_system" style="@style/ThemeButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp" android:minHeight="52dp" android:paddingStart="4dp" android:paddingEnd="4dp" android:text="@string/theme_system" android:textAllCaps="false" />
+                        <com.google.android.material.button.MaterialButton android:id="@+id/theme_light" style="@style/ThemeButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp" android:minHeight="52dp" android:paddingStart="4dp" android:paddingEnd="4dp" android:text="@string/theme_light" android:textAllCaps="false" />
+                        <com.google.android.material.button.MaterialButton android:id="@+id/theme_dark" style="@style/ThemeButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp" android:minHeight="52dp" android:paddingStart="4dp" android:paddingEnd="4dp" android:text="@string/theme_dark" android:textAllCaps="false" />
                     </com.google.android.material.button.MaterialButtonToggleGroup>
                 </LinearLayout>
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:padding="20dp" android:orientation="vertical" android:background="@drawable/card">
-                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/solid_switch" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp" android:text="@string/reduce_transparency" android:textColor="@color/ink" android:textSize="16sp"/>
-                    <TextView android:id="@+id/solid_switch_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/reduce_transparency_note"/>
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/solid_switch" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp" android:text="@string/reduce_transparency" android:textColor="@color/ink" android:textSize="16sp" app:showText="false" android:textOn="@string/switch_on" android:textOff="@string/switch_off" />
+                    <TextView android:id="@+id/solid_switch_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/reduce_transparency_note" />
                 </LinearLayout>
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:padding="20dp" android:orientation="vertical" android:background="@drawable/card">
-                    <TextView android:id="@+id/safety_title" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/safety_title" android:textSize="22sp"/>
-                    <TextView android:id="@+id/safety_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/safety_note" android:layout_marginTop="12dp"/>
+                    <TextView android:id="@+id/safety_title" style="@style/Metric" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/safety_title" android:textSize="22sp" />
+                    <TextView android:id="@+id/safety_note" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/safety_note" android:layout_marginTop="12dp" />
                 </LinearLayout>
-                <TextView android:id="@+id/about" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/about" android:layout_marginTop="24dp" android:gravity="center"/>
+                <TextView android:id="@+id/about" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/about" android:layout_marginTop="24dp" android:gravity="center" />
             </LinearLayout>
         </ScrollView>
-        <ViewStub android:id="@+id/page_cpu" android:inflatedId="@id/page_cpu" android:layout="@layout/page_cpu" android:layout_width="match_parent" android:layout_height="match_parent"/>
-        <ViewStub android:id="@+id/page_battery" android:inflatedId="@id/page_battery" android:layout="@layout/page_battery" android:layout_width="match_parent" android:layout_height="match_parent"/>
-        <ViewStub android:id="@+id/page_gpu" android:inflatedId="@id/page_gpu" android:layout="@layout/page_gpu" android:layout_width="match_parent" android:layout_height="match_parent"/>
+        <ViewStub android:id="@+id/page_cpu" android:inflatedId="@id/page_cpu" android:layout="@layout/page_cpu" android:layout_width="match_parent" android:layout_height="match_parent" />
+        <ViewStub android:id="@+id/page_battery" android:inflatedId="@id/page_battery" android:layout="@layout/page_battery" android:layout_width="match_parent" android:layout_height="match_parent" />
+        <ViewStub android:id="@+id/page_gpu" android:inflatedId="@id/page_gpu" android:layout="@layout/page_gpu" android:layout_width="match_parent" android:layout_height="match_parent" />
     </FrameLayout>
-    <LinearLayout android:id="@+id/bottom_bar" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="bottom" android:layout_marginStart="24dp" android:layout_marginEnd="24dp" android:layout_marginBottom="16dp" android:padding="4dp" android:elevation="8dp" android:orientation="horizontal" android:background="@drawable/glass">
-        <com.google.android.material.button.MaterialButton android:id="@+id/nav_overview" style="@style/Nav" android:text="@string/overview" app:icon="@drawable/ic_overview" app:iconGravity="textTop" app:iconSize="20dp" app:iconPadding="3dp" app:cornerRadius="28dp"/>
-        <com.google.android.material.button.MaterialButton android:id="@+id/nav_device" style="@style/Nav" android:text="@string/device" app:icon="@drawable/ic_device" app:iconGravity="textTop" app:iconSize="20dp" app:iconPadding="3dp" app:cornerRadius="28dp"/>
-        <com.google.android.material.button.MaterialButton android:id="@+id/nav_settings" style="@style/Nav" android:text="@string/settings" app:icon="@drawable/ic_settings" app:iconGravity="textTop" app:iconSize="20dp" app:iconPadding="3dp" app:cornerRadius="28dp"/>
+    <LinearLayout android:id="@+id/bottom_bar" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="bottom" android:layout_marginStart="20dp" android:layout_marginEnd="20dp" android:layout_marginBottom="16dp" android:padding="4dp" android:elevation="2dp" android:orientation="horizontal" android:background="@drawable/glass">
+        <com.google.android.material.button.MaterialButton android:id="@+id/nav_overview" style="@style/Nav" android:text="@string/overview" app:icon="@drawable/ic_overview" app:iconGravity="textTop" app:iconSize="20dp" app:iconPadding="3dp" app:cornerRadius="28dp" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/nav_device" style="@style/Nav" android:text="@string/device" app:icon="@drawable/ic_device" app:iconGravity="textTop" app:iconSize="20dp" app:iconPadding="3dp" app:cornerRadius="28dp" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/nav_settings" style="@style/Nav" android:text="@string/settings" app:icon="@drawable/ic_settings" app:iconGravity="textTop" app:iconSize="20dp" app:iconPadding="3dp" app:cornerRadius="28dp" />
     </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

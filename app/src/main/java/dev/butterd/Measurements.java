@@ -36,6 +36,12 @@ public final class Measurements {
             default: return "Unknown (" + raw.trim() + ")";
         }
     }
+    /** The sign represents net battery flow, even when a charger is connected. */
+    public static String signedPower(double watts) {
+        if (!Double.isFinite(watts)) return "Unavailable";
+        if (Math.abs(watts) < 0.05) return String.format(Locale.getDefault(), "%.1f W", 0d);
+        return String.format(Locale.getDefault(), "%+.1f W", watts);
+    }
     public static String value(double value, String unit) {
         return Double.isFinite(value) ? String.format(Locale.getDefault(), "%.1f %s", value, unit) : "Unavailable";
     }

@@ -9,6 +9,17 @@ public class MeasurementsTest {
         assertEquals(-4.2, Measurements.batteryWatts(-1_000_000, 4200), 0.0001);
         assertEquals(0, Measurements.batteryWatts(0, 4200), 0);
     }
+    @Test public void displayedPowerKeepsDirectionAndAvoidsNegativeZero() {
+        java.util.Locale previous = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.US);
+            assertEquals("-4.2 W", Measurements.signedPower(-4.2));
+            assertEquals("+8.4 W", Measurements.signedPower(8.4));
+            assertEquals("0.0 W", Measurements.signedPower(-0.01));
+            assertEquals("Unavailable", Measurements.signedPower(Double.NaN));
+            assertEquals("Unavailable", Measurements.signedPower(Double.POSITIVE_INFINITY));
+        } finally { java.util.Locale.setDefault(previous); }
+    }
     @Test public void missingBatteryReadingsStayUnavailable() {
         assertTrue(Double.isNaN(Measurements.batteryWatts(Integer.MIN_VALUE, 4200)));
         assertTrue(Double.isNaN(Measurements.batteryWatts(1000, -1)));

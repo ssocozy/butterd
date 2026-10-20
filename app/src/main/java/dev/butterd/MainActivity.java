@@ -73,8 +73,10 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
         findViewById(R.id.home_battery).setOnClickListener(view -> selectPage(4));
         findViewById(R.id.home_gpu).setOnClickListener(view -> selectPage(5));
         selectPage(state == null ? 0 : state.getInt("page", 0));
-        text(R.id.model, Build.MANUFACTURER + " " + Build.MODEL + " · " + Build.DEVICE);
-        text(R.id.rom, "Android " + Build.VERSION.RELEASE + " · " + System.getProperty("os.version", "Unknown"));
+        text(R.id.model, Build.MODEL);
+        text(R.id.device_codename, Build.DEVICE);
+        text(R.id.rom, "Android " + Build.VERSION.RELEASE);
+        text(R.id.kernel, System.getProperty("os.version", "Unknown"));
         findViewById(R.id.rom_thermal).setOnClickListener(view -> openRomScreen(RomIntegration.Screen.THERMAL));
         findViewById(R.id.rom_parts).setOnClickListener(view -> openRomScreen(RomIntegration.Screen.PARTS));
         refreshRomScreens();
@@ -190,7 +192,7 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
     }
     @Override public void onSnapshot(Snapshot s) {
         currentSnapshot = s;
-        text(R.id.power, Double.isFinite(s.watts) ? String.format(Locale.getDefault(), "%.1f W", Math.abs(s.watts)) : "—");
+        text(R.id.power, Measurements.signedPower(s.watts));
         text(R.id.power_direction, !Double.isFinite(s.watts) ? getString(R.string.unavailable) : s.watts > 0 ? "Flowing into the battery" : s.watts < 0 ? "Drawing from the battery" : "No net battery flow reported");
         text(R.id.battery_state, (s.capacity >= 0 ? s.capacity + "%" : "—") + "  ·  " + (s.charging ? "Charging" : s.plugged ? "Plugged in" : "On battery"));
         text(R.id.battery_temp, Measurements.value(s.batteryTemperature, "°C"));
@@ -247,7 +249,7 @@ public final class MainActivity extends AppCompatActivity implements TelemetryRe
     }
     private void renderContext(Snapshot s) {
         text(R.id.cpu_online, s.onlineCores);
-        text(R.id.detail_battery_power, Measurements.value(s.watts, "W"));
+        text(R.id.detail_battery_power, Measurements.signedPower(s.watts));
         text(R.id.detail_current, Measurements.value(s.currentAmps, "A"));
         text(R.id.detail_power_path, s.powerPath);
         text(R.id.detail_voltage, Measurements.value(s.voltage, "V"));
