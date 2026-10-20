@@ -6,3 +6,6 @@ local.properties
 *.jks
 *.keystore
 
+
+# Keep documentation, research and agent instructions on this machine.
+*.[mM][dD]

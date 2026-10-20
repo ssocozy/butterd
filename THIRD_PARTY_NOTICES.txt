@@ -1,4 +1,4 @@
-# Third-party components
+Third-party components
 
 Gradle wrapper and Gradle: Apache License 2.0, https://github.com/gradle/gradle
 Android Gradle Plugin, AndroidX and Material Components: Apache License 2.0.
