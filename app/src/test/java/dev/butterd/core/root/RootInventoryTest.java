@@ -16,7 +16,7 @@ public final class RootInventoryTest {
             for (int index : new int[]{0, 4, 7}) {
                 Path policy = sandbox.resolve("sys/devices/system/cpu/cpufreq/policy" + index);
                 Files.createDirectories(policy);
-                Files.writeString(policy.resolve("scaling_available_frequencies"), "800000 1600000");
+                Files.write(policy.resolve("scaling_available_frequencies"), "800000 1600000".getBytes(StandardCharsets.UTF_8));
             }
             String script = RootInventory.command()
                     .replace("[ \"$(id -u)\" = 0 ] || exit 1; ", "")
