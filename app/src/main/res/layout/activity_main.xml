@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:id="@+id/root" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/background">
     <FrameLayout android:id="@+id/content" android:layout_width="match_parent" android:layout_height="match_parent">
-        <ScrollView android:id="@+id/page_overview" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:visibility="visible">
+        <ScrollView android:id="@+id/page_overview" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:visibility="visible" android:scrollbars="none">
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingStart="24dp" android:paddingEnd="24dp" android:paddingTop="24dp" android:paddingBottom="120dp" android:orientation="vertical">
                 <TextView android:id="@+id/page_overview_title" style="@style/Title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/app_name" />
                 <TextView android:id="@+id/page_overview_subtitle" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/intro" android:layout_marginTop="6dp" />
@@ -44,7 +44,7 @@
                 <com.google.android.material.button.MaterialButton android:id="@+id/home_gpu" style="@style/NavigationRow" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="@string/open_gpu" android:textAllCaps="false" app:icon="@drawable/ic_chevron" app:iconGravity="end" app:iconSize="18dp" app:iconTint="@color/secondary" />
             </LinearLayout>
         </ScrollView>
-        <ScrollView android:id="@+id/page_device" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:visibility="gone">
+        <ScrollView android:id="@+id/page_device" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:visibility="gone" android:scrollbars="none">
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingStart="24dp" android:paddingEnd="24dp" android:paddingTop="24dp" android:paddingBottom="120dp" android:orientation="vertical">
                 <TextView android:id="@+id/page_device_title" style="@style/Title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/device" />
                 <TextView android:id="@+id/page_device_subtitle" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/device_subtitle" android:layout_marginTop="6dp" />
@@ -117,7 +117,7 @@
                 </LinearLayout>
             </LinearLayout>
         </ScrollView>
-        <ScrollView android:id="@+id/page_settings" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:visibility="gone">
+        <ScrollView android:id="@+id/page_settings" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:clipToPadding="false" android:visibility="gone" android:scrollbars="none">
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingStart="24dp" android:paddingEnd="24dp" android:paddingTop="24dp" android:paddingBottom="120dp" android:orientation="vertical">
                 <TextView android:id="@+id/page_settings_title" style="@style/Title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings" />
                 <TextView android:id="@+id/page_settings_subtitle" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Make yourself at home." android:layout_marginTop="6dp" />

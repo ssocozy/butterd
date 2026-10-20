@@ -16,6 +16,7 @@
         <item name="android:navigationBarColor">@color/background</item>
         <item name="android:windowLightNavigationBar">true</item>
         <item name="android:forceDarkAllowed">false</item>
+        <item name="android:scrollbars">none</item>
     </style>
     <style name="Title">
         <item name="android:textColor">@color/ink</item>
