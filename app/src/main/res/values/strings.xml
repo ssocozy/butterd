@@ -40,7 +40,7 @@
     <string name="reduce_transparency_note">Use an opaque surface for greater contrast.</string>
     <string name="safety_title">Observation comes first.</string>
     <string name="safety_note">Device data is read-only unless you explicitly change a supported CPU governor. Charging overrides, thermal bypass, frequency writes and boot scripts are not included.</string>
-    <string name="about">Butterd 0.2.2 · Built for Duchamp</string>
+    <string name="about">Butterd 0.2.3 · Built for Duchamp</string>
     <string name="monitor_channel">Live device monitor</string>
     <string name="monitor_channel_description">Quiet updates for the monitoring session you started.</string>
     <string name="stop">Stop</string>
