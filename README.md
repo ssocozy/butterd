@@ -69,7 +69,9 @@ support a verified transition design owned by the ROM controller.
 ## Build and install
 
 All compilation runs in [GitHub Actions](https://github.com/ssocozy/butterd/actions/workflows/android.yml).
-Each push runs **one job**: unit tests, lint and APK assembly. No emulators run.
+Builds are **manual only** while development is active. Open Actions → Android →
+Run workflow when ready. The single job runs unit tests, lint and APK assembly;
+pushes and pull requests do not start it. No emulators run.
 Download `butterd-debug.apk` directly from the latest debug [prerelease](https://github.com/ssocozy/butterd/releases).
 The Actions artifact remains available as a ZIP fallback.
 Development APKs use runner debug keys, which can change between runs and require
