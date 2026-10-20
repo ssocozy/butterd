@@ -56,3 +56,47 @@ It does not edit XiaomiParts preferences or impersonate its system UID.
 Embedded controls need a separate permission-protected ROM-side interface with
 state verification and ownership coordination; direct sysfs writes are not an
 API to XiaomiParts.
+
+## Bypass entry sequencing audit
+
+User observation: bypass works reliably only after selecting a lower charging
+preset (reported as 20 W or 37 W on the installed ROM). This is a hardware
+observation to reproduce, not a source-proven requirement or universal limit.
+The inspected device tree labels its presets 18 W / 30 W / 67 W and writes
+4,800,000 / 7,000,000 / 22,000,000 to constant_charge_current. These are current
+requests, not adapter wattage contracts; the installed build's mapping may differ.
+
+ChargeController.setBypass first changes current_cmd and then immediately calls
+apply(), which requests zero current when the software disable flag is set.
+There is no preparation phase, settling confirmation or rollback. Failure to read
+the flag is treated as disabled, allowing the normal current request to be applied
+after an unsuccessful read. Successful flag readback still does not verify the
+physical power path.
+
+In the linked kernel sources, current_cmd toggles primary charger enable and
+cmd_discharging. It does not explicitly coordinate the separate PD charge-pump
+state machine. The zero SIC current vote reduces target_fcc below its entry
+threshold, causing HOLD/EXIT. PD_PM_STATE_EXIT disables the charge pumps,
+renegotiates adapter output and restores the primary power path when input is
+not suspended. Therefore entry involves asynchronous transitions between separate
+controllers. A lower preset could affect that transition, but the exact reason
+for the user's workaround is not established by static inspection.
+
+The driver's internal bypass_enable selects a charge-pump conversion mode; that
+name alone does not establish a user-facing battery bypass control. No dedicated,
+validated battery-bypass interface was identified in this audit.
+
+A fix should be owned by the ROM controller, with distinct preparing, verified
+active, restoring and failed states. It must verify power-path/charging state and
+battery current, preserve thermal protections, bound transitions and recover
+partial failures. Selecting an arbitrary wattage and sleeping a fixed number of
+seconds is not sufficient validation. No charging writes or production fix have
+been added to Butterd.
+
+## CPU settings and cores
+
+CPUFreq policy governors and frequency limits affect CPUs sharing that policy;
+they do not select how many cores remain online. This tree separately configures
+cpusets (foreground/top-app 0–7, background 0–3) and permissions on cpu*/online.
+Cpuset membership controls task placement, not physical core power state.
+Manual core hotplug is outside Butterd's initial safety boundary.
