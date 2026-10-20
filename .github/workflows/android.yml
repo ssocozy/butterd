@@ -11,6 +11,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -26,6 +28,15 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Build, unit tests and lint
         run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Publish directly downloadable APK
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          release_tag="debug-${GITHUB_RUN_NUMBER}"
+          cp app/build/outputs/apk/debug/app-debug.apk butterd-debug.apk
+          gh release create "$release_tag" butterd-debug.apk --prerelease --target "$GITHUB_SHA" --title "Butterd debug #${GITHUB_RUN_NUMBER}" --notes "Development APK from commit ${GITHUB_SHA}. Build, lint and unit tests passed. Install and test on your phone."
       - name: Upload installable development APK
         uses: actions/upload-artifact@v4
         with:
