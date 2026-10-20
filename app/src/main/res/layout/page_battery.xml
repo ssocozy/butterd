@@ -81,10 +81,5 @@
             <com.google.android.material.button.MaterialButton android:id="@+id/marker_button" style="@style/SecondaryButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="@string/record_marker" android:textAllCaps="false" />
             <com.google.android.material.button.MaterialButton android:id="@+id/share_button" style="@style/SecondaryButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="@string/record_share" android:textAllCaps="false" />
         </LinearLayout>
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:padding="20dp" android:background="@drawable/card" android:orientation="vertical">
-            <TextView android:id="@+id/bypass_test_heading" style="@style/Section" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/bypass_test_title" android:letterSpacing="0.08" />
-            <TextView android:id="@+id/bypass_test_steps" style="@style/Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/bypass_test_steps" android:layout_marginTop="12dp" />
-            <com.google.android.material.button.MaterialButton android:id="@+id/battery_rom" style="@style/SecondaryButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:layout_marginTop="8dp" android:text="@string/rom_parts" android:textAllCaps="false" />
-        </LinearLayout>
     </LinearLayout>
 </ScrollView>

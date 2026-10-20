@@ -21,8 +21,5 @@
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="—" style="@style/RowValue" android:id="@+id/gpu_step" android:layout_marginTop="6dp" />
         </LinearLayout>
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="The Power HAL changes these values for system workloads. A larger value is not a proven performance or efficiency improvement." style="@style/Body" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="PERFORMANCE PROFILES" style="@style/Section" android:layout_marginTop="32dp" android:layout_marginBottom="12dp" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Choose the ROM’s performance profile so CPU, GPU and thermal policy keep one owner. Butterd does not pin maximum GPU clocks." style="@style/Body" />
-        <com.google.android.material.button.MaterialButton android:id="@+id/gpu_profiles" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Open ROM profiles" style="@style/NavigationRow" />
     </LinearLayout>
 </ScrollView>

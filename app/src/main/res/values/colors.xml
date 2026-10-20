@@ -10,4 +10,5 @@
     <color name="hero">#111111</color>
     <color name="hero_ink">#FFFFFF</color>
     <color name="launcher_background">#1D1B1B</color>
+    <color name="hero_shade">#292929</color>
 </resources>

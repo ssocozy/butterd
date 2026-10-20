@@ -1,7 +1,7 @@
 # Butterd
 
-A monochrome device monitor for POCO X6 Pro / Redmi K70E (Duchamp), built with
-Java and XML. Android 14 minimum, compile/target SDK 36. Version 0.3 adds the supplied butter logo,
+A monochrome device monitor and manual controller for POCO X6 Pro / Redmi K70E (Duchamp), built with
+Java and XML. Android 14 minimum, compile/target SDK 36. Version 0.4 adds the supplied butter logo,
 short page/press/splash transitions, and separate Display and Kernel screens. Android 17 compatibility
 has not been verified. White, black and system themes are available.
 
@@ -17,12 +17,15 @@ has not been verified. White, black and system themes are available.
   capacity-retention estimate when provided. Signed current, USB readings, requested charging-current
   limit, ROM charging-disable flag and driver-reported primary power path, where
   readable. These flags do not prove physical bypass charging.
-- **GPU:** readable driver frequency and ROM GPU DVFS parameters. GPU tuning remains ROM-managed.
-- **Display:** Android-reported Hz, supported modes and readable HTSR mode.
+- **GPU:** readable driver frequency and ROM GPU DVFS parameters. GPU tuning is not implemented yet.
+- **Display:** Android-reported Hz and root-controlled global refresh preferences
+  selected inside Butterd, with supported-mode validation, saved originals,
+  readback and Restore. Readable HTSR mode remains a sensor. Per-app refresh
+  overrides are not implemented.
 - **Kernel:** current/available/allowed TCP congestion algorithms and default qdisc.
   These are capabilities, not network tuning recommendations.
-- **Device:** hardware and access information, plus shortcuts to compatible
-  XiaomiParts screens. Butterd does not edit XiaomiParts private preferences.
+- **Device:** hardware, access information and navigation to Butterd controls.
+  Butterd does not depend on XiaomiParts or open its controls.
 - **Settings:** appearance and a permission-gated, quiet live notification with Stop.
 
 Battery power is net power **at the battery**, not adapter wattage.
@@ -38,7 +41,8 @@ values remain the latest sample while the CPU is suspended.
 
 1. Open **Battery → Record diagnostics** and review what will be recorded.
 2. Allow notifications. Optional root access on Device unlocks more sensor reads.
-3. Open XiaomiParts and reproduce the lower-current/bypass sequence there.
+3. Reproduce the charging behavior you want to diagnose. Butterd does not
+   implement charging bypass yet.
 4. Return to Battery and add a marker after each change.
 5. Stop recording, then **Share recording** to send the `.jsonl` file yourself.
 
@@ -54,7 +58,9 @@ termination or reboot. There is no network permission or automatic upload.
 
 ## Control boundaries
 
-Only an explicit CPU governor change writes a kernel setting. It is restricted to
+Only explicit CPU governor changes write kernel settings. Display controls write
+Android minimum/peak refresh preferences for the current user; these preferences
+can persist across closing the app or rebooting until restored. It is restricted to
 validated CPUFreq policy paths and supported allowlisted governors. Originals are
 saved before writes, readback is checked, and restoration rejects an unexpected
 external governor change instead of overwriting it. This check reduces races; it
@@ -86,3 +92,17 @@ updateable production builds.
 Physical sensor accuracy, root managers, charging behavior and frame pacing need
 verification on the phone. CPU/GPU frequency presets, charging and thermal
 overrides, and independent per-app refresh/touch control are not implemented.
+
+## Code organization
+
+`core/root` owns bounded worker-only root process transport and read inventory.
+`feature/cpu` owns validated policies and manual governor changes.
+`feature/display` owns preference validation, transition journals, application,
+restoration and the display panel. `feature/kernel` owns the fixed read inventory.
+Other legacy panels still need extraction; this is an incremental refactor.
+
+Display restoration stops when preferences no longer match the last journaled
+transition. This reduces conflicts; it is not a lock shared with ROM services.
+Readback confirms preference storage, not that Android must display the selected
+rate. No preferences are reasserted on a timer or at boot. Restore before clearing
+app data or uninstalling if you want to retain the original values.

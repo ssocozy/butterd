@@ -1,20 +1,17 @@
-package dev.butterd;
+package dev.butterd.feature.cpu;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.TimeUnit;
+import dev.butterd.core.root.RootExecutor;
 
 /** Manual, per-policy governor changes only. Never writes frequency, online, thermal or boot nodes. */
-final class CpuController {
+public final class CpuController {
     private final SharedPreferences journal;
-    CpuController(Context context) { journal = context.getSharedPreferences("cpu_session", Context.MODE_PRIVATE); }
-    boolean hasSaved(String policy) { return journal.contains(policy + ".original"); }
-    void apply(String policy, String target, boolean restore) throws Exception {
+    public CpuController(Context context) { journal = context.getSharedPreferences("cpu_session", Context.MODE_PRIVATE); }
+    public boolean hasSaved(String policy) { return journal.contains(policy + ".original"); }
+    public void apply(String policy, String target, boolean restore) throws Exception {
         if (!CpuPolicy.validId(policy) || (!restore && !CpuPolicy.selectable(target))) throw new IllegalArgumentException("Unsupported governor");
-        String inventory = RootReader.read();
+        String inventory = inventory(policy);
         String boot = ""; CpuPolicy found = null;
         for (String line : inventory.split("\n")) {
             String[] p = line.split("\\|", -1);
@@ -45,15 +42,20 @@ final class CpuController {
                 + "[ \"$(cat " + path + ")\" = '" + found.governor + "' ] || exit 2; "
                 + "printf '%s' '" + target + "' > " + path + " || exit 3; "
                 + "[ \"$(cat " + path + ")\" = '" + target + "' ] || exit 4; printf 'VERIFIED\\n'";
-        Process process = new ProcessBuilder("su", "-c", script).redirectErrorStream(true).start();
-        try {
-            if (!process.waitFor(10, TimeUnit.SECONDS) || process.exitValue() != 0)
-                throw new IllegalStateException("Governor change was not verified. Use Restore to check recovery.");
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                if (!"VERIFIED".equals(reader.readLine())) throw new IllegalStateException("Governor readback failed; saved original retained");
-            }
-        } finally { process.destroy(); }
+        if (!"VERIFIED".equals(RootExecutor.run(script, 10, 1024)))
+            throw new IllegalStateException("Governor readback failed; saved original retained");
         if (restore) clear(policy);
+    }
+    private static String inventory(String policy) throws Exception {
+        String path = "/sys/devices/system/cpu/cpufreq/" + policy;
+        String script = "printf 'BOOT|%s\\n' \"$(head -c 40 /proc/sys/kernel/random/boot_id)\"; "
+                + "printf 'C|%s|%s|%s|%s|%s|%s|1\\n' '" + policy + "' "
+                + "\"$(head -c 32 " + path + "/scaling_governor)\" "
+                + "\"$(head -c 160 " + path + "/scaling_available_governors)\" "
+                + "\"$(head -c 64 " + path + "/related_cpus)\" "
+                + "\"$(head -c 24 " + path + "/scaling_min_freq)\" "
+                + "\"$(head -c 24 " + path + "/scaling_max_freq)\"";
+        return RootExecutor.run(script, 20, 4096);
     }
     private void clear(String policy) {
         journal.edit().remove(policy + ".original").remove(policy + ".expected").remove(policy + ".boot").commit();

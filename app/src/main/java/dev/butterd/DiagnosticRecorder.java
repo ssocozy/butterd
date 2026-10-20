@@ -1,5 +1,7 @@
 package dev.butterd;
 
+import dev.butterd.feature.cpu.CpuPolicy;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.BufferedWriter;
@@ -35,7 +37,7 @@ final class DiagnosticRecorder {
         writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(current), StandardCharsets.UTF_8));
         started = elapsed; bytes = 0; samples = 0;
         status = "Recording / 0 samples";
-        JSONObject header = new JSONObject().put("type", "session").put("schema", 1).put("app_version", "0.3.0")
+        JSONObject header = new JSONObject().put("type", "session").put("schema", 1).put("app_version", "0.4.0")
                 .put("time_utc", Instant.now().toString())
                 .put("note", "Battery watts are net battery power, not adapter wattage. Markers are user observations, not verified bypass state.");
         for (java.util.Map.Entry<String, String> entry : metadata.entrySet()) header.put(entry.getKey(), entry.getValue());

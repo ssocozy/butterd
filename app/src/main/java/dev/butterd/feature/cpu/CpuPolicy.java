@@ -1,4 +1,4 @@
-package dev.butterd;
+package dev.butterd.feature.cpu;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -6,10 +6,10 @@ import java.util.Collections;
 import java.util.List;
 
 /** Validated kernel capability data. Frequency limits remain owned by the ROM. */
-final class CpuPolicy {
-    final String id, governor, cores, minimum, maximum;
-    final List<String> governors;
-    CpuPolicy(String id, String governor, String available, String cores, String minimum, String maximum) {
+public final class CpuPolicy {
+    public final String id, governor, cores, minimum, maximum;
+    public final List<String> governors;
+    public CpuPolicy(String id, String governor, String available, String cores, String minimum, String maximum) {
         if (!validId(id) || !validGovernor(governor)) throw new IllegalArgumentException("Invalid CPU policy");
         this.id = id; this.governor = governor;
         List<String> values = new ArrayList<>();
@@ -18,12 +18,12 @@ final class CpuPolicy {
         this.cores = cores.matches("[0-9 ,\\-]{1,64}") ? cores : "Unavailable";
         this.minimum = mhz(minimum); this.maximum = mhz(maximum);
     }
-    static boolean validId(String value) { return value != null && value.matches("policy[0-9]{1,3}"); }
-    static boolean validGovernor(String value) { return value != null && value.matches("[a-z][a-z0-9_]{0,31}"); }
-    static boolean selectable(String value) {
+    public static boolean validId(String value) { return value != null && value.matches("policy[0-9]{1,3}"); }
+    public static boolean validGovernor(String value) { return value != null && value.matches("[a-z][a-z0-9_]{0,31}"); }
+    public static boolean selectable(String value) {
         return Arrays.asList("schedutil", "ondemand", "conservative", "powersave", "interactive").contains(value);
     }
-    List<String> selectableGovernors() {
+    public List<String> selectableGovernors() {
         List<String> result = new ArrayList<>();
         for (String value : governors) if (selectable(value)) result.add(value);
         return result;

@@ -40,7 +40,7 @@
     <string name="reduce_transparency_note">Use an opaque surface for greater contrast.</string>
     <string name="safety_title">Observation comes first.</string>
     <string name="safety_note">Device data is read-only unless you explicitly change a supported CPU governor. Charging overrides, thermal bypass, frequency writes and boot scripts are not included.</string>
-    <string name="about">Butterd 0.3 / Built for Duchamp</string>
+    <string name="about">Butterd 0.4 / Built for Duchamp</string>
     <string name="monitor_channel">Live device monitor</string>
     <string name="monitor_channel_description">Quiet updates for the monitoring session you started.</string>
     <string name="stop">Stop</string>
@@ -50,7 +50,7 @@
     <string name="open_settings">Settings</string>
     <string name="monitor_failed">Could not start the monitor. Try again while Butterd is open.</string>
     <string name="root_checking">Waiting for root permission…</string>
-    <string name="root_granted">Root granted / read-only sensors enabled</string>
+    <string name="root_granted">Root access granted</string>
     <string name="root_denied">Root unavailable or denied. Standard monitoring still works.</string>
     <string name="root_lost">Root read failed. Standard monitoring remains available; check access to retry.</string>
     <string name="root_standard">Standard access</string>
@@ -73,7 +73,7 @@
     <string name="cpu_intro">Core status, cluster clocks and manual governor selection.</string>
     <string name="cpu_online">Online cores</string>
     <string name="cpu_policy_note">Frequency limits are managed by the ROM. Online cores are available to Android; this does not mean they are all busy.</string>
-    <string name="cpu_control_note">Root enables supported governor choices. Changes can remain after closing Butterd until restored or rebooted. Nothing is applied at boot. ROM changes take priority.</string>
+    <string name="cpu_control_note">Root enables supported governor choices. Changes can remain after closing Butterd until restored or rebooted. Nothing is applied at boot. Other controllers may change these settings; Butterd does not repeatedly force them.</string>
     <string name="cpu_unavailable">No readable CPU policies. Check root access on the Device screen if you want to inspect more.</string>
     <string name="cpu_access">Access settings</string>
     <string name="cpu_select">Choose governor</string>
@@ -102,7 +102,7 @@
     <string name="bypass_test_title">CHECKING ROM BYPASS</string>
     <string name="bypass_test_steps">Start recording before changing anything. In XiaomiParts, reproduce your normal lower-power selection and bypass toggle. Add a marker after each change, then return here, stop recording and share the file. Butterd observes this test; it does not alter charging.</string>
     <string name="gpu_intro">Readings from the driver, with the ROM in control.</string>
-    <string name="gpu_note">GPU frequency controls remain ROM-managed in this version. Butterd does not lock clocks or override thermal and battery limits.</string>
+    <string name="gpu_note">GPU tuning controls are not implemented yet. These are live readings, not an applied performance profile.</string>
     <string name="switch_on">On</string>
     <string name="switch_off">Off</string>
     <string name="device_subtitle">Hardware, sensors and access.</string>

@@ -1,5 +1,7 @@
 package dev.butterd;
 
+import dev.butterd.feature.cpu.CpuPolicy;
+
 final class Snapshot {
     double watts = Double.NaN, voltage = Double.NaN, batteryTemperature = Double.NaN;
     double cpuTemperature = Double.NaN, usbVoltage = Double.NaN, usbCurrent = Double.NaN;
@@ -15,6 +17,9 @@ final class Snapshot {
     int capacity = -1, cycles = -1;
     String health = "", displayModes = "";
     double refreshRate = Double.NaN;
+    float[] refreshRates = new float[0];
+    String refreshMinimum, refreshPeak;
+    boolean displaySaved;
     java.util.Map<String, String> kernel = new java.util.HashMap<>();
     java.util.Map<String, String> frequencyTables = new java.util.HashMap<>();
     long elapsed, sleepingMillis;

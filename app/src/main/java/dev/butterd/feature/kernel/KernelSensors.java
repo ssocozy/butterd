@@ -1,10 +1,10 @@
-package dev.butterd;
+package dev.butterd.feature.kernel;
 
 import java.util.Map;
 
 /** Fixed read-only inventory; these paths never become write targets. */
-final class KernelSensors {
-    static final Map<String, String> PATHS = Map.ofEntries(
+public final class KernelSensors {
+    public static final Map<String, String> PATHS = Map.ofEntries(
             Map.entry("cycles", "/sys/class/power_supply/battery/cycle_count"),
             Map.entry("full", "/sys/class/power_supply/battery/charge_full"),
             Map.entry("design", "/sys/class/power_supply/battery/charge_full_design"),
@@ -16,7 +16,7 @@ final class KernelSensors {
             Map.entry("thermal_remove", "/sys/class/power_supply/usb/thermal_remove"),
             Map.entry("gpu_margin", "/sys/kernel/ged/hal/timer_base_dvfs_margin"),
             Map.entry("gpu_step", "/sys/kernel/ged/hal/loading_base_dvfs_step"));
-    static String clean(String key, String raw) {
+    public static String clean(String key, String raw) {
         if (!PATHS.containsKey(key) || raw == null) return "";
         String value = raw.trim();
         if (key.startsWith("tcp") || key.equals("qdisc"))
@@ -24,11 +24,11 @@ final class KernelSensors {
         if (key.equals("htsr") || key.equals("thermal_remove")) return value.matches("[01]") ? value : "";
         return value.matches("[0-9]{1,12}") ? value : "";
     }
-    static double capacityMah(String raw) {
+    public static double capacityMah(String raw) {
         try { double value = Long.parseLong(raw) / 1000d; return value > 0 && value <= 20000 ? value : Double.NaN; }
         catch (RuntimeException ignored) { return Double.NaN; }
     }
-    static double remainingCapacity(String full, String design) {
+    public static double remainingCapacity(String full, String design) {
         double a = capacityMah(full), b = capacityMah(design);
         double percent = a / b * 100;
         return Double.isFinite(percent) && percent > 0 && percent <= 110 ? percent : Double.NaN;

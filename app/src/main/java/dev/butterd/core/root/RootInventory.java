@@ -1,12 +1,9 @@
-package dev.butterd;
+package dev.butterd.core.root;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.TimeUnit;
+import dev.butterd.feature.kernel.KernelSensors;
 
 /** No arbitrary command API. Only this fixed, bounded sensor inventory can run as root. */
-final class RootReader {
+public final class RootInventory {
     private static final String SCRIPT =
             "[ \"$(id -u)\" = 0 ] || exit 1; printf 'ROOT|0\\n'; " +
             "printf 'BOOT|%s\\n' \"$(head -c 40 /proc/sys/kernel/random/boot_id)\"; " +
@@ -36,18 +33,9 @@ final class RootReader {
         script.append("; n=0; for p in /sys/devices/system/cpu/cpufreq/policy*; do printf 'A|%s|%s\\n' \"${p##*/}\" \"$(head -c 512 \"$p/scaling_available_frequencies\" 2>/dev/null)\"; n=$((n+1)); [ \"$n\" -ge 16 ] && break; done");
         return script.toString();
     }
-    static String read() throws Exception {
-        Process process = new ProcessBuilder("su", "-c", SCRIPT + extras()).redirectErrorStream(true).start();
-        try {
-            if (!process.waitFor(20, TimeUnit.SECONDS)) throw new IllegalStateException("Root request timed out");
-            if (process.exitValue() != 0) throw new SecurityException("Root unavailable");
-            StringBuilder out = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null && out.length() < 16384) out.append(line).append('\n');
-            }
-            if (!out.toString().contains("ROOT|0\n")) throw new SecurityException("Root not verified");
-            return out.toString();
-        } finally { process.destroy(); }
+    public static String read() throws Exception {
+        String inventory = RootExecutor.run(SCRIPT + extras(), 20, 32768);
+        if (!inventory.startsWith("ROOT|0\n")) throw new SecurityException("Root not verified");
+        return inventory;
     }
 }

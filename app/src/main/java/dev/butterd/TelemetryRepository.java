@@ -1,5 +1,11 @@
 package dev.butterd;
 
+import dev.butterd.feature.cpu.CpuPolicy;
+import dev.butterd.feature.cpu.CpuController;
+import dev.butterd.feature.kernel.KernelSensors;
+import dev.butterd.core.root.RootInventory;
+
+import dev.butterd.feature.display.DisplayController;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -24,6 +30,7 @@ final class TelemetryRepository {
     private final Context context;
     private final DiagnosticRecorder recorder;
     private final CpuController cpuController;
+    private final DisplayController displayController;
     private final BatteryFlow batteryFlow = new BatteryFlow();
     private volatile boolean recording;
     private String recordingError = "";
@@ -52,6 +59,7 @@ final class TelemetryRepository {
                 "build_id", Build.ID, "security_patch", Build.VERSION.SECURITY_PATCH,
                 "kernel", System.getProperty("os.version", "Unknown")));
         cpuController = new CpuController(context);
+        displayController = new DisplayController(context);
         HandlerThread thread = new HandlerThread("butterd-sensors", android.os.Process.THREAD_PRIORITY_BACKGROUND);
         thread.start(); worker = new Handler(thread.getLooper());
     }
@@ -66,6 +74,15 @@ final class TelemetryRepository {
     }
     boolean isRecording() { return recording; }
     boolean hasCpuOriginal(String policy) { return cpuController.hasSaved(policy); }
+    void changeDisplay(float hz, boolean adaptive, boolean restore, Result result) {
+        worker.post(() -> {
+            String error = "";
+            if (!rootEnabled) error = "Grant root access inside Butterd first";
+            else try { displayController.apply(hz, adaptive, restore); }
+            catch (Exception failure) { error = failure.getMessage() == null ? "Display preferences were not verified. Saved originals were retained." : failure.getMessage(); }
+            sample(); String message = error; main.post(() -> result.complete(message));
+        });
+    }
     void changeGovernor(String policy, String governor, boolean restore, Result result) {
         worker.post(() -> {
             String error = "";
@@ -110,7 +127,7 @@ final class TelemetryRepository {
         if (rootBusy) return;
         rootBusy = true;
         worker.post(() -> {
-            try { rootData = RootReader.read(); rootEnabled = true; rootError = ""; lastRootRead = SystemClock.elapsedRealtime(); }
+            try { rootData = RootInventory.read(); rootEnabled = true; rootError = ""; lastRootRead = SystemClock.elapsedRealtime(); }
             catch (Exception failure) { rootEnabled = false; rootData = ""; rootError = context.getString(R.string.root_denied); }
             finally { rootBusy = false; sample(); }
         });
@@ -165,7 +182,7 @@ final class TelemetryRepository {
             readStandard(s);
             if (rootEnabled) {
                 if (s.elapsed - lastRootRead >= (recorder.active() ? 3000 : 15000)) {
-                    try { rootData = RootReader.read(); lastRootRead = s.elapsed; }
+                    try { rootData = RootInventory.read(); lastRootRead = s.elapsed; }
                     catch (Exception failure) { rootEnabled = false; rootData = ""; rootError = context.getString(R.string.root_lost); }
                 }
                 if (rootEnabled) {
@@ -178,6 +195,7 @@ final class TelemetryRepository {
             try { s.cycles = Integer.parseInt(s.kernel.get("cycles")); }
             catch (NumberFormatException ignored) { }
         }
+        s.displaySaved = displayController.hasOriginal();
         s.root = rootEnabled; s.rootBusy = rootBusy;
         if (!rootError.isEmpty()) s.error = rootError;
         try { recorder.sample(s); }
@@ -200,6 +218,11 @@ final class TelemetryRepository {
         android.view.Display display = displays.getDisplay(android.view.Display.DEFAULT_DISPLAY);
         if (display != null) {
             s.refreshRate = display.getRefreshRate();
+            s.refreshRates = displayController.supportedRates();
+            try {
+                s.refreshMinimum = android.provider.Settings.System.getString(context.getContentResolver(), "min_refresh_rate");
+                s.refreshPeak = android.provider.Settings.System.getString(context.getContentResolver(), "peak_refresh_rate");
+            } catch (SecurityException protectedPreference) { /* Display telemetry remains usable. */ }
             java.util.Set<String> modes = new java.util.LinkedHashSet<>();
             for (android.view.Display.Mode mode : display.getSupportedModes())
                 modes.add(mode.getPhysicalWidth() + " × " + mode.getPhysicalHeight() + " / " + Measurements.value(mode.getRefreshRate(), "Hz"));

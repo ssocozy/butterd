@@ -3,9 +3,6 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <queries>
-        <package android:name="com.xiaomi.settings" />
-    </queries>
     <application android:name=".ButterdApp" android:allowBackup="false" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:supportsRtl="true" android:theme="@style/Theme.Butterd">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>

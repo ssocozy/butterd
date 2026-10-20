@@ -1,5 +1,7 @@
 package dev.butterd;
 
+import dev.butterd.feature.kernel.KernelSensors;
+
 import org.junit.Test;
 import static org.junit.Assert.*;
 
