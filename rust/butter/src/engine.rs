@@ -68,7 +68,13 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             return Err("Advanced controls require --accept-risk".into());
         }
         let targets = if restoring { Vec::new() } else { hardware::plan(&self.hardware, &feature, setting)? };
-        self.apply_targets(feature, targets, restoring)
+        match self.apply_targets(feature.clone(), targets, restoring) {
+            Err(error) if feature == Feature::Governors && !restoring => {
+                let cleanup = self.apply_targets(feature, Vec::new(), true);
+                Err(format!("Governor change failed: {error}; cleanup: {}",cleanup.unwrap_or_else(|error| error.to_string())).into())
+            }
+            result => result,
+        }
     }
     pub fn apply_targets(&self, feature: Feature, mut targets: Vec<(String, String)>, restoring: bool) -> Result<String> {
         feature.validate()?;
@@ -169,7 +175,8 @@ impl<H: Hardware, S: Store> Engine<H, S> {
                     return Err("The original TCP algorithm is no longer available".into());
                 }
                 // An original governor must still be offered by the live policy.
-                if let Feature::Governor(policy) = &feature {
+                if matches!(feature, Feature::Governor(_) | Feature::Governors) {
+                    let policy = entry.path.strip_prefix(&format!("{CPU}/")).and_then(|tail| tail.strip_suffix("/scaling_governor")).ok_or("Invalid governor path")?;
                     let available = self
                         .hardware
                         .read(&format!("{CPU}/{policy}/scaling_available_governors"))?;
@@ -246,7 +253,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         .into())
     }
     pub fn controls(&self) -> Vec<Feature> {
-        let mut controls = vec![Feature::CpuLock, Feature::GpuLock, Feature::ChargingThermal, Feature::GpuThermal, Feature::Touch, Feature::Tcp, Feature::Profile, Feature::GpuRange, Feature::ChargingPause, Feature::Bypass];
+        let mut controls = vec![Feature::CpuLock, Feature::GpuLock, Feature::ChargingThermal, Feature::GpuThermal, Feature::Touch, Feature::Tcp, Feature::Governors, Feature::Profile, Feature::GpuRange, Feature::ChargingPause, Feature::Bypass];
         if let Ok(policies) = self.hardware.list(CPU) {
             for policy in policies.into_iter().filter(|value| valid_policy(value)).take(16) {
                 controls.push(Feature::Governor(policy.clone()));
@@ -336,6 +343,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             })();
             output.insert(feature.key(), capability.unwrap_or_else(|error| json!({"available": false, "state": "Not exposed", "reason": error.to_string()})));
         }
+        output.insert("governors".into(), json!({"original": self.session(&Feature::Governors).ok().flatten().is_some()}));
         let mut policies = Vec::new();
         if let Ok(mut names) = self.hardware.list(CPU) {
             names.retain(|value| valid_policy(value));

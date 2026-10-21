@@ -453,3 +453,39 @@ fn android_unset_preferred_mode_is_captured_and_released() {
         assert!(butter::display::preferred_reply(&format!("User preferred display mode: {invalid}")).is_err());
     }
 }
+
+#[test]
+fn unified_governor_applies_and_restores_each_clusters_original() {
+    let engine = fixture();
+    engine.hardware.put(&format!("{CPU}/policy4/scaling_governor"),"performance");
+    engine.apply(Feature::Governors,"powersave",false,false).unwrap();
+    for policy in ["policy0","policy4"] { assert_eq!(engine.hardware.read(&format!("{CPU}/{policy}/scaling_governor")).unwrap(),"powersave"); }
+    assert!(engine.apply(Feature::Governor("policy0".into()),"schedutil",false,false).is_err());
+    engine.apply(Feature::Governors,"",true,false).unwrap();
+    assert_eq!(engine.hardware.read(&format!("{CPU}/policy0/scaling_governor")).unwrap(),"schedutil");
+    assert_eq!(engine.hardware.read(&format!("{CPU}/policy4/scaling_governor")).unwrap(),"performance");
+}
+#[test]
+fn unified_governor_preflights_all_clusters_and_rolls_back_failed_write() {
+    let engine = fixture();
+    engine.hardware.put(&format!("{CPU}/policy4/scaling_available_governors"),"schedutil");
+    assert!(engine.apply(Feature::Governors,"powersave",false,false).is_err());
+    assert_eq!(engine.hardware.writes.get(),0);
+    engine.hardware.put(&format!("{CPU}/policy4/scaling_available_governors"),"schedutil powersave");
+    engine.hardware.fail_at.set(Some(2));
+    assert!(engine.apply(Feature::Governors,"powersave",false,false).is_err());
+    for policy in ["policy0","policy4"] { assert_eq!(engine.hardware.read(&format!("{CPU}/{policy}/scaling_governor")).unwrap(),"schedutil"); }
+}
+#[test]
+fn unified_governor_preserves_external_changes_and_checks_original_support() {
+    let engine = fixture();
+    engine.apply(Feature::Governors,"powersave",false,false).unwrap();
+    engine.hardware.put(&format!("{CPU}/policy4/scaling_governor"),"performance");
+    let writes = engine.hardware.writes.get();
+    assert!(engine.apply(Feature::Governors,"",true,false).is_err());
+    assert_eq!(engine.hardware.writes.get(),writes);
+    engine.hardware.put(&format!("{CPU}/policy4/scaling_governor"),"powersave");
+    engine.hardware.put(&format!("{CPU}/policy4/scaling_available_governors"),"powersave");
+    assert!(engine.apply(Feature::Governors,"",true,false).is_err());
+    assert_eq!(engine.hardware.writes.get(),writes);
+}

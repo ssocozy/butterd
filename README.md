@@ -9,7 +9,7 @@ Powered by **butter**, a Rust optimization engine built for Duchamp’s Dimensit
 
 ## Controls
 
-- Balanced, Performance and Battery CPU/GPU presets, with per-cluster governor and frequency controls.
+- Balanced, Performance and Battery CPU/GPU presets, with one governor selector for all CPU clusters and advanced per-cluster controls.
 - Opt-in foreground app profiles, temporary launch boosts and per-app display preferences.
 - Battery, temperature, workload and screen-state monitoring, with explainable profile decisions.
 - TCP congestion-control selection from your kernel’s available algorithms.

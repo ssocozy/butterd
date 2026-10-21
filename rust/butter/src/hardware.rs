@@ -133,6 +133,7 @@ pub fn allowed(hardware: &impl Hardware, feature: &Feature, path: &str) -> bool 
         Feature::GpuThermal => cooling(hardware).is_ok_and(|current| current == path),
         Feature::Touch => path == GOODIX || path == HTSR,
         Feature::Tcp => path == TCP,
+        Feature::Governors => path.strip_prefix(&format!("{CPU}/")).and_then(|tail| tail.strip_suffix("/scaling_governor")).is_some_and(valid_policy),
         Feature::Governor(policy) => {
             valid_policy(policy) && path == format!("{CPU}/{policy}/scaling_governor")
         }
@@ -174,7 +175,7 @@ pub fn validate_value(feature: &Feature, value: &str) -> Result<()> {
         if !valid_algorithm(value) {
             return Err("Invalid TCP algorithm".into());
         }
-    } else if matches!(feature, Feature::Governor(_)) {
+    } else if matches!(feature, Feature::Governor(_) | Feature::Governors) {
         if !valid_governor(value) {
             return Err("Invalid governor value".into());
         }
@@ -250,6 +251,12 @@ pub fn plan(
                 return Err("TCP algorithm is not exposed by this kernel".into());
             }
             targets.push((TCP.into(), setting.into()));
+        }
+        Feature::Governors => {
+            let mut policies: Vec<_> = hardware.list(CPU)?.into_iter().filter(|policy| valid_policy(policy)).collect();
+            policies.sort(); policies.dedup();
+            if policies.is_empty() || policies.len() > 16 { return Err("CPU clusters could not be discovered".into()); }
+            for policy in policies { targets.extend(plan(hardware,&Feature::Governor(policy),setting)?); }
         }
         Feature::Governor(policy) => {
             if !selectable_governor(setting) {

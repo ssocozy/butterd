@@ -70,6 +70,7 @@ fn run() -> Result<()> {
         [command, range] if command == "restore-range" && valid_policy(range) => (Feature::CpuRange(range.clone()), "", true, false),
         [command, range] if command == "restore-range" && range == "gpu" => (Feature::GpuRange, "", true, false),
         [command, algorithm] if command == "tcp" => (Feature::Tcp, algorithm.as_str(), false, false),
+        [command, all, governor] if command == "governor" && all == "all" => (Feature::Governors, governor.as_str(), false, false),
         [command, policy, governor] if command == "governor" && valid_policy(policy) => (Feature::Governor(policy.clone()), governor.as_str(), false, false),
         [command, policy] if command == "restore" && valid_policy(policy) => (Feature::Governor(policy.clone()), "", true, false),
         [command, feature] if command == "restore" => (Feature::parse(feature)?, "", true, false),

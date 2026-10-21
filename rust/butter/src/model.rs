@@ -11,6 +11,7 @@ pub enum Feature {
     Touch,
     Tcp,
     Governor(String),
+    Governors,
     Profile,
     CpuRange(String),
     GpuRange,
@@ -21,6 +22,7 @@ pub enum Feature {
 impl Feature {
     pub fn parse(value: &str) -> Result<Self> {
         Ok(match value {
+            "governors" => Self::Governors,
             "cpu-lock" => Self::CpuLock,
             "gpu-lock" => Self::GpuLock,
             "charging-thermal" => Self::ChargingThermal,
@@ -36,6 +38,7 @@ impl Feature {
     }
     pub fn key(&self) -> String {
         match self {
+            Self::Governors => "governors".into(),
             Self::CpuLock => "cpu-lock".into(),
             Self::GpuLock => "gpu-lock".into(),
             Self::ChargingThermal => "charging-thermal".into(),

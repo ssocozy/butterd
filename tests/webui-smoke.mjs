@@ -106,6 +106,9 @@ try {
   assert.equal(await evaluate(`document.querySelectorAll('.bottom-nav .ph-icon').length`),3);
   assert.equal(await evaluate(`[...document.querySelectorAll('.select-trigger')].every(node=>node.querySelector('svg.ph-icon') && !node.textContent.includes('⌄'))`),true);
   await evaluate(`document.querySelector('#cpu-controls').closest('details').open=true`); await delay(250);
+  assert.equal(await evaluate(`document.querySelector('#governor-all').value`),'schedutil');
+  assert.equal(await evaluate(`document.querySelector('#cpu-controls > details').open`),false);
+  await evaluate(`document.querySelector('#cpu-controls > details').open=true`);
   assert.equal(await evaluate(`document.querySelector('[data-select=maximum-policy0]').textContent.includes('GHz')`),true);
   assert.match(await evaluate(`document.querySelector('#cpu-controls .preset-request').textContent`),/Preset request: 1 GHz – 2 GHz/);
   assert.equal(await evaluate(`document.querySelector('#cpu-controls').closest('details').querySelector('summary').textContent.includes('−')`),false);

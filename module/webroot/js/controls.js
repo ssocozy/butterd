@@ -47,17 +47,33 @@ function range(host, id, data, run) {
 }
 export function renderControls(state, run, requestAdvanced) {
   const cpu = $('cpu-controls'); cpu.replaceChildren();
-  const names = clusterNames(state.cpuPolicies || []);
+  const policies = state.cpuPolicies || [];
+  const allowed = ['schedutil','ondemand','conservative','powersave','interactive'];
+  const common = allowed.filter(value => policies.length && policies.every(policy => (policy.choices || []).includes(value)));
+  const current = new Set(policies.map(policy => policy.governor));
+  const unified = document.createElement('div'); unified.className = 'control';
+  const heading = document.createElement('h3'); heading.textContent = 'All CPU clusters';
+  unified.append(heading,paragraph('Current governor: '+(current.size === 1 ? policies[0].governor : 'Mixed'),'caption'),paragraph('Optional. Keep the ROM governor unless you have a reason to change it.','caption'));
+  if (common.length) {
+    const selected = selection('governor-all','CPU governor',common,current.size === 1 && common.includes(policies[0].governor) ? policies[0].governor : '',unified);
+    if (!selected.value) { const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = 'Choose a governor'; placeholder.disabled = true; placeholder.selected = true; selected.prepend(placeholder); }
+    unified.append(actions(button('Apply to all clusters',()=> selected.value ? run('governor all '+selected.value) : run(null,'Choose a governor first.'))));
+  } else unified.append(paragraph('No selectable governor is shared by every cluster.','caption'));
+  unified.append(actions(button('Restore all governors',()=>run('restore governors'),state.governors?.original === true)));
+  cpu.append(unified);
+  const details = document.createElement('details'); details.className = 'disclosure';
+  const summary = document.createElement('summary'); summary.textContent = 'Advanced cluster controls'; details.append(summary); cpu.append(details);
+  const names = clusterNames(policies);
   for (const policy of state.cpuPolicies || []) {
     if (!/^policy[0-9]{1,3}$/.test(policy.id)) continue;
     const host = document.createElement('div'); host.className = 'control'; const title = document.createElement('h3'); const cluster = names.get(policy.id); title.textContent = cluster.name; host.append(title,paragraph(cluster.cores+' '+(cluster.cores === 1 ? 'core' : 'cores')+' · supported up to '+formatClock(cluster.peak),'cluster-meta'),paragraph('Effective limits: '+formatClock(policy.min)+' – '+formatClock(policy.max),'caption'));
     if (validNumber(policy.requestedMin) && validNumber(policy.requestedMax)) host.append(paragraph('Preset request: '+formatClock(policy.requestedMin)+' – '+formatClock(policy.requestedMax),'preset-request'));
     const allowed = ['schedutil','ondemand','conservative','powersave','interactive']; const choices = [...new Set([policy.governor,...(policy.choices || [])])].filter(v => /^[a-z][a-z0-9_]{0,31}$/.test(v));
     const governor = selection('governor-'+policy.id,'CPU governor',choices,policy.governor,host);
-    host.append(actions(button('Apply governor', () => { if (allowed.includes(governor.value)) run('governor '+policy.id+' '+governor.value); else run(null,'This governor is shown for reference but cannot be selected by butter.'); }),button('Restore governor', () => run('restore '+policy.id),policy.original === true)));
-    range(host,policy.id,{frequencies:policy.frequencies,min:policy.min,max:policy.max,active:policy.rangeActive},run); cpu.append(host);
+    host.append(actions(button('Apply governor', () => { if (allowed.includes(governor.value)) run('governor '+policy.id+' '+governor.value); else run(null,'This governor is shown for reference but cannot be selected by butter.'); },state.governors?.original !== true),button('Restore governor', () => run('restore '+policy.id),policy.original === true)));
+    range(host,policy.id,{frequencies:policy.frequencies,min:policy.min,max:policy.max,active:policy.rangeActive},run); details.append(host);
   }
-  if (!cpu.childElementCount) cpu.append(paragraph('CPU controls could not be discovered. Export diagnostics for the exact failure.'));
+  if (!policies.length) cpu.append(paragraph('CPU controls could not be discovered. Export diagnostics for the exact failure.'));
   const gpu = $('gpu-controls'); gpu.replaceChildren(); const gpuRange = state.gpuRange || {};
   if (validNumber(gpuRange.min) && validNumber(gpuRange.max)) gpu.append(paragraph('Effective limits: '+formatClock(gpuRange.min,true)+' – '+formatClock(gpuRange.max,true),'caption'));
   if (validNumber(gpuRange.requestedMin) && validNumber(gpuRange.requestedMax)) gpu.append(paragraph('Preset request: '+formatClock(gpuRange.requestedMin,true)+' – '+formatClock(gpuRange.requestedMax,true),'preset-request'));
