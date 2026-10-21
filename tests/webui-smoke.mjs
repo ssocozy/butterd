@@ -18,16 +18,18 @@ const server=createServer(async(request,response)=>{
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const directory=await fs.mkdtemp(path.join(os.tmpdir(),'butter-webui-'));
-const chrome=spawn(process.env.CHROME_BIN || '/usr/bin/google-chrome',['--headless=new','--remote-allow-origins=*','--no-sandbox','--disable-dev-shm-usage','--no-first-run','--disable-extensions','--disable-background-networking','--remote-debugging-port=0','--user-data-dir='+directory,'about:blank'],{stdio:['ignore','ignore','pipe']});
+const chrome=spawn(process.env.CHROME_BIN || '/usr/bin/google-chrome',['--headless=new','--disable-gpu','--remote-allow-origins=*','--no-sandbox','--disable-dev-shm-usage','--no-first-run','--disable-extensions','--disable-background-networking','--remote-debugging-port=0','--user-data-dir='+directory,'about:blank'],{stdio:['ignore','ignore','pipe']});
 let chromeErrors=''; chrome.stderr.on('data',chunk=>{ if(chromeErrors.length<16384) chromeErrors+=chunk; });
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 let socket;
 try {
   let port;
-  for(let attempt=0;attempt<200;attempt++) {
+  for(let attempt=0;attempt<600;attempt++) {
+    const listening=chromeErrors.match(/DevTools listening on ws:\/\/127\.0\.0\.1:([0-9]+)/);
+    if(listening) { port=Number(listening[1]); break; }
     try { port=Number((await fs.readFile(path.join(directory,'DevToolsActivePort'),'utf8')).split('\n')[0]); break; } catch (_) { if(chrome.exitCode!==null) throw new Error('Chrome exited: '+chromeErrors); await delay(50); }
   }
-  assert.ok(port,'Chrome debugging endpoint did not start');
+  assert.ok(port,'Chrome debugging endpoint did not start: '+chromeErrors);
   const target=await(await fetch('http://127.0.0.1:'+port+'/json/new?about:blank',{method:'PUT'})).json();
   socket=new WebSocket(target.webSocketDebuggerUrl); await new Promise((resolve,reject)=>{ socket.addEventListener('open',resolve,{once:true}); socket.addEventListener('error',reject,{once:true}); });
   let serial=0; const pending=new Map(), exceptions=[];
