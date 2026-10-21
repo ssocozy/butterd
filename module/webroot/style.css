@@ -23,3 +23,5 @@
 .control-switch>.switch{justify-self:end;align-self:start}
 .control-switch input:disabled+span{opacity:.4}
 .control-switch[aria-busy=true] .switch span{opacity:.55}
+
+.connection-notice{color:var(--ink);font-size:12px;font-weight:600;border-left:2px solid var(--ink);padding:6px 10px;background:var(--soft);margin-bottom:12px;border-radius:0 6px 6px 0}

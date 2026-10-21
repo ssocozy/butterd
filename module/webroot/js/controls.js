@@ -108,11 +108,15 @@ export function renderControls(state, run, requestAdvanced) {
   } else tcp.append(paragraph(state.tcp?.reason || 'The kernel does not expose TCP controls.'));
   const audio = state.audio || {}, audioHost = $('audio-controls'); audioHost.replaceChildren();
   const savedMic = !!state.supervisor?.config?.controls?.['phone-mic'];
-  let audioSummary = !audio.available ? audio.reason || 'Input-routing API is not exposed by this ROM.' : !audio.bluetoothConnected ? 'Connect Bluetooth earbuds. A saved preference will resume when they reconnect.' : audio.active ? 'Phone microphone preference is set.' : 'Ready to set a phone microphone preference.';
+  let audioSummary = !audio.available ? audio.reason || 'Input-routing API is not exposed by this ROM.' : !audio.bluetoothConnected ? (savedMic ? 'Your preference is saved. It will apply automatically when Bluetooth earbuds reconnect.' : 'Connect Bluetooth earbuds to enable this option.') : audio.active ? 'Phone microphone preference is set.' : 'Ready to set a phone microphone preference.';
   const observed = audio.activeInputs || [];
   if (observed.length) audioSummary += observed.every(input=>input.phoneMic) ? ' Observed recording inputs use the phone microphone.' : observed.some(input=>input.phoneMic) ? ' Observed inputs include both phone and external microphones.' : ' Observed recording inputs still use an external microphone.';
   else audioSummary += ' No active app input is reported; actual routing is unverified.';
   audioHost.append(toggle('Prefer phone microphone',savedMic || audio.active === true,savedMic || audio.active === true || (audio.available && audio.bluetoothConnected),{on:'enable phone-mic',off:'restore phone-mic'},run,audioSummary));
+  if (audio.available && !audio.bluetoothConnected) {
+    const notice = paragraph('Bluetooth earbuds disconnected','connection-notice'); notice.setAttribute('role','status');
+    audioHost.querySelector('.control-copy').prepend(notice);
+  }
   const errors = state.supervisor?.runtime?.preference_errors || {};
   $('preferences-status').textContent = Object.keys(errors).length ? 'Some saved options could not resume: '+Object.entries(errors).map(([name,error])=>name+': '+error).join(' · ') : 'Applied options are remembered after reboot. Temporary overrides retain their original expiry.';
   const host = $('advanced-controls'); host.replaceChildren();

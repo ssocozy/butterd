@@ -122,6 +122,11 @@ try {
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('#advanced-controls > .control-switch')).every(row=>{const copy=row.querySelector('.control-copy').getBoundingClientRect(), control=row.querySelector('.switch').getBoundingClientRect();return copy.right+15<=control.left && row.querySelector('.caption')?.parentElement.classList.contains('control-copy');})`),true);
   await evaluate(`document.querySelector('#advanced-controls').closest('details').open=false`);
   assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('Use previous preferences')`),false);
+  await evaluate(`globalThis.__butterFixture.audio.bluetoothConnected=false;globalThis.__butterFixture.audio.active=false;document.querySelector('#refresh').click()`);
+  await until(`document.querySelector('#audio-controls .connection-notice')?.textContent==='Bluetooth earbuds disconnected'`);
+  assert.equal(await evaluate(`document.querySelector('#audio-controls input').checked && !document.querySelector('#audio-controls input').disabled`),true);
+  assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('automatically when Bluetooth earbuds reconnect')`),true);
+
   assert.equal(await evaluate(`document.querySelector('#preferences-status').textContent.includes('remembered after reboot')`),true);
   assert.equal(await evaluate(`document.querySelector('#cpu-controls > details').open`),false);
   await evaluate(`document.querySelector('#cpu-controls > details').open=true`);
