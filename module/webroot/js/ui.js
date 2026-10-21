@@ -1,3 +1,4 @@
+import {icon} from './icons.js';
 export const $ = id => document.getElementById(id);
 let noticeTimer;
 export function notify(message, error = false) {
@@ -16,7 +17,7 @@ export function updateSelectors() {
   if (!choiceDialog) {
     choiceDialog = document.createElement('dialog'); choiceDialog.id = 'choice-dialog'; choiceDialog.setAttribute('aria-labelledby', 'choice-title');
     const heading = document.createElement('div'); heading.className = 'sheet-heading';
-    const title = document.createElement('h2'); title.id = 'choice-title'; const close = button('×', () => choiceDialog.close(), true, 'icon-button'); close.setAttribute('aria-label', 'Close selection'); heading.append(title, close);
+    const title = document.createElement('h2'); title.id = 'choice-title'; const close = button('', () => choiceDialog.close(), true, 'icon-button'); close.append(icon('x')); close.setAttribute('aria-label', 'Close selection'); heading.append(title, close);
     const list = document.createElement('div'); list.id = 'choice-list'; list.setAttribute('role', 'listbox'); choiceDialog.append(heading,list); document.body.append(choiceDialog);
     list.addEventListener('keydown', event => {
       if (!['ArrowUp','ArrowDown','Home','End'].includes(event.key)) return;
@@ -33,7 +34,7 @@ export function updateSelectors() {
       $('choice-title').textContent = label; const list = $('choice-list'); list.replaceChildren(); trigger.setAttribute('aria-expanded','true');
       for (const option of select.options) {
         const row = button('', () => { select.value = option.value; select.dispatchEvent(new Event('change',{bubbles:true})); choiceDialog.close(); updateSelectors(); }, !option.disabled, 'choice-option');
-        const text = document.createElement('span'); text.textContent = option.textContent; const check = document.createElement('span'); check.className = 'selection-check'; check.textContent = option.selected ? '✓' : ''; row.append(text,check); row.setAttribute('role','option'); row.setAttribute('aria-selected',String(option.selected)); list.append(row);
+        const text = document.createElement('span'); text.textContent = option.textContent; const check = document.createElement('span'); check.className = 'selection-check'; if (option.selected) check.append(icon('check')); row.append(text,check); row.setAttribute('role','option'); row.setAttribute('aria-selected',String(option.selected)); list.append(row);
       }
       choiceDialog.addEventListener('close', () => { trigger.setAttribute('aria-expanded','false'); trigger.focus(); }, {once:true});
       choiceDialog.showModal(); list.querySelector('[aria-selected=true]')?.focus();
@@ -43,7 +44,7 @@ export function updateSelectors() {
   for (const [select, trigger] of selectors) {
     if (!select.isConnected) { selectors.delete(select); continue; }
     const label = select.labels?.[0]?.textContent?.trim() || select.getAttribute('aria-label') || 'Selection';
-    trigger.textContent = (select.selectedOptions[0]?.textContent || 'Choose') + ' ⌄'; trigger.setAttribute('aria-label', label + ': ' + (select.selectedOptions[0]?.textContent || 'Choose'));
+    const value = document.createElement('span'); value.textContent = select.selectedOptions[0]?.textContent || 'Choose'; trigger.replaceChildren(value, icon('caret-down')); trigger.setAttribute('aria-label', label + ': ' + (select.selectedOptions[0]?.textContent || 'Choose'));
     trigger.disabled = select.disabled; trigger.dataset.capable = String(!select.disabled);
   }
 }

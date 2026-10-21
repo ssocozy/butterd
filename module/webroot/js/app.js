@@ -1,3 +1,5 @@
+import {icon,mountIcons} from './icons.js';
+mountIcons();
 import {exec,binary,validPackage} from './bridge.js';
 import {$,notify,button,paragraph,setBusy,updateSelectors} from './ui.js';
 import {renderControls,advanced} from './controls.js';
@@ -87,7 +89,7 @@ function renderApps() {
     let icon; if (typeof app.icon==='string' && /^data:image\/png;base64,[A-Za-z0-9+/=]{1,3000}$/.test(app.icon)) { icon=document.createElement('img'); icon.src=app.icon; icon.alt=''; icon.loading='lazy'; } else { icon=document.createElement('span'); icon.textContent=String(app.label || app.package).slice(0,1).toUpperCase(); icon.setAttribute('aria-hidden','true'); } icon.className='app-icon';
     const info=document.createElement('span'); info.className='app-name'; const label=document.createElement('strong'); label.textContent=app.label || app.package; const detail=document.createElement('small'); detail.textContent=app.package; info.append(label,detail); row.append(icon,info);
     const rule=rules.find(rule=>rule.package===app.package); if (rule) { const badge=document.createElement('span'); badge.className='app-badge'; badge.textContent=rule.preset; row.append(badge); } else if (app.game) { const badge=document.createElement('span'); badge.className='app-badge'; badge.textContent='Game'; row.append(badge); }
-    const chevron=document.createElement('span'); chevron.className='chevron'; chevron.textContent='›'; row.append(chevron); host.append(row);
+    const chevron=document.createElement('span'); chevron.className='chevron'; chevron.append(icon('caret-right')); row.append(chevron); host.append(row);
   }
 }
 function openApp(app) {
