@@ -19,11 +19,11 @@ Powered by **butter**, a Rust optimization engine built for Duchamp’s Dimensit
 - Local diagnostic reports, optional logcat events and app frame-duration samples.
 - Pixel 6a–9a compatibility profiles, fetched automatically during installation.
 
-Configure controls in the module WebUI. Overview holds the overall presets; Apps lists installed launchable apps with searchable profiles; Settings holds hardware controls and diagnostics. Availability depends on your kernel and touch panel. Advanced thermal controls are opt-in and can increase heat and power use. Read-only monitoring starts at boot. Automatic tuning starts only when enabled; choose installed apps to add profile rules. Initial frequency-table presets still need device benchmarks.
+Configure controls in the module WebUI. Overview holds the overall presets; Apps lists installed launchable apps with searchable profiles; Settings holds hardware controls and diagnostics. Availability depends on your kernel and touch panel. Advanced thermal controls are opt-in and can increase heat and power use. Read-only monitoring starts at boot. Saving an app profile enables automatic tuning; the Apps switch can pause it. Initial frequency-table presets still need device benchmarks.
 
 ## How butter works
 
-butter is a device-aware Rust control engine for Duchamp. Its supervisor follows the foreground app, screen state, battery saver, battery temperature and sampled CPU activity. App rules choose a preset; short boost leases overlap independently and expire without a permanent clock lock. When both CPU and GPU activity can be measured as idle, performance floors are released; heat takes priority over boosts.
+butter is a device-aware Rust control engine for Duchamp. Its supervisor wakes on Android app-lifecycle, screen and battery events, then reads authoritative state before applying a rule. A bounded polling fallback covers missing ROM events and thermal checks. It follows the foreground app, screen state, battery saver, battery temperature and sampled CPU activity. App rules choose a preset; entering a configured Performance app automatically triggers a short launch boost, which expires without a permanent clock lock. When both CPU and GPU activity can be measured as idle, performance floors are released; heat takes priority over boosts.
 
 The engine discovers CPU policies and Mali frequency tables at runtime. Performance raises moderate frequency floors; Battery lowers ceilings; Balanced returns profile limits to the ROM. It does not assume every kernel exposes the same nodes. Display requests use Android preferences, accept only advertised internal-display modes and yield when another controller changes those preferences.
 
@@ -43,7 +43,7 @@ These are explicit policies, not machine learning. The frequency choices are con
 2. Install it through your root manager and reboot.
 3. Open the WebUI to configure Butterd. Magisk users need a compatible WebUI host.
 
-Fresh installs randomly select a Pixel profile from 6a through 9a, with build, Play Store build and scoped property spoofing enabled. Change the model in the WebUI; updates keep your selection. Offline profiles include the model’s initial API and a matching published Pixel security patch. These identity properties are scoped to the target process; the Android SDK version is unchanged. A Play Integrity verdict is not guaranteed.
+Fresh installs randomly select a Pixel profile from 6a through 9a, with build, Play Store build and scoped property spoofing enabled. Change the model in the WebUI; applying it restarts only the Google integrity and Play Store target processes so no phone reboot is needed for profile changes. Updates keep your selection. Offline profiles include the model’s initial API and a matching published Pixel security patch. These identity properties are scoped to the target process; the Android SDK version is unchanged. A Play Integrity verdict is not guaranteed.
 
 ## Why Play Integrity Fix is included
 

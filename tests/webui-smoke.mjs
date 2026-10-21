@@ -67,6 +67,7 @@ try {
   await send('Page.navigate',{url:'http://127.0.0.1:'+server.address().port+'/index.html'});
   await until(`document.getElementById('engine-state')?.textContent==='Monitoring active'`);
   assert.equal(await evaluate(`document.getElementById('watts').textContent`),'-2.4');
+  assert.equal(await evaluate(`document.getElementById('boost')`),null,'Manual launch boost should not be in the interface');
   assert.equal(await evaluate(`document.querySelectorAll('#spoof-options dd').length`),3);
   assert.equal(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),true,'Mobile overview overflows horizontally');
   const screenshot=async name=>{await evaluate(`window.scrollTo(0,0)`);await delay(300);const image=await send('Page.captureScreenshot',{format:'png'});await fs.writeFile(path.join(output,name),Buffer.from(image.data,'base64'));};
@@ -91,8 +92,18 @@ try {
   await evaluate(`document.querySelector('[data-select=theme]').click()`); await until(`document.getElementById('choice-dialog').open`);
   await evaluate(`[...document.querySelectorAll('#choice-list button')].find(node=>node.textContent.includes('Dark')).click()`);
   assert.equal(await evaluate(`document.documentElement.dataset.theme`),'dark');
+  const clockLabels = await evaluate(`import('./js/controls.js').then(m=>[m.formatClock('1900000'),m.formatClock('740000000',true),[...m.clusterNames([{id:'policy0',cores:'0 1 2 3',frequencies:'480000 2200000'},{id:'policy4',cores:'4 5 6',frequencies:'400000 3200000'},{id:'policy7',cores:'7',frequencies:'400000 3350000'}]).values()].map(c=>c.name)])`);
+  assert.deepEqual(clockLabels,['1.9 GHz','740 MHz',['Efficiency cores (little)','Performance cores (big)','Prime core']]);
   assert.equal(await evaluate(`document.querySelectorAll('.bottom-nav .ph-icon').length`),3);
   assert.equal(await evaluate(`[...document.querySelectorAll('.select-trigger')].every(node=>node.querySelector('svg.ph-icon') && !node.textContent.includes('⌄'))`),true);
+  await evaluate(`document.querySelector('#cpu-controls').closest('details').open=true`); await delay(250);
+  assert.equal(await evaluate(`document.querySelector('[data-select=maximum-policy0]').textContent.includes('GHz')`),true);
+  assert.equal(await evaluate(`document.querySelector('#cpu-controls').closest('details').querySelector('summary').textContent.includes('−')`),false);
+  const arrowX = await evaluate(`document.querySelector('#cpu-controls').closest('details').querySelector('summary>.ph-icon').getBoundingClientRect().right`);
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('#cpu-controls').closest('details').querySelector('summary'),'::after').content`),'none');
+  await evaluate(`document.querySelector('#cpu-controls').closest('details').open=false`); await delay(250);
+  const closedArrowX = await evaluate(`document.querySelector('#cpu-controls').closest('details').querySelector('summary>.ph-icon').getBoundingClientRect().right`);
+  assert.ok(Math.abs(arrowX-closedArrowX)<1,'Disclosure arrow moved sideways when opened');
   await screenshot('webui-settings-dark.png');
   assert.equal(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),true,'Mobile settings overflow horizontally');
   await evaluate(`document.querySelector('[data-page=apps]').click()`); await until(`!document.getElementById('page-apps').hidden`);

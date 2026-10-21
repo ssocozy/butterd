@@ -107,13 +107,17 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             }
         };
         self.checked(&feature, &journal)?;
+        if restoring && journal.entries.iter().all(|entry| hardware::value(&self.hardware, &entry.path).is_ok_and(|current| current == entry.original)) {
+            self.store.remove(&feature)?;
+            return Ok("Original values are already active; session released.".into());
+        }
         // Preflight every node, including originals loaded from older versions, before any write.
         for entry in &journal.entries {
             let current = hardware::value(&self.hardware, &entry.path)?;
             if !entry.owned(&current) {
                 return Err(format!(
-                    "Another controller changed {}; nothing overwritten",
-                    entry.path
+                    "Readback changed at {}; expected {}, observed {}; no write made",
+                    entry.path, entry.expected, current
                 )
                 .into());
             }
@@ -227,12 +231,15 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         let Some(journal) = self.session(feature)? else {
             return Ok("Off");
         };
+        if *feature == Feature::Touch && journal.entries.iter().any(|entry| entry.expected != entry.original) && journal.entries.iter().all(|entry| hardware::value(&self.hardware, &entry.path).is_ok_and(|actual| actual == entry.original)) {
+            return Ok("Original values active; release session");
+        }
         let mut pending = false;
         for entry in &journal.entries {
             let actual = hardware::value(&self.hardware, &entry.path)?;
             pending |= entry.before.is_some();
             if !entry.owned(&actual) {
-                return Ok("Changed by another controller");
+                return Ok("Readback changed; request no longer active");
             }
         }
         Ok(if pending {
@@ -298,6 +305,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
                         json!({"id": policy, "governor": governor, "cores": self.hardware.read(&format!("{CPU}/{policy}/related_cpus"))?, "choices": choices,
                         "original": self.session(&Feature::Governor(policy.clone()))?.is_some(),
                         "frequencies":self.hardware.read(&format!("{CPU}/{policy}/scaling_available_frequencies")).unwrap_or_default(),
+                        "hardwareMax":self.hardware.read(&format!("{CPU}/{policy}/cpuinfo_max_freq")).unwrap_or_default(),
                         "min":self.hardware.read(&format!("{CPU}/{policy}/scaling_min_freq")).unwrap_or_default(),
                         "max":self.hardware.read(&format!("{CPU}/{policy}/scaling_max_freq")).unwrap_or_default(),
                         "rangeActive":self.session(&Feature::CpuRange(policy.clone()))?.is_some()}),

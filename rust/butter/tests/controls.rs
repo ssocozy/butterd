@@ -346,3 +346,15 @@ fn shared_lock_backend_distinguishes_contention_from_errors() {
     assert!(!FileLock::held(&path).unwrap());
     std::fs::remove_file(path).unwrap();
 }
+
+#[test]
+fn touch_returning_to_original_releases_session_without_a_write() {
+    let engine = fixture();
+    engine.apply(Feature::Touch, "480", false, false).unwrap();
+    engine.hardware.put(GOODIX, "0");
+    let writes = engine.hardware.writes.get();
+    assert_eq!(engine.state(&Feature::Touch).unwrap(), "Original values active; release session");
+    engine.apply(Feature::Touch, "", true, false).unwrap();
+    assert_eq!(engine.hardware.writes.get(), writes);
+    assert!(engine.session(&Feature::Touch).unwrap().is_none());
+}

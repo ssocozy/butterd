@@ -98,6 +98,7 @@ jobs:
         run: |
           python3 tools/validate.py
           python3 tests/catalog_test.py
+          sh tests/compatibility_test.sh
           for script in module/webroot/js/*.js; do node --check "$script"; done
           mkdir -p build
           g++ -std=c++20 -Wall -Wextra -Werror -Inative/compatibility native/compatibility/pif_config.cpp tests/config_test.cpp -o build/config-test

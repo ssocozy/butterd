@@ -96,3 +96,36 @@ fn display_modes_survive_nested_hdr_and_alternative_rate_arrays() {
     assert!(display_rates(&dump.replace("type INTERNAL", "type EXTERNAL")).is_empty());
     assert!(display_rates("DisplayDeviceInfo{supportedModes [{id=1, fps=120, alternativeRefreshRates=[]}, type INTERNAL}").is_empty());
 }
+
+#[test]
+fn low_refresh_cap_survives_cpu_conflicts_heat_and_saver() {
+    let mut cfg = Config { automatic:true, rules:vec![AppRule { package:"com.example.game".into(), preset:Mode::Performance, hz:Some(60) }], ..Default::default() };
+    let mut state = state(); state.blocked = true;
+    let mut ctx = context(); ctx.soc_millic = Some(90000); ctx.saver = Some(true);
+    assert_eq!(butter::runtime::requested_refresh(&cfg, &state, &ctx), Some(60));
+    cfg.rules[0].hz = Some(120);
+    assert_eq!(butter::runtime::requested_refresh(&cfg, &state, &ctx), None);
+    cfg.rules[0].hz = Some(60); state.refresh_blocked = true;
+    assert_eq!(butter::runtime::requested_refresh(&cfg, &state, &ctx), None);
+    state.refresh_blocked = false; ctx.app = Some("com.other.app".into());
+    assert_eq!(butter::runtime::requested_refresh(&cfg, &state, &ctx), None);
+}
+#[test]
+fn event_fallback_respects_boost_and_advanced_deadlines() {
+    let mut state = RuntimeState::default();
+    assert_eq!(butter::runtime::next_wait(&state, true, 100).as_secs(), 5);
+    state.leases.push(Lease { source:"launch".into(), expires:103 });
+    assert_eq!(butter::runtime::next_wait(&state, false, 100).as_secs(), 3);
+    state.advanced_deadlines.insert("gpu-lock".into(), 101);
+    assert_eq!(butter::runtime::next_wait(&state, true, 100).as_secs(), 1);
+}
+#[test]
+fn repeated_foreground_events_do_not_extend_the_launch_boost() {
+    let cfg = Config { automatic:true, rules:vec![AppRule { package:"com.example.game".into(), preset:Mode::Performance, hz:None }], ..Default::default() };
+    let mut state = RuntimeState::default(); let ctx = context();
+    assert_eq!(decide(&cfg, &mut state, &ctx, 100).0, Mode::Boost);
+    state.foreground = ctx.app.clone();
+    assert_eq!(decide(&cfg, &mut state, &ctx, 101).0, Mode::Boost);
+    assert_eq!(state.leases[0].expires, 103);
+    assert_eq!(decide(&cfg, &mut state, &ctx, 104).0, Mode::Performance);
+}

@@ -24,7 +24,7 @@ case "${1:-status}" in
       sed -n 's/^selectedModel=//p' "$MODDIR/compatibility/pif.prop"
     else
       . "$MODDIR/lib/compatibility.sh"
-      select_identity "$2"
+      select_identity "$2" restart
     fi
     exit $?
     ;;

@@ -22,5 +22,29 @@ select_identity() {
   if { cat "$profile"; printf 'selectedModel=%s\n' "$1"; } > "$temporary"; then
     mv -f "$temporary" "$MODDIR/compatibility/pif.prop" || { rm -f "$temporary"; return 1; }
   else rm -f "$temporary"; return 1; fi
-  echo "Pixel profile selected. Restart the affected apps or reboot to apply."
+  if [ "${2:-}" = restart ]; then
+    restart_compatibility || { echo "Profile saved, but a Google process could not be restarted. Close Play Store and retry."; return 1; }
+    echo "Pixel profile applied. Google integrity and Play Store processes will reload it; no phone reboot needed."
+  else
+    echo "Pixel profile selected. It will load after installation and reboot."
+  fi
+}
+
+restart_compatibility() {
+  restart_failed=0
+  for target in com.google.android.gms.unstable com.android.vending; do
+    process_ids=$(pidof "$target" 2>/dev/null) || process_ids=
+    process_count=0
+    for process_id in $process_ids; do
+      case "$process_id" in ''|*[!0-9]*) restart_failed=1; continue ;; esac
+      [ "${#process_id}" -le 8 ] && [ "$process_id" -gt 1 ] || { restart_failed=1; continue; }
+      process_count=$((process_count + 1))
+      [ "$process_count" -le 16 ] || { restart_failed=1; break; }
+      # Restart only upstream's two target processes; never clear Google application data.
+      if ! kill -TERM "$process_id" 2>/dev/null; then
+        kill -0 "$process_id" 2>/dev/null && restart_failed=1
+      fi
+    done
+  done
+  [ "$restart_failed" -eq 0 ]
 }

@@ -30,6 +30,7 @@ pub struct RuntimeState {
     pub boot: String, pub active: Mode, pub reason: String, pub foreground: Option<String>,
     pub tuning_requested: bool, pub selected: Mode, pub advanced_deadlines: BTreeMap<String, u64>, pub leases: Vec<Lease>, pub blocked: bool, pub refresh_user: Option<u32>, pub refresh_hz: Option<u32>, pub idle_samples: u8, pub sampled_at: u64,
     pub telemetry: Value, pub error: Option<String>, pub pending_preset: Option<Mode>,
+    pub refresh_error: Option<String>, pub refresh_blocked: bool,
 }
 pub fn uptime() -> Result<u64> {
     let text = read_bounded(Path::new("/proc/uptime"), 128)?;
@@ -115,7 +116,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
         let mut state = match state(boot) { Ok(state) => state, Err(_) if resetting => RuntimeState {boot:boot.into(), ..Default::default()}, Err(error) => return Err(error) };
         match args {
             [command] if command == "monitor" => {},
-            [command, choice] if command == "auto" && matches!(choice.as_str(), "on" | "off") => { cfg.automatic = choice == "on"; state.tuning_requested = cfg.automatic; state.blocked = false; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = None; }
+            [command, choice] if command == "auto" && matches!(choice.as_str(), "on" | "off") => { state.refresh_blocked = false; state.refresh_error = None; cfg.automatic = choice == "on"; state.tuning_requested = cfg.automatic; state.blocked = false; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = None; }
             [command, choice] if command == "logging" && matches!(choice.as_str(), "on" | "off") => cfg.logcat = choice == "on",
             [command, mode] if command == "preset" => { let mode = Mode::parse(mode)?; if mode == Mode::Boost { return Err("Use boost SECONDS".into()); } state.tuning_requested = true; cfg.preset = mode; state.selected = mode; state.pending_preset = Some(mode); state.blocked = false; state.leases.clear(); }
             [command, seconds] if command == "boost" => {
@@ -131,11 +132,12 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
                     let preset = Mode::parse(mode)?;
                     let hz = if hz == "rom" { None } else { Some(hz.parse()?) };
                     cfg.rules.push(AppRule { package: package.clone(), preset, hz });
+                    cfg.automatic = true; state.tuning_requested = true;
                 }
-                state.blocked = false;
+                state.blocked = false; state.refresh_blocked = false; state.refresh_error = None;
             }
             [command] if command == "reset" => {
-                cfg.automatic = false; state.tuning_requested = false; cfg.preset = Mode::Balanced; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = Some(Mode::Balanced); state.blocked = false;
+                cfg.automatic = false; state.refresh_blocked = false; state.refresh_error = None; state.tuning_requested = false; cfg.preset = Mode::Balanced; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = Some(Mode::Balanced); state.blocked = false;
                 save("config.json", &cfg)?; save("runtime.json", &state)?;
                 cleanup_all(&e, &mut state)?;
             }
@@ -146,6 +148,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
         event(&cfg, "configuration", &args.join(" "));
     }
     ensure_daemon()?;
+    let _ = android::command("/system/bin/log", &["-p", "i", "-t", "butterWake", "configuration"]);
     Ok("Request saved. The supervisor will apply it after checking device state.".into())
 }
 #[derive(Debug, Clone, Default)]
@@ -229,10 +232,16 @@ fn restore_refresh(e: &Engine<SystemHardware, DiskStore>, state: &mut RuntimeSta
     }
     Ok(())
 }
-fn refresh(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &mut RuntimeState, ctx: &Context, desired: Mode) -> Result<()> {
-    let rule = if !state.blocked && cfg.automatic && ctx.awake == Some(true) && ctx.saver == Some(false) && ctx.temperature.is_some_and(|temp| temp < 420) && ctx.soc_millic.is_none_or(|temp| temp < 85000) && desired != Mode::Battery {
-        cfg.rules.iter().find(|rule| Some(&rule.package) == ctx.app.as_ref()).and_then(|rule| rule.hz)
-    } else { None };
+/// Low refresh caps remain useful during heat/saver; CPU conflicts do not disable display rules.
+pub fn requested_refresh(cfg: &Config, state: &RuntimeState, ctx: &Context) -> Option<u32> {
+    if state.refresh_blocked || !cfg.automatic || ctx.awake != Some(true) { return None; }
+    let hz = cfg.rules.iter().find(|rule| Some(&rule.package) == ctx.app.as_ref())?.hz?;
+    if hz == 60 { return Some(hz); }
+    if ctx.saver == Some(false) && ctx.battery.is_some_and(|level| level > 20)
+        && ctx.temperature.is_some_and(|temp| temp < 420) && ctx.soc_millic.is_none_or(|temp| temp < 85000) { Some(hz) } else { None }
+}
+fn refresh(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &mut RuntimeState, ctx: &Context) -> Result<()> {
+    let rule = requested_refresh(cfg, state, ctx);
     if state.foreground != ctx.app || state.refresh_user != ctx.user || state.refresh_hz != rule || rule.is_none() { restore_refresh(e, state)?; }
     let (Some(hz), Some(user)) = (rule, ctx.user) else { return Ok(()); };
     if !ctx.rates.contains(&hz) { return Err("Requested refresh mode is not advertised by the internal display".into()); }
@@ -300,6 +309,7 @@ pub fn daemon(boot: &str) -> Result<()> {
     let mut previous_cpu = None;
     let mut last_error = String::new();
     let mut last_sample_event = 0;
+    let mut wake_events = crate::events::WakeEvents::new();
     loop {
         let ctx = context();
         let now = uptime()?;
@@ -322,12 +332,15 @@ pub fn daemon(boot: &str) -> Result<()> {
             return Ok(());
         }
         let cfg = cfg?;
+        // A ROM/driver can return touch to its original state; no write is needed to release that session.
+        if matches!(e.state(&Feature::Touch), Ok("Original values active; release session")) && e.apply_targets(Feature::Touch, Vec::new(), true).is_ok() {
+            event(&cfg, "touch", "Touch returned to its original value; session released without a write");
+        }
         let (desired, reason) = decide(&cfg, &mut state, &ctx, now);
         let result = (|| -> Result<()> {
             thermal_cleanup(&e, &mut state, &ctx, now)?;
             if e.session(&Feature::Profile)?.is_some() && !matches!(e.state(&Feature::Profile)?, "Request active" | "Off") { return Err("Profile changed externally or interrupted; automatic tuning paused".into()); }
             if desired != state.active || (desired == Mode::Balanced && e.session(&Feature::Profile)?.is_some()) { e.preset(desired)?; }
-            refresh(&e, &cfg, &mut state, &ctx, desired)?;
             Ok(())
         })();
         match result {
@@ -340,20 +353,40 @@ pub fn daemon(boot: &str) -> Result<()> {
                 if last_error != error { event(&cfg, "error", &error); last_error = error.clone(); }
                 state.blocked = true; state.error = Some(error); state.leases.clear();
                 // Best effort cleanup never reasserts externally changed nodes.
-                let _ = e.preset(Mode::Balanced); let _ = restore_refresh(&e, &mut state);
+                let _ = e.preset(Mode::Balanced);
                 state.active = Mode::Balanced; state.reason = "Paused after a conflict or failure".into();
+            }
+        }
+        // Display failures and CPU failures have independent state and ownership.
+        match refresh(&e, &cfg, &mut state, &ctx) {
+            Ok(()) => { if !state.refresh_blocked { state.refresh_error = None; } },
+            Err(error) => {
+                let message = error.to_string();
+                if state.refresh_error.as_deref() != Some(message.as_str()) { event(&cfg, "display-error", &message); }
+                state.refresh_error = Some(message); state.refresh_blocked = true;
+                let _ = restore_refresh(&e, &mut state);
             }
         }
         let cpu = read_bounded(Path::new("/proc/stat"), 65536).ok().and_then(|text| cpu_counters(&text));
         let load = previous_cpu.zip(cpu).and_then(|(old, new)| busy(old, new)); previous_cpu = cpu;
-        state.telemetry = telemetry(&ctx, load); state.foreground = ctx.app; state.sampled_at = now;
+        state.telemetry = telemetry(&ctx, load);
+        state.telemetry["wakeSource"] = json!(wake_events.last_wake);
+        state.telemetry["eventStreamRunning"] = json!(wake_events.available());
+        state.telemetry["displayRequestHz"] = json!(state.refresh_hz);
+        state.foreground = ctx.app; state.sampled_at = now;
         if now.saturating_sub(last_sample_event) >= if cfg.logcat { 10 } else { 30 } {
             event(&cfg, "sample", &state.telemetry.to_string()); last_sample_event = now;
         }
         save("runtime.json", &state)?;
         drop(e);
-        std::thread::sleep(Duration::from_secs(if ctx.awake == Some(true) { 2 } else { 8 }));
+        wake_events.wait(next_wait(&state, ctx.awake == Some(true), now));
     }
+}
+pub fn next_wait(state: &RuntimeState, awake: bool, now: u64) -> Duration {
+    let fallback = if !state.advanced_deadlines.is_empty() { 1 } else if state.tuning_requested { if awake { 2 } else { 8 } } else if awake { 5 } else { 15 };
+    let seconds = state.leases.iter().map(|lease| lease.expires).chain(state.advanced_deadlines.values().copied())
+        .filter(|expiry| *expiry > now).map(|expiry| expiry - now).fold(fallback, u64::min);
+    Duration::from_secs(seconds.max(1))
 }
 pub fn diagnostics(boot: &str) -> Result<Value> {
     let e = Engine { hardware:SystemHardware, store:DiskStore::new(DIRECTORY), boot:boot.into() };

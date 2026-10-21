@@ -22,7 +22,7 @@ function render(state) {
   const supervisor = state.supervisor || {}, config = supervisor.config || {}, runtime = supervisor.runtime || {}, health = supervisor.health || {}, telemetry = runtime.telemetry || {};
   const sampled = runtime.sampled_at > 0, age = health.sampleAgeSeconds ?? (sampled ? supervisor.uptime-runtime.sampled_at : null), running = health.running === true;
   $('engine-state').textContent = health.error || config.error || runtime.error ? 'Needs attention' : running ? sampled ? 'Monitoring active' : 'Starting monitoring' : 'Monitoring stopped';
-  $('engine-reason').textContent = health.error || config.error || runtime.error || runtime.reason || (running ? 'Waiting for the first sensor sample.' : 'Tap Start / retry monitoring in Settings.');
+  $('engine-reason').textContent = health.error || config.error || runtime.error || runtime.refresh_error || runtime.reason || (running ? 'Waiting for the first sensor sample.' : 'Tap Start / retry monitoring in Settings.');
   if (running && age > 30) { $('engine-state').textContent = 'Readings are stale'; $('engine-reason').textContent = 'The supervisor has not produced a recent sample. Export diagnostics.'; }
   $('preset-label').textContent = runtime.active ? runtime.active[0].toUpperCase()+runtime.active.slice(1) : 'Balanced';
   $('automatic').checked = config.automatic === true; $('logging').checked = config.logcat === true;
@@ -64,7 +64,7 @@ async function run(command,message,quiet=false) {
 $('refresh').addEventListener('click',refresh);
 $('open-presets').addEventListener('click',()=>$('preset-dialog').showModal());
 document.querySelectorAll('[data-preset]').forEach(node=>node.addEventListener('click',()=>{ $('preset-dialog').close(); run('preset '+node.dataset.preset); }));
-$('boost').addEventListener('click',()=>run('boost 5')); $('release').addEventListener('click',()=>run('reset'));
+$('release').addEventListener('click',()=>run('reset'));
 $('automatic').addEventListener('change',event=>run('auto '+(event.target.checked ? 'on' : 'off')));
 $('logging').addEventListener('change',event=>run('logging '+(event.target.checked ? 'on' : 'off')));
 $('restart').addEventListener('click',()=>run('monitor'));
