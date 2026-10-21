@@ -1,0 +1,36 @@
+#!/system/bin/sh
+MODDIR=${0%/bin/*}
+[ "$(id -u)" = 0 ] || { echo "Root is required."; exit 1; }
+case "${1:-status}" in
+  status)
+    printf 'Butterd / device: %s / Android: %s\n' "$(getprop ro.product.device)" "$(getprop ro.build.version.release)"
+    printf 'Kernel: %s\n' "$(uname -r)"
+    for policy in /sys/devices/system/cpu/cpufreq/policy*; do
+      [ -d "$policy" ] || continue
+      printf '\n%s\n' "${policy##*/}"
+      for field in related_cpus scaling_governor scaling_available_governors scaling_cur_freq scaling_min_freq scaling_max_freq scaling_available_frequencies; do
+        [ -r "$policy/$field" ] && printf '%s: %s\n' "$field" "$(head -c 512 "$policy/$field")"
+      done
+    done
+    printf '\nGPU (GED, raw): %s\n' "$(head -c 80 /sys/kernel/ged/hal/current_freqency 2>/dev/null)"
+    printf 'TCP algorithms: %s\n' "$(head -c 256 /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
+    printf 'HTSR flag: %s\n' "$(head -c 16 /sys/devices/virtual/touch/touch_dev/bump_sample_rate 2>/dev/null)"
+    printf 'Bypass capability: %s\n' "$(head -c 16 /sys/class/power_supply/battery/bypass_charging_supported 2>/dev/null)"
+    printf '\nCompatibility options:\n'
+    grep '^spoof' "$MODDIR/compatibility/pif.prop"
+    ;;
+  identity)
+    if [ "$#" -eq 1 ]; then
+      sed -n 's/^selectedModel=//p' "$MODDIR/compatibility/pif.prop"
+    else
+      . "$MODDIR/lib/compatibility.sh"
+      select_identity "$2"
+    fi
+    exit $?
+    ;;
+  governor|restore|tcp)
+    exec "$MODDIR/bin/butter" "$@"
+    ;;
+  *) echo "Usage: butterctl status | governor policyN GOVERNOR | restore policyN"; exit 2 ;;
+esac
+exit 0

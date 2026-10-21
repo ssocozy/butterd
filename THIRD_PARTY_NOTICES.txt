@@ -1,0 +1,32 @@
+Butterd is distributed under GPL version 3 (LICENSE).
+
+PlayIntegrityFix
+Source: https://github.com/KOWX712/PlayIntegrityFix
+Revision: cc06c31e1de8c6d4d25e48c62c2dbc3995979fc3
+License: GPL-3.0 (full text in LICENSE)
+Retained/adapted: process-local property virtualizer, native build-field updates,
+fingerprint expansion and Magisk installer bootstrap.
+Changes: only spoofBuild, spoofVendingBuild and spoofProps remain configurable;
+removed dex/provider/signature paths, SDK overrides, USB/ADB masking, upstream automatic
+fingerprint scripts and global property scripts. Butterd supplies its own bounded
+metadata-only fetcher for the Pixel 6a–9a catalog. Added bounded config transport,
+explicit target-process checks and Butterd paths. Original authors retain copyright.
+
+Zygisk public API header
+Source: included in the PlayIntegrityFix revision above, originally the Magisk project.
+Copyright 2022-2023 John "topjohnwu" Wu.
+ISC permission and disclaimer are retained verbatim in native/compatibility/zygisk.hpp.
+
+Reviewed as architectural references only; no Encore or Duchamp Essential source
+is included in this version:
+https://github.com/Rem01Gaming/encore (Apache-2.0)
+https://github.com/Chandan977808/Duchamp-Essential (Apache-2.0)
+
+Rust engine dependencies (versions and checksums in rust/butter/Cargo.lock):
+serde, serde_core, serde_derive: MIT OR Apache-2.0
+serde_json: MIT OR Apache-2.0
+itoa, proc-macro2, quote, syn: MIT OR Apache-2.0
+memchr: Unlicense OR MIT
+unicode-ident: (MIT OR Apache-2.0) AND Unicode-3.0
+ryu: Apache-2.0 OR BSL-1.0
+Dependency licenses and corresponding crate sources are included in release ZIPs.
