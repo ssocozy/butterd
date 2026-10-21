@@ -76,8 +76,8 @@ struct State {
     std::vector<Override> overrides;
 };
 
-#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF", __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "PIF", __VA_ARGS__)
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "butter", __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "butter", __VA_ARGS__)
 
 struct MapsLine {
     uintptr_t start = 0;

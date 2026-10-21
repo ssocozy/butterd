@@ -8,5 +8,5 @@ while [ "$(getprop sys.boot_completed)" != 1 ]; do
 done
 umask 077
 mkdir -p /data/adb/butterd || exit 1
-# Only the user's explicit Automatic option enables tuning after reboot.
+# Read-only monitoring starts at boot. Tuning still requires explicit selection.
 "$MODDIR/bin/butter" boot > /data/adb/butterd/boot.log 2>&1

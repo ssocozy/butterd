@@ -23,6 +23,7 @@ https://github.com/Rem01Gaming/encore (Apache-2.0)
 https://github.com/Chandan977808/Duchamp-Essential (Apache-2.0)
 
 Rust engine dependencies (versions and checksums in rust/butter/Cargo.lock):
+fs2, libc, winapi and winapi target crates: MIT OR Apache-2.0
 serde, serde_core, serde_derive: MIT OR Apache-2.0
 serde_json: MIT OR Apache-2.0
 itoa, proc-macro2, quote, syn: MIT OR Apache-2.0

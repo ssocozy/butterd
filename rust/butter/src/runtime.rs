@@ -68,7 +68,14 @@ pub fn state(boot: &str) -> Result<RuntimeState> {
     Ok(value)
 }
 fn engine(boot: &str) -> Result<Engine<SystemHardware, DiskStore>> {
-    Ok(Engine { hardware: SystemHardware, store: DiskStore::locked(DIRECTORY)?, boot: boot.into() })
+    for attempt in 0..40 {
+        match DiskStore::locked(DIRECTORY) {
+            Ok(store) => return Ok(Engine { hardware:SystemHardware, store, boot:boot.into() }),
+            Err(error) if error.downcast_ref::<crate::lock::Busy>().is_some() && attempt < 39 => std::thread::sleep(Duration::from_millis(50)),
+            Err(error) => return Err(error),
+        }
+    }
+    Err("Control lock retry limit reached".into())
 }
 fn event(config: &Config, kind: &str, detail: &str) {
     let record = json!({"uptime":uptime().ok(),"event":kind,"detail":detail});
@@ -82,14 +89,17 @@ pub fn ensure_daemon() -> Result<()> {
     let _ = fs::remove_file(Path::new(DIRECTORY).join("stop"));
     if !Path::new(MODULE).is_dir() || ["disable", "remove"].iter().any(|file| Path::new(MODULE).join(file).exists()) { return Err("Module is disabled or being removed".into()); }
     { let _ = engine(&crate::hardware::SystemHardware.read(crate::hardware::BOOT)?)?; }
-    let mut child = Command::new(std::env::current_exe()?).arg("daemon").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
+    if crate::lock::FileLock::held(&Path::new(DIRECTORY).join("daemon.lock"))? { return Ok(()); }
+    let log_path = Path::new(DIRECTORY).join("supervisor.log");
+    if fs::symlink_metadata(&log_path).is_ok_and(|meta| !meta.is_file() || meta.file_type().is_symlink()) { return Err("Invalid supervisor log".into()); }
+    if fs::metadata(&log_path).is_ok_and(|meta| meta.len() > 16384) { fs::rename(&log_path, Path::new(DIRECTORY).join("supervisor.previous.log"))?; }
+    let log = OpenOptions::new().append(true).create(true).mode(0o600).open(log_path)?;
+    let mut child = Command::new(std::env::current_exe()?).arg("daemon").stdin(Stdio::null()).stdout(Stdio::from(log.try_clone()?)).stderr(Stdio::from(log)).spawn()?;
     for _ in 0..30 {
-        if let Ok(lock) = OpenOptions::new().read(true).write(true).open(Path::new(DIRECTORY).join("daemon.lock")) {
-            if lock.try_lock().is_err() {
+        if crate::lock::FileLock::held(&Path::new(DIRECTORY).join("daemon.lock"))? {
                 // Reap an already-exited duplicate; a detached live worker exits with Android.
                 let _ = child.try_wait();
                 return Ok(());
-            }
         }
         if child.try_wait()?.is_some() { return Err("Supervisor failed to start".into()); }
         std::thread::sleep(Duration::from_millis(100));
@@ -285,8 +295,7 @@ pub fn daemon(boot: &str) -> Result<()> {
     { let _ = engine(boot)?; }
     let lock_path = Path::new(DIRECTORY).join("daemon.lock");
     if fs::symlink_metadata(&lock_path).is_ok_and(|meta| !meta.is_file() || meta.file_type().is_symlink()) { return Err("Invalid supervisor lock".into()); }
-    let daemon_lock = OpenOptions::new().read(true).write(true).create(true).truncate(false).mode(0o600).open(Path::new(DIRECTORY).join("daemon.lock"))?;
-    if daemon_lock.try_lock().is_err() { return Ok(()); }
+    let Some(_daemon_lock) = crate::lock::FileLock::acquire(&lock_path)? else { return Ok(()); };
     fs::set_permissions(DIRECTORY, fs::Permissions::from_mode(0o700))?;
     let mut previous_cpu = None;
     let mut last_error = String::new();
@@ -347,13 +356,13 @@ pub fn daemon(boot: &str) -> Result<()> {
     }
 }
 pub fn diagnostics(boot: &str) -> Result<Value> {
-    let e = engine(boot)?;
+    let e = Engine { hardware:SystemHardware, store:DiskStore::new(DIRECTORY), boot:boot.into() };
     let cfg = config().map(|cfg| json!(cfg)).unwrap_or_else(|error| json!({"error":error.to_string()}));
     let state = state(boot).map(|state| json!(state)).unwrap_or_else(|error| json!({"error":error.to_string()}));
     let events = read_bounded(&Path::new(DIRECTORY).join("events.jsonl"), 270000).unwrap_or_default();
     let events: Vec<Value> = events.lines().rev().take(100).filter_map(|line| serde_json::from_str(line).ok()).collect();
     let sessions: Vec<Value> = e.controls().iter().map(|feature| match e.session(feature) { Ok(session) => json!({"control":feature.key(),"journal":session}), Err(error) => json!({"control":feature.key(),"error":error.to_string()}) }).collect();
-    Ok(json!({"engine":e.status(),"sessions":sessions,"config":cfg,"runtime":state,"events":events,"kernel":read_bounded(Path::new("/proc/version"),4096).ok()}))
+    Ok(json!({"engine":e.status(),"sessions":sessions,"config":cfg,"runtime":state,"events":events,"supervisor":supervisor_status(boot),"compatibility":compatibility_status(),"startupLog":read_bounded(&Path::new(DIRECTORY).join("boot.log"),32768).ok(),"supervisorLog":read_bounded(&Path::new(DIRECTORY).join("supervisor.log"),32768).ok(),"kernel":read_bounded(Path::new("/proc/version"),4096).ok()}))
 }
 pub fn shutdown(boot: &str) -> Result<String> {
     let e = engine(boot)?;
@@ -391,10 +400,9 @@ pub fn parse_frames(text: &str) -> Value {
 }
 pub fn launch_if_requested(boot: &str) -> Result<()> {
     { let e = engine(boot)?; recover_refresh(&e)?; }
-    let cfg = config()?;
-    if cfg.automatic { ensure_daemon()?; }
-    else { let _ = state(boot)?; }
-    Ok(())
+    config()?;
+    ensure_daemon()
+
 }
 
 pub fn guarded_apply(boot: &str, feature: Feature) -> Result<String> {
@@ -455,4 +463,21 @@ fn recover_refresh(e: &Engine<SystemHardware, DiskStore>) -> Result<()> {
         }
     }
     if errors.is_empty() { Ok(()) } else { Err(errors.join("; ").into()) }
+}
+
+pub fn supervisor_status(boot: &str) -> Value {
+    let running = crate::lock::FileLock::held(&Path::new(DIRECTORY).join("daemon.lock"));
+    let last = state(boot).ok().map(|state| state.sampled_at).filter(|time| *time > 0);
+    json!({"running":running.as_ref().ok(),"error":running.err().map(|error| error.to_string()),"sampleAgeSeconds":last.and_then(|time| uptime().ok().map(|now| now.saturating_sub(time)))})
+}
+pub fn fatal(message: &str) {
+    let _ = android::command("/system/bin/log", &["-p","e","-t","butter", message]);
+}
+
+pub fn compatibility_status() -> Value {
+    let text = match read_bounded(Path::new("/data/adb/modules/butterd/compatibility/pif.prop"),16384) {
+        Ok(text) => text, Err(error) => return json!({"error":error.to_string()}),
+    };
+    let fields: BTreeMap<_,_> = text.lines().filter_map(|line| line.split_once('=' )).collect();
+    json!({"selectedModel":fields.get("selectedModel"),"model":fields.get("MODEL"),"spoofBuild":fields.get("spoofBuild").map(|value| *value == "true" || *value == "1"),"spoofVendingBuild":fields.get("spoofVendingBuild").map(|value| *value == "true" || *value == "1"),"spoofProps":fields.get("spoofProps").map(|value| *value == "true" || *value == "1"),"scope":"GMS unstable and Play Store","injectionVerified":false})
 }

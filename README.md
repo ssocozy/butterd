@@ -19,7 +19,7 @@ Powered by **butter**, a Rust optimization engine built for Duchamp’s Dimensit
 - Local diagnostic reports, optional logcat events and app frame-duration samples.
 - Pixel 6a–9a compatibility profiles, fetched automatically during installation.
 
-Configure controls in the module WebUI. Availability depends on your kernel and touch panel. Advanced thermal controls are opt-in and can increase heat and power use. Automatic mode starts only when enabled; app profiles require a package rule. Initial frequency-table presets still need device benchmarks.
+Configure controls in the module WebUI. Overview holds the overall presets; Apps lists installed launchable apps with searchable profiles; Settings holds hardware controls and diagnostics. Availability depends on your kernel and touch panel. Advanced thermal controls are opt-in and can increase heat and power use. Read-only monitoring starts at boot. Automatic tuning starts only when enabled; choose installed apps to add profile rules. Initial frequency-table presets still need device benchmarks.
 
 ## How butter works
 
@@ -55,7 +55,7 @@ STRONG integrity is not guaranteed by PIF, Fenrir or a keybox. The result depend
 
 ## Diagnostics
 
-Enable logcat output in the WebUI, reproduce the issue, then export the diagnostics report. Engine messages use the `butter` tag. Reports include app package names and configuration; review them before sharing. Frame samples describe recent app-rendered durations, not game FPS.
+Enable logcat output in the WebUI, reproduce the issue, then export the diagnostics report. The Overview page distinguishes a stopped supervisor from sensors that firmware does not expose. Reports remain available without acquiring the control-write lock and include retained startup errors. Engine messages use the `butter` tag. Reports include app package names and configuration; review them before sharing. Frame samples describe recent app-rendered durations, not game FPS.
 
 ## Credits
 

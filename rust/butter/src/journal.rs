@@ -40,7 +40,7 @@ pub trait Store {
 }
 pub struct DiskStore {
     directory: PathBuf,
-    _lock: Option<File>,
+    _lock: Option<crate::lock::FileLock>,
 }
 impl DiskStore {
     pub fn new(directory: impl Into<PathBuf>) -> Self {
@@ -61,16 +61,9 @@ impl DiskStore {
         if fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_symlink()) {
             return Err("Invalid session lock".into());
         }
-        let lock = OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .read(true)
-            .write(true)
-            .mode(0o600)
-            .open(path)?;
-        lock.try_lock().map_err(|error| {
-            format!("Another operation is running or the lock is unavailable: {error}")
-        })?;
+        let lock = crate::lock::FileLock::acquire(&path)
+            .map_err(|error| format!("Cannot lock {}: {error} (OS error {:?})", path.display(), error.raw_os_error()))?
+            .ok_or(crate::lock::Busy)?;
         store._lock = Some(lock);
         Ok(store)
     }

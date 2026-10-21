@@ -2,6 +2,7 @@
 pub mod engine;
 pub mod hardware;
 pub mod journal;
+pub mod lock;
 pub mod model;
 pub mod android;
 pub mod presets;

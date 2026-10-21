@@ -49,11 +49,13 @@ fn run() -> Result<()> {
             boot,
         };
         let mut status = engine.status();
-        status["supervisor"] = serde_json::json!({"config": butter::runtime::config().map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "runtime": butter::runtime::state(&engine.boot).map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "uptime": butter::runtime::uptime()?});
+        status["compatibility"] = butter::runtime::compatibility_status();
+        status["supervisor"] = serde_json::json!({"config": butter::runtime::config().map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "runtime": butter::runtime::state(&engine.boot).map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "uptime": butter::runtime::uptime()?, "health":butter::runtime::supervisor_status(&engine.boot)});
         println!("{}", serde_json::to_string(&status)?);
         return Ok(());
     }
     match args.as_slice() {
+        [command] if command == "apps" => { println!("{}", butter::android::installed_apps()?); return Ok(()); },
         [command] if command == "daemon" => return butter::runtime::daemon(&boot),
         [command] if command == "boot" => return butter::runtime::launch_if_requested(&boot),
         [command] if command == "diagnostics" => { println!("{}", serde_json::to_string_pretty(&butter::runtime::diagnostics(&boot)?)?); return Ok(()); }
@@ -92,6 +94,7 @@ fn run() -> Result<()> {
 fn main() {
     if let Err(error) = run() {
         eprintln!("{error}");
+        butter::runtime::fatal(&error.to_string());
         std::process::exit(1);
     }
 }

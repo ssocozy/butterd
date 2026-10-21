@@ -25,3 +25,7 @@ assert not (root / 'java/dev/butterd/butter/Engine.java').exists()
 assert not (root / 'module/lib/cpu.sh').exists()
 assert 'app_process' not in (root / 'module/bin/butter').read_text()
 assert 'butter-engine' in (root / 'module/bin/butter').read_text()
+
+# Rust 1.90 std File::try_lock is unsupported on Android; prevent a repeat of the startup regression.
+assert '.try_lock(' not in '\n'.join(path.read_text() for path in (root / 'rust/butter/src').glob('*.rs'))
+assert 'fs2::FileExt::try_lock_exclusive' in (root / 'rust/butter/src/lock.rs').read_text()

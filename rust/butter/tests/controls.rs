@@ -333,3 +333,16 @@ fn display_journal_remains_restorable_after_reboot() {
     engine.apply_targets(Feature::Refresh(0),Vec::new(),true).unwrap();
     assert_eq!(engine.hardware.read(path).unwrap(),"60");
 }
+
+#[test]
+fn shared_lock_backend_distinguishes_contention_from_errors() {
+    use butter::lock::FileLock;
+    let path = std::env::temp_dir().join(format!("butter-portable-lock-{}",std::process::id()));
+    assert!(!FileLock::held(&path).unwrap());
+    let first = FileLock::acquire(&path).unwrap().unwrap();
+    assert!(FileLock::held(&path).unwrap());
+    assert!(FileLock::acquire(&path).unwrap().is_none());
+    drop(first);
+    assert!(!FileLock::held(&path).unwrap());
+    std::fs::remove_file(path).unwrap();
+}

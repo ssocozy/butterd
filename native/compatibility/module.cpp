@@ -44,11 +44,12 @@ void companion(int fd) {
     if (file >= 0) close(file);
     if (transfer(fd, &size, sizeof(size), true) && size) transfer(fd, text.data(), size, true);
 }
-void updateBuild(JNIEnv* env, const pif::Config& config) {
+size_t updateBuild(JNIEnv* env, const pif::Config& config) {
+    size_t applied = 0;
     jclass build = env->FindClass("android/os/Build");
-    if (!build) { env->ExceptionClear(); return; }
+    if (!build) { env->ExceptionClear(); return 0; }
     jclass version = env->FindClass("android/os/Build$VERSION");
-    if (!version) { env->ExceptionClear(); env->DeleteLocalRef(build); return; }
+    if (!version) { env->ExceptionClear(); env->DeleteLocalRef(build); return 0; }
     for (const auto& [key, value] : config.propMap) {
         auto target = build;
         auto field = env->GetStaticFieldID(build, key.c_str(), "Ljava/lang/String;");
@@ -60,20 +61,34 @@ void updateBuild(JNIEnv* env, const pif::Config& config) {
         auto text = env->NewStringUTF(value.c_str());
         if (!text) { env->ExceptionClear(); continue; }
         env->SetStaticObjectField(target, field, text);
+        bool verified = false;
         if (env->ExceptionCheck()) env->ExceptionClear();
+        else {
+            auto observed = static_cast<jstring>(env->GetStaticObjectField(target, field));
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            else if (observed) {
+                const char* actual = env->GetStringUTFChars(observed, nullptr);
+                if (actual) { verified = value == actual; env->ReleaseStringUTFChars(observed, actual); }
+                else env->ExceptionClear();
+            }
+            if (observed) env->DeleteLocalRef(observed);
+        }
+        if (verified) ++applied;
+        else __android_log_print(ANDROID_LOG_WARN, "butter", "PIF build field readback failed: %s", key.c_str());
         env->DeleteLocalRef(text);
     }
     env->DeleteLocalRef(version); env->DeleteLocalRef(build);
+    return applied;
 }
 class ButterdCompatibility : public zygisk::ModuleBase {
     zygisk::Api* api = nullptr;
     JNIEnv* env = nullptr;
     pif::Config config;
-    bool gms = false, store = false, loaded = false;
+    bool gms = false, store = false, loaded = false, propsApplied = false;
 public:
     void onLoad(zygisk::Api* interface, JNIEnv* jni) override { api = interface; env = jni; }
     void preAppSpecialize(zygisk::AppSpecializeArgs* args) override {
-        gms = store = loaded = false; config = {};
+        gms = store = loaded = propsApplied = false; config = {};
         if (!args || !args->nice_name || !args->app_data_dir) { api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); return; }
         const char* rawName = env->GetStringUTFChars(args->nice_name, nullptr);
         if (!rawName) { env->ExceptionClear(); api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); return; }
@@ -84,8 +99,9 @@ public:
         gms = name == "com.google.android.gms.unstable" && dir.ends_with("/com.google.android.gms");
         store = name == "com.android.vending" && dir.ends_with("/com.android.vending");
         if (!gms && !store) { api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); return; }
+        api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
         int fd = api->connectCompanion();
-        if (fd < 0) { api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); return; }
+        if (fd < 0) { __android_log_print(ANDROID_LOG_ERROR, "butter", "PIF companion connection failed"); api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); return; }
         deadline(fd);
         uint32_t size = 0;
         std::string text;
@@ -94,12 +110,17 @@ public:
         close(fd);
         if (ok) config = pif::parseConfig(text);
         loaded = ok && !config.propMap.empty();
-        if (!loaded) { api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); return; }
-        if (gms && config.spoofProps && !pif::property_virtualizer::install(config))
-            __android_log_print(ANDROID_LOG_WARN, "Butterd", "Scoped properties unavailable; skipped");
+        if (!loaded) { __android_log_print(ANDROID_LOG_ERROR, "butter", "PIF identity missing or invalid; no spoof applied"); api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); return; }
+        if (gms && config.spoofProps) {
+            propsApplied = pif::property_virtualizer::install(config);
+            if (!propsApplied) __android_log_print(ANDROID_LOG_WARN, "butter", "PIF scoped properties unavailable; skipped");
+        }
     }
     void postAppSpecialize(const zygisk::AppSpecializeArgs*) override {
-        if (loaded && ((gms && config.spoofBuild) || (store && config.spoofVendingBuild))) updateBuild(env, config);
+        if (!loaded) return;
+        const bool buildRequested = (gms && config.spoofBuild) || (store && config.spoofVendingBuild);
+        const size_t fields = buildRequested ? updateBuild(env, config) : 0;
+        __android_log_print(ANDROID_LOG_INFO, "butter", "PIF process=%s buildRequested=%d fieldsVerified=%zu propsApplied=%d", gms ? "gms.unstable" : "vending", buildRequested, fields, propsApplied);
     }
     void preServerSpecialize(zygisk::ServerSpecializeArgs*) override { api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); }
 };

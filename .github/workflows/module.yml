@@ -90,7 +90,7 @@ jobs:
       - name: Validate module and compatibility configuration
         run: |
           python3 tools/validate.py
-          node --check module/webroot/app.js
+          for script in module/webroot/js/*.js; do node --check "$script"; done
           mkdir -p build
           g++ -std=c++20 -Wall -Wextra -Werror -Inative/compatibility native/compatibility/pif_config.cpp tests/config_test.cpp -o build/config-test
           build/config-test
@@ -102,22 +102,28 @@ jobs:
           cargo +1.90.0 fmt --manifest-path rust/butter/Cargo.toml
           cargo +1.90.0 test --locked --manifest-path rust/butter/Cargo.toml
           cargo +1.90.0 clippy --locked --manifest-path rust/butter/Cargo.toml --all-targets -- -D warnings
+      - name: Smoke test WebUI in Chromium
+        run: node tests/webui-smoke.mjs
       - name: Collect dependency sources and licenses
         run: cargo +1.90.0 vendor --locked --manifest-path rust/butter/Cargo.toml build/rust-vendor > build/vendor-config.toml
       - name: Cross-compile Rust engine
         env:
           CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS: '-C link-arg=-Wl,-z,max-page-size=16384'
         run: cargo +1.90.0 build --locked --manifest-path rust/butter/Cargo.toml --release --target aarch64-linux-android
+      - name: Verify Android file locking backend
+        run: |
+          "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" --dyn-symbols rust/butter/target/aarch64-linux-android/release/butter > build/butter-symbols.txt
+          python3 -c 'import pathlib,re; assert re.search(r"\bflock(?:@|$)", pathlib.Path("build/butter-symbols.txt").read_text(), re.M), "Android binary must link the supported flock backend"'
       - name: Cross-compile compatibility component
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/28.2.13676358/build/cmake/android.toolchain.cmake" -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-34 -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release
           cmake --build build
           "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" --strip-unneeded build/libbutterd_compat.so
-      - name: Compile installation metadata helper
+      - name: Compile Android query helpers
         run: |
           mkdir -p build/java build/dex
           javac -source 8 -target 8 -bootclasspath "$ANDROID_HOME/platforms/android-36/android.jar" -d build/java java/dev/butterd/module/*.java
-          "$ANDROID_HOME/build-tools/36.0.0/d8" --release --lib "$ANDROID_HOME/platforms/android-36/android.jar" --min-api 34 --output build/dex build/java/dev/butterd/module/PixelCatalog.class
+          "$ANDROID_HOME/build-tools/36.0.0/d8" --release --lib "$ANDROID_HOME/platforms/android-36/android.jar" --min-api 34 --output build/dex build/java/dev/butterd/module/*.class
           cp build/dex/classes.dex module/bin/catalog.dex
       - name: Refresh bundled Pixel catalog
         run: python3 tools/fetch_catalog.py
