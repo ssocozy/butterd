@@ -60,7 +60,11 @@ public final class AppCatalog {
             }
             rows.add(row);
         }
-        rows.sort(Comparator.comparing((JSONObject row) -> row.optString("label"), String.CASE_INSENSITIVE_ORDER));
+        rows.sort(new Comparator<JSONObject>() {
+            @Override public int compare(JSONObject left, JSONObject right) {
+                return left.optString("label").compareToIgnoreCase(right.optString("label"));
+            }
+        });
         JSONArray apps = new JSONArray(); for (JSONObject row : rows) apps.put(row);
         System.out.println(new JSONObject().put("user", Integer.parseInt(args[0])).put("apps", apps).put("source", "PackageManager"));
         System.exit(0);
