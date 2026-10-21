@@ -1,5 +1,5 @@
 use butter::{android::{display_rates, foreground, parse_setting, valid_package}, presets::Mode, runtime::{busy, cpu_counters, decide, parse_frames, AppRule, Config, Context, Lease, RuntimeState}};
-fn context() -> Context { Context { awake:Some(true), saver:Some(false), temperature:Some(350), battery:Some(70), soc_millic:Some(45000),gpu_busy:Some(0.0),online:Some(false), user:Some(0), app:Some("com.example.game".into()), rates:vec![60,120], hz:Some(120.0) } }
+fn context() -> Context { Context { awake:Some(true), saver:Some(false), temperature:Some(350), battery:Some(70), soc_millic:Some(45000),gpu_busy:Some(0.0),gpu_source:Some("fixture".into()),online:Some(false), user:Some(0), app:Some("com.example.game".into()), rates:vec![60,120], hz:Some(120.0) } }
 fn state() -> RuntimeState { RuntimeState { tuning_requested:true, selected:Mode::Performance, ..Default::default() } }
 #[test]
 fn overlapping_boosts_expire_independently_and_never_survive_unknown_state() {

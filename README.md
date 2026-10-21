@@ -7,6 +7,22 @@
 
 Powered by **butter**, a Rust optimization engine built for Duchamp’s Dimensity 8300 Ultra and Mali GPU.
 
+## Presets
+
+| Preset | What it changes |
+| --- | --- |
+| **Balanced** | Releases the CPU/GPU limits applied by the preset and returns those limits to ROM control. Separate manual governor and frequency settings stay separate. |
+| **Performance** | Raises minimum CPU/GPU clocks to about one-third through the available frequency steps, keeping the existing maximum limits. Clocks can still scale with demand. |
+| **Battery** | Keeps the original minimum clocks and lowers maximum clocks to about three-quarters through the available frequency steps. This can reduce responsiveness under heavier loads. |
+
+Frequency steps come from the running kernel and current limits. These positions are not percentages of GHz, performance or battery savings. GPU tuning requires a readable frequency table. Presets do not change CPU governors or disable thermal protections.
+
+With automatic profiles enabled, the foreground app’s rule takes precedence over the overall preset. Entering an app assigned **Performance** requests a **3-second launch boost**, subject to the same heat and battery checks. Other apps use the overall preset. Scrolling and video playback are not detected separately yet.
+
+Butter releases preset limits when the screen turns off or the battery reaches 42°C or sampled SoC temperature reaches 85°C. After cooling starts, it waits for battery temperature below 39°C and sampled SoC below 75°C before resuming. Android Battery Saver or a battery level of 20% or less selects **Battery** when heat checks allow tuning. Missing required readings prevent performance requests. Performance floors can also be released after three low-activity samples, but only when both CPU and GPU activity are readable.
+
+Per-app refresh rates are independent of CPU/GPU presets. Leaving an app releases its display request and restores its previous ROM refresh rule where a compatible service is available; the next app follows its own rule or the ROM defaults. A 60 Hz request remains eligible while CPU performance is paused for heat.
+
 ## Controls
 
 - Balanced, Performance and Battery CPU/GPU presets, with one governor selector for all CPU clusters and advanced per-cluster controls.
@@ -30,7 +46,7 @@ The engine discovers CPU policies and Mali frequency tables at runtime. On kerne
 These are explicit policies, not machine learning. The frequency choices are conservative starting points, not proven efficiency sweet spots. Diagnostics provide readings and recent app-rendered frame durations so changes can be compared on the same workload. No FPS or battery-life improvement is claimed without device measurements.
 
 > [!IMPORTANT]
-> Automated source checks, unit tests and release-build checks run before publication. This version is awaiting physical-device validation; passing CI does not establish stability on every ROM or kernel. Keep a known-working module ZIP and know how to disable modules through your root manager's recovery procedure.
+> Automated source checks, unit tests and release-build checks run before publication. On-device validation is ongoing; passing CI does not establish stability on every ROM or kernel. Keep a known-working module ZIP and know how to disable modules through your root manager's recovery procedure.
 
 > [!WARNING]
 > Root controls can increase heat, power consumption and instability. Advanced overrides are off by default and expire automatically, but they cannot make unsupported hardware behavior safe. Avoid overlapping performance controllers. Use Butterd at your own risk; the project provides no warranty and accepts no responsibility for damage, data loss or boot failures caused by misuse or incompatible modifications. See [LICENSE](LICENSE).

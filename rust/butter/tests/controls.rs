@@ -528,3 +528,19 @@ fn rom_refresh_fallback_unset_rules_and_external_edits_are_preserved() {
     assert!(butter::display::app_node(&path.replace("com.mobile.legends","../other")).is_none());
     assert!(butter::display::app_targets(&engine.hardware,0,"com.mobile.legends",60,&serde_json::json!({"available":true,"service":"activity","descriptor":"android.app.IActivityManager"})).is_err());
 }
+
+#[test]
+fn ged_activity_is_a_read_only_fallback_and_missing_counters_stay_unknown() {
+    let engine = fixture();
+    assert_eq!(butter::gpu::activity(&engine.hardware),None);
+    engine.hardware.put(butter::gpu::GED_UTILIZATION,"42 3 55");
+    assert_eq!(butter::gpu::activity(&engine.hardware),Some((42.0,"MediaTek GED")));
+    let load = format!("{}/load",butter::hardware::GPU.trim_end_matches("/min_freq"));
+    engine.hardware.put(&load,"17%");
+    assert_eq!(butter::gpu::activity(&engine.hardware),Some((17.0,"devfreq")));
+    engine.hardware.put(&load,"NaN");
+    assert_eq!(butter::gpu::activity(&engine.hardware),Some((42.0,"MediaTek GED")));
+    engine.hardware.put(butter::gpu::GED_UTILIZATION,"0 0 0");
+    assert_eq!(butter::gpu::activity(&engine.hardware),None);
+    assert_eq!(engine.hardware.writes.get(),0);
+}

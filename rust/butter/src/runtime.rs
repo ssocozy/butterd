@@ -154,7 +154,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
 #[derive(Debug, Clone, Default)]
 pub struct Context {
     pub awake: Option<bool>, pub saver: Option<bool>, pub temperature: Option<i64>, pub battery: Option<u64>,
-    pub soc_millic: Option<i64>, pub gpu_busy: Option<f64>, pub online: Option<bool>, pub user: Option<u32>, pub app: Option<String>, pub rates: Vec<u32>, pub hz: Option<f64>,
+    pub soc_millic: Option<i64>, pub gpu_busy: Option<f64>, pub gpu_source: Option<String>, pub online: Option<bool>, pub user: Option<u32>, pub app: Option<String>, pub rates: Vec<u32>, pub hz: Option<f64>,
 }
 pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now: u64) -> (Mode, &'static str) {
     state.leases.retain(|lease| lease.expires > now && lease.expires <= now.saturating_add(30));
@@ -194,12 +194,9 @@ fn context() -> Context {
         if !(kind == "soc_max" || kind.contains("cpu") || kind == "gpu") { return None; }
         hw.read(&format!("{base}/temp")).ok()?.parse::<i64>().ok().filter(|value| (0..=200000).contains(value))
     }).max();
-    let gpu_busy = [crate::hardware::GPU,crate::hardware::GPU_ALT].iter().find_map(|node| {
-        let raw = hw.read(&format!("{}/load", node.trim_end_matches("/min_freq"))).ok()?;
-        raw.trim_end_matches('%').parse::<f64>().ok().filter(|value| value.is_finite() && (0.0..=100.0).contains(value))
-    });
+    let gpu = crate::gpu::activity(&hw);
     Context {
-        awake, saver, soc_millic, gpu_busy, temperature: read("/sys/class/power_supply/battery/temp").and_then(|value| value.parse().ok()).filter(|v| (-200..=800).contains(v)),
+        awake, saver, soc_millic, gpu_busy:gpu.map(|sample| sample.0), gpu_source:gpu.map(|sample| sample.1.into()), temperature: read("/sys/class/power_supply/battery/temp").and_then(|value| value.parse().ok()).filter(|v| (-200..=800).contains(v)),
         battery: read("/sys/class/power_supply/battery/capacity").and_then(|value| value.parse().ok()).filter(|value| *value <= 100),
         online: read("/sys/class/power_supply/usb/online").and_then(|value| match value.as_str() { "1" => Some(true), "0" => Some(false), _ => None }),
         user, app, rates: android::display_rates(&display), hz: active_hz(&display),
@@ -292,7 +289,7 @@ fn telemetry(ctx: &Context, cpu: Option<f64>) -> Value {
         match read("status").as_deref() { Some("Discharging") => Some(-watts), Some("Charging") => Some(watts), Some("Not charging") => Some(-watts), Some("Full") => Some(0.0), _ => None }
     });
     let health_percent = integer("charge_full").zip(integer("charge_full_design")).filter(|(full, design)| *full > 0 && *design > 0 && full <= &design.saturating_mul(2)).map(|(full, design)| full as f64 * 100.0 / design as f64);
-    json!({"batteryPercent":ctx.battery,"batteryTempC":ctx.temperature.map(|v| v as f64 / 10.0),"batteryWatts":watts,"usbOnline":ctx.online,"batteryStatus":read("status"),"health":read("health"),"healthPercent":health_percent,"cycleCount":integer("cycle_count"),"voltageUv":integer("voltage_now"),"currentUa":integer("current_now"),"screenHz":ctx.hz,"supportedHz":ctx.rates,"cpuBusyPercent":cpu,"gpuBusyPercent":ctx.gpu_busy,"socTempC":ctx.soc_millic.map(|v| v as f64 / 1000.0)})
+    json!({"batteryPercent":ctx.battery,"batteryTempC":ctx.temperature.map(|v| v as f64 / 10.0),"batteryWatts":watts,"usbOnline":ctx.online,"batteryStatus":read("status"),"health":read("health"),"healthPercent":health_percent,"cycleCount":integer("cycle_count"),"voltageUv":integer("voltage_now"),"currentUa":integer("current_now"),"screenHz":ctx.hz,"supportedHz":ctx.rates,"cpuBusyPercent":cpu,"gpuBusyPercent":ctx.gpu_busy,"gpuActivitySource":ctx.gpu_source,"socTempC":ctx.soc_millic.map(|v| v as f64 / 1000.0)})
 }
 pub fn cpu_counters(text: &str) -> Option<(u64, u64)> {
     let fields: Vec<_> = text.lines().next()?.split_whitespace().collect();

@@ -14,3 +14,5 @@ pub mod events;
 pub mod vendor;
 
 pub mod display;
+
+pub mod gpu;
