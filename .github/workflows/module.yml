@@ -44,6 +44,13 @@ jobs:
           echo "cargo=${CARGO_HOME:-$HOME/.cargo}" >> "$GITHUB_OUTPUT"
           echo "rustup=${RUSTUP_HOME:-$HOME/.rustup}" >> "$GITHUB_OUTPUT"
           echo "image=${ImageOS:-linux}" >> "$GITHUB_OUTPUT"
+      - name: Prepare SDK cache ownership
+        run: |
+          for package in ndk/28.2.13676358 platforms/android-36 build-tools/36.0.0 cmdline-tools/16.0; do
+            if [ -e "$ANDROID_HOME/$package" ]; then
+              sudo chown -R "$(id -u):$(id -g)" "$ANDROID_HOME/$package"
+            fi
+          done
       - name: Cache Android SDK packages
         uses: actions/cache@v5
         with:

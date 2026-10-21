@@ -12,7 +12,8 @@ const server=createServer(async(request,response)=>{
     const filename=path.resolve(root,'.'+new URL(request.url,'http://localhost').pathname);
     if (!filename.startsWith(root+path.sep)) { response.writeHead(403).end(); return; }
     const types={'.html':'text/html','.js':'text/javascript','.css':'text/css','.png':'image/png','.json':'application/json'};
-    response.writeHead(200,{'Content-Type':types[path.extname(filename)] || 'application/octet-stream'}); response.end(await fs.readFile(filename));
+    const bytes=await fs.readFile(filename);
+    response.writeHead(200,{'Content-Type':types[path.extname(filename)] || 'application/octet-stream'}); response.end(bytes);
   } catch (_) { response.writeHead(404).end(); }
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
