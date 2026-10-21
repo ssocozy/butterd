@@ -53,8 +53,11 @@ try {
   };
   for(const name of ['cpu-lock','gpu-lock','gpu-thermal','charging-thermal','bypass','charging-pause'])fixture[name]={available:name!=='bypass',state:'Off',reason:'Kernel does not advertise observable battery bypass'};
   await send('Page.addScriptToEvaluateOnNewDocument',{source:`
+    globalThis.__micPaints=[];globalThis.__micPaintObserved=false;
+    document.addEventListener('change',event=>{if(event.target.matches('#audio-controls input')){globalThis.__micPaintObserved=false;requestAnimationFrame(()=>{globalThis.__micPaintObserved=true;});}});
     globalThis.__butterCommands=[];globalThis.__butterFixture=${JSON.stringify(fixture)};
     globalThis.ksu={exec(command,options,callback){
+      if(command.endsWith('phone-mic'))__micPaints.push(__micPaintObserved);
       __butterCommands.push(command);let stdout='Request saved.',code=0,stderr='';const state=__butterFixture;
       if(command.endsWith('id -u'))stdout='0';
       else if(command.endsWith(' monitor')){state.supervisor.health={running:true,sampleAgeSeconds:2};state.supervisor.runtime.sampled_at=100;state.supervisor.runtime.reason='Monitoring only';state.supervisor.runtime.telemetry={batteryPercent:72,batteryWatts:-2.4,batteryTempC:34.2,socTempC:46,screenHz:120,supportedHz:[60,120],cpuBusyPercent:12,gpuBusyPercent:8,cycleCount:125,health:'Good',batteryStatus:'Discharging'};}
@@ -124,6 +127,7 @@ try {
   await until(`document.querySelector('#audio-controls input').checked && !document.querySelector('#audio-controls input').disabled && document.body.getAttribute('aria-busy')==='false'`);
   assert.equal(await evaluate(`document.querySelector('#feedback').textContent.includes('Example routing rejection')`),true);
   await evaluate(`globalThis.__failMic=false`);
+  assert.equal(await evaluate(`__micPaints.length>=4 && __micPaints.every(Boolean)`),true,'Mic requests entered the root bridge before a pending frame could paint');
   await evaluate(`document.querySelector('#advanced-controls').closest('details').open=true`);
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('#advanced-controls > .control-switch')).every(row=>{const copy=row.querySelector('.control-copy').getBoundingClientRect(), control=row.querySelector('.switch').getBoundingClientRect();return copy.right+15<=control.left && row.querySelector('.caption')?.parentElement.classList.contains('control-copy');})`),true);
   await evaluate(`document.querySelector('#advanced-controls').closest('details').open=false`);

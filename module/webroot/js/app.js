@@ -72,7 +72,13 @@ async function run(command,message,quiet=false) {
   if (busy) return false;
   let succeeded = false;
   busy = true; setBusy(true); if (!quiet) notify('Applying your request…');
-  try { const result = await exec(binary+' '+command); succeeded = true; if (!quiet) notify(result || 'Request completed.'); }
+  try {
+    // Promise construction invokes the native bridge synchronously. Yield through a
+    // paint first so WebView can display the switch and progress before entering it.
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    const result = await exec(binary+' '+command); succeeded = true;
+    if (!quiet) notify(result || 'Request completed.');
+  }
   catch (error) { notify(error.message,true); }
   finally { await refresh(false,true); busy = false; if (snapshot) render(snapshot); setBusy(false); updateSelectors(); }
   return succeeded;
