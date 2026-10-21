@@ -129,3 +129,14 @@ fn repeated_foreground_events_do_not_extend_the_launch_boost() {
     assert_eq!(state.leases[0].expires, 103);
     assert_eq!(decide(&cfg, &mut state, &ctx, 104).0, Mode::Performance);
 }
+
+#[test]
+fn old_settings_load_without_saved_controls_and_invalid_intents_are_rejected() {
+    use butter::preferences::{SavedControl,validate};
+    use std::collections::BTreeMap;
+    let config:Config=serde_json::from_str(r#"{"automatic":false,"preset":"performance","logcat":true,"rules":[]}"#).unwrap();
+    config.validate().unwrap(); assert!(config.controls.is_empty());
+    assert!(validate(&BTreeMap::from([("cpu-lock".into(),SavedControl{setting:String::new(),expires_utc:None})])).is_err());
+    assert!(validate(&BTreeMap::from([("profile".into(),SavedControl{setting:String::new(),expires_utc:None})])).is_err());
+    assert!(validate(&BTreeMap::from([("governor-../../boot".into(),SavedControl{setting:"schedutil".into(),expires_utc:None})])).is_err());
+}

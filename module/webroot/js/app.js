@@ -36,7 +36,7 @@ function render(state) {
   const metrics = $('device-metrics'); metrics.replaceChildren();
   for (const [name,value] of [['SoC temperature',telemetry.socTempC == null ? null : telemetry.socTempC.toFixed(1)+' °C'],['CPU activity',telemetry.cpuBusyPercent == null ? null : telemetry.cpuBusyPercent.toFixed(0)+'%'],['GPU activity',telemetry.gpuBusyPercent == null ? null : telemetry.gpuBusyPercent.toFixed(0)+'%'],['Charge cycles',telemetry.cycleCount],['Battery health',telemetry.healthPercent == null ? telemetry.health : telemetry.healthPercent.toFixed(0)+'% of design capacity']]) if (value != null) detailsRow(metrics,name,String(value));
   $('sensor-note').textContent = sampled ? 'Only readings exposed by your firmware are shown. Missing readings do not imply a sensor failure.' : running ? 'Monitoring is starting. Readings appear after the first sample.' : 'Sensor readings need the supervisor. Diagnostics remain accessible while it is stopped.';
-  const signature = JSON.stringify([state.governors,state.cpuPolicies,state.gpuRange,state.touch,state.tcp,...Object.keys(advanced).map(key=>state[key])]);
+  const signature = JSON.stringify([state.audio,state.supervisor?.config?.controls,state.supervisor?.runtime?.preference_errors,state.governors,state.cpuPolicies,state.gpuRange,state.touch,state.tcp,...Object.keys(advanced).map(key=>state[key])]);
   if (signature !== hardwareSignature && !$('choice-dialog')?.open) { renderControls(state,run,requestAdvanced); hardwareSignature = signature; }
   $('hardware-details').textContent = JSON.stringify({cpu:state.cpuPolicies,gpu:state.gpuRange,touch:state.touch,tcp:state.tcp},null,2);
   const compatibility = state.compatibility || {};

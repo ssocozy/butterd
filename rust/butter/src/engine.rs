@@ -69,9 +69,9 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         }
         let targets = if restoring { Vec::new() } else { hardware::plan(&self.hardware, &feature, setting)? };
         match self.apply_targets(feature.clone(), targets, restoring) {
-            Err(error) if feature == Feature::Governors && !restoring => {
+            Err(error) if matches!(feature,Feature::Governors|Feature::PhoneMic) && !restoring => {
                 let cleanup = self.apply_targets(feature, Vec::new(), true);
-                Err(format!("Governor change failed: {error}; cleanup: {}",cleanup.unwrap_or_else(|error| error.to_string())).into())
+                Err(format!("Control change failed: {error}; cleanup: {}",cleanup.unwrap_or_else(|error| error.to_string())).into())
             }
             result => result,
         }
@@ -145,8 +145,8 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             }
             if adopted { self.store.save(&journal)?; }
         }
-        if restoring && matches!(feature,Feature::Refresh(_)) {
-            // Release our remaining display votes while preserving settings the ROM already changed.
+        if restoring && matches!(feature,Feature::Refresh(_)|Feature::PhoneMic) {
+            // Release remaining owned preferences while preserving externally changed values.
             for entry in &mut journal.entries {
                 let current = hardware::value(&self.hardware, &entry.path)?;
                 if !entry.owned(&current) { entry.original = current.clone(); entry.expected = current; entry.before = None; }
@@ -218,7 +218,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             if !journal.entries[index].owned(&current) {
                 return Err("External change detected; session retained".into());
             }
-            if restoring && matches!(feature,Feature::Refresh(_)) && current == target {
+            if restoring && matches!(feature,Feature::Refresh(_)|Feature::PhoneMic) && current == target {
                 journal.entries[index].expected = target; journal.entries[index].before = None; self.store.save(&journal)?;
                 continue;
             }
@@ -253,7 +253,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         .into())
     }
     pub fn controls(&self) -> Vec<Feature> {
-        let mut controls = vec![Feature::CpuLock, Feature::GpuLock, Feature::ChargingThermal, Feature::GpuThermal, Feature::Touch, Feature::Tcp, Feature::Governors, Feature::Profile, Feature::GpuRange, Feature::ChargingPause, Feature::Bypass];
+        let mut controls = vec![Feature::PhoneMic, Feature::CpuLock, Feature::GpuLock, Feature::ChargingThermal, Feature::GpuThermal, Feature::Touch, Feature::Tcp, Feature::Governors, Feature::Profile, Feature::GpuRange, Feature::ChargingPause, Feature::Bypass];
         if let Ok(policies) = self.hardware.list(CPU) {
             for policy in policies.into_iter().filter(|value| valid_policy(value)).take(16) {
                 controls.push(Feature::Governor(policy.clone()));
@@ -344,6 +344,11 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             output.insert(feature.key(), capability.unwrap_or_else(|error| json!({"available": false, "state": "Not exposed", "reason": error.to_string()})));
         }
         output.insert("governors".into(), json!({"original": self.session(&Feature::Governors).ok().flatten().is_some()}));
+        let audio = crate::audio::status(&self.hardware).map(|mut value| {
+            value["active"] = json!(self.session(&Feature::PhoneMic).ok().flatten().is_some());
+            value["state"] = json!(self.state(&Feature::PhoneMic).unwrap_or("Readback unavailable")); value
+        }).unwrap_or_else(|error| json!({"available":false,"reason":error.to_string()}));
+        output.insert("audio".into(),audio);
         let mut policies = Vec::new();
         if let Ok(mut names) = self.hardware.list(CPU) {
             names.retain(|value| valid_policy(value));

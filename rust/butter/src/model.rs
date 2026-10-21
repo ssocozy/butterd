@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Feature {
+    PhoneMic,
     CpuLock,
     GpuLock,
     ChargingThermal,
@@ -22,6 +23,7 @@ pub enum Feature {
 impl Feature {
     pub fn parse(value: &str) -> Result<Self> {
         Ok(match value {
+            "phone-mic" => Self::PhoneMic,
             "governors" => Self::Governors,
             "cpu-lock" => Self::CpuLock,
             "gpu-lock" => Self::GpuLock,
@@ -38,6 +40,7 @@ impl Feature {
     }
     pub fn key(&self) -> String {
         match self {
+            Self::PhoneMic => "phone-mic".into(),
             Self::Governors => "governors".into(),
             Self::CpuLock => "cpu-lock".into(),
             Self::GpuLock => "gpu-lock".into(),

@@ -1,7 +1,7 @@
 <div align="center">
   <img src="module/webroot/butter.png" width="128" alt="Butterd">
   <h1>Butterd</h1>
-  <p>A performance module for POCO X6 Pro and Redmi K70E.</p>
+  <p>Make your device optimized, one step at a time</p>
   <p><a href="https://github.com/ssocozy/butterd/releases">Download</a> | <a href="https://github.com/ssocozy/butterd/issues">Issues</a></p>
 </div>
 
@@ -32,10 +32,11 @@ Per-app refresh rates are independent of CPU/GPU presets. Leaving an app release
 - Goodix 240/480 Hz touch modes and high sampling mode on supported firmware.
 - Optional, time-limited clock, GPU cooling and charging thermal-vote overrides.
 - Observable kernel battery bypass where supported; a separately labelled experimental primary-charger pause.
+- Phone-microphone capture preferences with Bluetooth earbuds on ROMs exposing the privileged routing API.
 - Local diagnostic reports, optional logcat events and app frame-duration samples.
 - Pixel 6a–9a compatibility profiles, fetched automatically during installation.
 
-Configure controls in the module WebUI. Overview holds the overall presets; Apps lists installed launchable apps with searchable profiles; Settings holds hardware controls and diagnostics. Availability depends on your kernel and touch panel. Advanced thermal controls are opt-in and can increase heat and power use. Read-only monitoring starts at boot. Saving an app profile enables automatic tuning; the Apps switch can pause it. Initial frequency-table presets still need device benchmarks.
+Configure controls in the module WebUI. Overview holds the overall presets; Apps lists installed launchable apps with searchable profiles; Settings holds hardware controls and diagnostics. Availability depends on your kernel and touch panel. Advanced thermal controls are opt-in and can increase heat and power use. Monitoring starts at boot. Applied presets and manual controls are saved and rechecked before resuming after reboot. Unsupported controls or conflicts remain visible instead of being forced. Temporary clock and thermal overrides keep their original expiration time; a reboot does not renew them. Saving an app profile enables automatic tuning; the Apps switch can pause it. Initial frequency-table presets still need device benchmarks.
 
 ## How butter works
 
@@ -60,6 +61,12 @@ These are explicit policies, not machine learning. The frequency choices are con
 3. Open the WebUI to configure Butterd. Magisk users need a compatible WebUI host.
 
 Fresh installs randomly select a Pixel profile from 6a through 9a, with build, Play Store build and scoped property spoofing enabled. Change the model in the WebUI; applying it restarts only the Google integrity and Play Store target processes so no phone reboot is needed for profile changes. Updates preserve your complete existing PIF profile and settings. Reapplying a model in the WebUI explicitly replaces the identity with that bundled profile. Offline profiles include the model’s initial API and a matching published Pixel security patch. These identity properties are scoped to the target process; the Android SDK version is unchanged. A Play Integrity verdict is not guaranteed.
+
+## Phone microphone with Bluetooth earbuds
+
+In **Settings → Miscellaneous**, connect Bluetooth earbuds and select **Prefer phone microphone**. Butter requests the built-in microphone for ordinary recording, camera recording and voice communication capture presets. This is a shared preference across apps using those presets; explicit app routing, phone calls and vendor audio policies can take precedence. Bluetooth output is not selected or rewritten by Butter.
+
+The preference is saved, resumes when earbuds are connected, and restores the previous capture preferences on disconnect or when disabled. It never records audio. The WebUI shows active input devices when Android reports them; saved preference readback alone is not proof that a call or game uses the phone mic. Unsupported APIs and permission errors are shown. Device testing is required separately for recording, games and calls.
 
 ## Why Play Integrity Fix is included
 

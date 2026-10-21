@@ -10,9 +10,10 @@ const MODULE: &str = "/data/adb/modules/butterd";
 pub struct AppRule { pub package: String, pub preset: Mode, pub hz: Option<u32> }
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Config { pub automatic: bool, pub preset: Mode, pub logcat: bool, pub rules: Vec<AppRule> }
+pub struct Config { pub automatic: bool, pub preset: Mode, pub logcat: bool, pub rules: Vec<AppRule>, pub controls: BTreeMap<String,crate::preferences::SavedControl> }
 impl Config {
     pub fn validate(&self) -> Result<()> {
+        crate::preferences::validate(&self.controls)?;
         if self.rules.len() > 64 || self.preset == Mode::Boost { return Err("Invalid engine configuration".into()); }
         let mut seen = std::collections::HashSet::new();
         for rule in &self.rules {
@@ -31,6 +32,7 @@ pub struct RuntimeState {
     pub tuning_requested: bool, pub selected: Mode, pub advanced_deadlines: BTreeMap<String, u64>, pub leases: Vec<Lease>, pub blocked: bool, pub refresh_user: Option<u32>, pub refresh_hz: Option<u32>, pub idle_samples: u8, pub sampled_at: u64,
     pub telemetry: Value, pub error: Option<String>, pub pending_preset: Option<Mode>,
     pub refresh_error: Option<String>, pub refresh_blocked: bool, pub profile_retries: u8,
+    pub preferences_loaded: bool, pub resumed_controls: std::collections::BTreeSet<String>, pub preference_errors: BTreeMap<String,String>, pub audio_checked_at: u64,
 }
 pub fn uptime() -> Result<u64> {
     let text = read_bounded(Path::new("/proc/uptime"), 128)?;
@@ -115,8 +117,8 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
         let mut cfg = match config() { Ok(cfg) => cfg, Err(_) if resetting => Config::default(), Err(error) => return Err(error) };
         let mut state = match state(boot) { Ok(state) => state, Err(_) if resetting => RuntimeState {boot:boot.into(), ..Default::default()}, Err(error) => return Err(error) };
         match args {
-            [command] if command == "monitor" => {},
-            [command, choice] if command == "auto" && matches!(choice.as_str(), "on" | "off") => { state.refresh_blocked = false; state.refresh_error = None; cfg.automatic = choice == "on"; state.tuning_requested = cfg.automatic; state.blocked = false; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = None; }
+            [command] if command == "monitor" => { state.preference_errors.clear(); state.resumed_controls.clear(); },
+            [command, choice] if command == "auto" && matches!(choice.as_str(), "on" | "off") => { state.refresh_blocked = false; state.refresh_error = None; cfg.automatic = choice == "on"; state.tuning_requested = cfg.automatic || cfg.preset != Mode::Balanced; state.blocked = false; state.leases.clear(); state.selected = cfg.preset; state.pending_preset = Some(cfg.preset); }
             [command, choice] if command == "logging" && matches!(choice.as_str(), "on" | "off") => cfg.logcat = choice == "on",
             [command, mode] if command == "preset" => { let mode = Mode::parse(mode)?; if mode == Mode::Boost { return Err("Use boost SECONDS".into()); } state.tuning_requested = true; cfg.preset = mode; state.selected = mode; state.pending_preset = Some(mode); state.blocked = false; state.profile_retries = 0; state.leases.clear(); }
             [command, seconds] if command == "boost" => {
@@ -137,6 +139,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
                 state.profile_retries = 0; state.blocked = false; state.refresh_blocked = false; state.refresh_error = None;
             }
             [command] if command == "reset" => {
+                cfg.controls.clear(); state.resumed_controls.clear(); state.preference_errors.clear();
                 cfg.automatic = false; state.refresh_blocked = false; state.refresh_error = None; state.tuning_requested = false; cfg.preset = Mode::Balanced; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = Some(Mode::Balanced); state.blocked = false;
                 save("config.json", &cfg)?; save("runtime.json", &state)?;
                 cleanup_all(&e, &mut state)?;
@@ -263,7 +266,7 @@ fn refresh(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &mut Runt
     event(cfg,"display-request",&format!("Requested {hz} Hz for {} using {controls} display preferences ({backend})",ctx.app.as_deref().unwrap_or("unknown app")));
     Ok(())
 }
-fn thermal_cleanup(e: &Engine<SystemHardware, DiskStore>, state: &mut RuntimeState, ctx: &Context, now: u64) -> Result<()> {
+fn thermal_cleanup(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &mut RuntimeState, ctx: &Context, now: u64) -> Result<()> {
     let unsafe_temperature = ctx.temperature.is_none_or(|temp| !(0..420).contains(&temp)) || ctx.soc_millic.is_some_and(|temp| temp >= 85000);
     let mut errors = Vec::new();
     for feature in [Feature::ChargingPause, Feature::ChargingThermal, Feature::GpuThermal, Feature::CpuLock, Feature::GpuLock, Feature::Bypass] {
@@ -271,7 +274,13 @@ fn thermal_cleanup(e: &Engine<SystemHardware, DiskStore>, state: &mut RuntimeSta
         let should_restore = state.advanced_deadlines.get(&feature.key()).is_none_or(|expires| *expires <= now || *expires > now.saturating_add(1800)) || unsafe_temperature || ctx.battery.is_none_or(|level| level <= 20) || ctx.saver != Some(false) || (charging && ctx.online != Some(true)) || (!charging && (ctx.awake != Some(true) || ctx.soc_millic.is_none()));
         if should_restore {
             match e.session(&feature).and_then(|session| if session.is_some() { e.apply_targets(feature.clone(), Vec::new(), true).map(|_| ()) } else { Ok(()) }) {
-                Ok(()) => { state.advanced_deadlines.remove(&feature.key()); },
+                Ok(()) => {
+                    state.advanced_deadlines.remove(&feature.key());
+                    if cfg.controls.contains_key(&feature.key()) {
+                        let mut latest=config()?;
+                        if latest.controls.remove(&feature.key()).is_some() { save("config.json",&latest)?; }
+                    }
+                },
                 Err(error) => errors.push(format!("{}: {error}", feature.key())),
             }
         }
@@ -336,6 +345,12 @@ pub fn daemon(boot: &str) -> Result<()> {
             return Ok(());
         }
         let cfg = cfg?;
+        if !state.preferences_loaded {
+            state.selected=cfg.preset; state.tuning_requested=cfg.automatic || cfg.preset!=Mode::Balanced; state.preferences_loaded=true;
+        }
+        let previous_errors=state.preference_errors.clone();
+        crate::preferences::resume(&e,&cfg.controls,&mut state,&ctx,epoch(),now);
+        for (key,error) in &state.preference_errors { if previous_errors.get(key)!=Some(error) { event(&cfg,"preference-error",&format!("{key}: {error}")); } }
         if state.foreground != ctx.app { state.profile_retries = 0; }
         // A ROM/driver can return touch to its original state; no write is needed to release that session.
         if matches!(e.state(&Feature::Touch), Ok("Original values active; release session")) && e.apply_targets(Feature::Touch, Vec::new(), true).is_ok() {
@@ -343,7 +358,7 @@ pub fn daemon(boot: &str) -> Result<()> {
         }
         let (desired, reason) = decide(&cfg, &mut state, &ctx, now);
         let result = (|| -> Result<()> {
-            thermal_cleanup(&e, &mut state, &ctx, now)?;
+            thermal_cleanup(&e, &cfg, &mut state, &ctx, now)?;
             if e.session(&Feature::Profile)?.is_some() && !matches!(e.state(&Feature::Profile)?, "Request active" | "Off") {
                 if desired == Mode::Balanced { e.preset(Mode::Balanced)?; }
                 else if state.profile_retries < 3 {
@@ -477,7 +492,7 @@ pub fn guarded_apply(boot: &str, feature: Feature) -> Result<String> {
         Ok(message)
     });
     match result {
-        Ok(message) => { event(&config()?, "control", &format!("{} enabled for at most {seconds}s", feature.key())); Ok(message) }
+        Ok(message) => { remember_applied(boot,&feature,"",false,Some(epoch()+seconds))?; event(&config()?, "control", &format!("{} enabled for at most {seconds}s", feature.key())); Ok(message) }
         Err(error) => {
             let cleanup = e.apply_targets(feature.clone(), Vec::new(), true);
             let message = format!("{error}; cleanup: {}", cleanup.unwrap_or_else(|error| error.to_string()));
@@ -529,4 +544,20 @@ pub fn compatibility_status() -> Value {
     };
     let fields: BTreeMap<_,_> = text.lines().filter_map(|line| line.split_once('=' )).collect();
     json!({"selectedModel":fields.get("selectedModel"),"model":fields.get("MODEL"),"fingerprint":fields.get("FINGERPRINT"),"securityPatch":fields.get("SECURITY_PATCH"),"initialApi":fields.get("DEVICE_INITIAL_SDK_INT"),"spoofBuild":fields.get("spoofBuild").map(|value| *value == "true" || *value == "1"),"spoofVendingBuild":fields.get("spoofVendingBuild").map(|value| *value == "true" || *value == "1"),"spoofProps":fields.get("spoofProps").map(|value| *value == "true" || *value == "1"),"scope":"GMS unstable and Play Store","injectionVerified":false})
+}
+
+fn epoch() -> u64 { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|time| time.as_secs()).unwrap_or(0) }
+/// Caller holds the control lock; this never reacquires it.
+pub fn remember_applied(boot: &str, feature: &Feature, setting: &str, restoring: bool, expires_utc: Option<u64>) -> Result<()> {
+    let mut cfg=config()?; let mut state=state(boot)?; let key=feature.key();
+    if *feature == Feature::Profile {
+        cfg.preset=Mode::Balanced; state.selected=Mode::Balanced; state.tuning_requested=cfg.automatic;
+        save("config.json",&cfg)?; save("runtime.json",&state)?; return Ok(());
+    }
+    crate::preferences::feature(&key)?;
+    if restoring { cfg.controls.remove(&key); state.resumed_controls.remove(&key); }
+    else { cfg.controls.insert(key.clone(),crate::preferences::SavedControl{setting:setting.into(),expires_utc}); state.resumed_controls.insert(key.clone()); }
+    state.preference_errors.remove(&key); cfg.validate()?;
+    save("config.json",&cfg)?; save("runtime.json",&state)?;
+    Ok(())
 }

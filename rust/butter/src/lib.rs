@@ -16,3 +16,7 @@ pub mod vendor;
 pub mod display;
 
 pub mod gpu;
+
+pub mod audio;
+
+pub mod preferences;

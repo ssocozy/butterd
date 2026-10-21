@@ -46,6 +46,7 @@ try {
   const fixture={
     engine:{version:'0.3.0'},cpuPolicies:[{id:'policy0',cores:'0 1 2 3',governor:'schedutil',choices:['schedutil','powersave'],frequencies:'500000 1000000 2000000',min:'500000',max:'2000000',requestedMin:'1000000',requestedMax:'2000000',original:false,rangeActive:false}],
     gpuRange:{frequencies:'300000000 600000000 1000000000',min:'300000000',max:'1000000000',active:false},
+    audio:{available:true,bluetoothConnected:true,active:false,activeInputs:[]},
     touch:{available:true,state:'Off',driverHz:240},tcp:{available:true,current:'cubic',choices:['cubic','bbr'],original:false},
     compatibility:{selectedModel:'bluejay',spoofBuild:true,spoofVendingBuild:true,spoofProps:true},
     supervisor:{health:{running:false,sampleAgeSeconds:null},uptime:102,config:{automatic:false,logcat:false,rules:[]},runtime:{sampled_at:0,active:'balanced',reason:'',telemetry:{}}}
@@ -107,6 +108,8 @@ try {
   assert.equal(await evaluate(`[...document.querySelectorAll('.select-trigger')].every(node=>node.querySelector('svg.ph-icon') && !node.textContent.includes('⌄'))`),true);
   await evaluate(`document.querySelector('#cpu-controls').closest('details').open=true`); await delay(250);
   assert.equal(await evaluate(`document.querySelector('#governor-all').value`),'schedutil');
+  assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('Prefer phone microphone')`),true);
+  assert.equal(await evaluate(`document.querySelector('#preferences-status').textContent.includes('remembered after reboot')`),true);
   assert.equal(await evaluate(`document.querySelector('#cpu-controls > details').open`),false);
   await evaluate(`document.querySelector('#cpu-controls > details').open=true`);
   assert.equal(await evaluate(`document.querySelector('[data-select=maximum-policy0]').textContent.includes('GHz')`),true);

@@ -74,6 +74,7 @@ fn run() -> Result<()> {
         [command, policy, governor] if command == "governor" && valid_policy(policy) => (Feature::Governor(policy.clone()), governor.as_str(), false, false),
         [command, policy] if command == "restore" && valid_policy(policy) => (Feature::Governor(policy.clone()), "", true, false),
         [command, feature] if command == "restore" => (Feature::parse(feature)?, "", true, false),
+        [command, feature] if command == "enable" && feature == "phone-mic" => (Feature::PhoneMic, "", false, false),
         [command, feature, setting] if command == "enable" && feature == "touch" => (Feature::Touch, setting.as_str(), false, false),
         [command, feature, accepted] if command == "enable" && accepted == "--accept-risk" => (Feature::parse(feature)?, "", false, true),
         _ => return Err("Usage: butter status | governor policyN VALUE | enable CONTROL --accept-risk | enable touch 240|480|high | restore CONTROL".into()),
@@ -87,9 +88,11 @@ fn run() -> Result<()> {
         store: DiskStore::locked("/data/adb/butterd")?,
         boot,
     };
-    let result = engine.apply(feature, setting, restoring, accepted);
+    let result = engine.apply(feature.clone(), setting, restoring, accepted);
+    if restoring || result.is_ok() { butter::runtime::remember_applied(&engine.boot,&feature,setting,restoring,None)?; }
     butter::runtime::log_control(&args, result.as_ref().err().map(|error| error.to_string()).as_deref());
     println!("{}", result?);
+    drop(engine); butter::runtime::ensure_daemon()?;
     Ok(())
 }
 fn main() {

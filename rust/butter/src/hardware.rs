@@ -64,15 +64,18 @@ pub fn read_bounded(path: &Path, limit: u64) -> Result<String> {
 }
 impl Hardware for SystemHardware {
     fn check_write(&self, path: &str) -> Result<()> {
+        if crate::audio::preset(path).is_some() { return Ok(()); }
         if crate::display::node(path).is_some() { return Ok(()); }
         OpenOptions::new().write(true).open(path)?;
         Ok(())
     }
     fn read(&self, path: &str) -> Result<String> {
+        if let Some(value) = crate::audio::read(path) { return value; }
         if let Some(value) = crate::display::read(path) { return value; }
         Ok(read_bounded(Path::new(path), 4096)?.trim().to_string())
     }
     fn write(&self, path: &str, value: &str) -> Result<()> {
+        if let Some(result) = crate::audio::write(path,value) { return result; }
         if let Some(result) = crate::display::write(path,value) { return result; }
         // Open an existing node only. Never create a device path or change its permissions.
         OpenOptions::new()
@@ -124,6 +127,7 @@ pub fn cooling(hardware: &impl Hardware) -> Result<String> {
 }
 pub fn allowed(hardware: &impl Hardware, feature: &Feature, path: &str) -> bool {
     match feature {
+        Feature::PhoneMic => crate::audio::preset(path).is_some(),
         Feature::CpuLock => path
             .strip_prefix(&format!("{CPU}/"))
             .and_then(|v| v.strip_suffix("/scaling_min_freq"))
@@ -160,6 +164,7 @@ pub fn validate_path_value(feature: &Feature, path: &str, value: &str) -> Result
     validate_value(feature, value)
 }
 pub fn validate_value(feature: &Feature, value: &str) -> Result<()> {
+    if *feature == Feature::PhoneMic { crate::audio::normalize(value)?; return Ok(()); }
     if matches!(feature, Feature::Refresh(_)) {
         if value == "null" { return Ok(()); }
         let hz: f64 = value.parse()?;
@@ -198,6 +203,7 @@ pub fn plan(
     feature.validate()?;
     let mut targets = Vec::new();
     match feature {
+        Feature::PhoneMic => targets = crate::audio::plan(hardware)?,
         Feature::CpuLock => {
             for policy in hardware.list(CPU)? {
                 if !valid_policy(&policy) {

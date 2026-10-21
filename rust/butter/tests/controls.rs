@@ -544,3 +544,77 @@ fn ged_activity_is_a_read_only_fallback_and_missing_counters_stay_unknown() {
     assert_eq!(butter::gpu::activity(&engine.hardware),None);
     assert_eq!(engine.hardware.writes.get(),0);
 }
+
+fn audio_fixture() -> Engine<FakeHardware,MemoryStore> {
+    let engine=fixture();
+    engine.hardware.put(butter::audio::STATUS,r#"{"available":true,"bluetoothConnected":true,"phoneMic":{"type":15,"address":"bottom"},"activeInputs":[]}"#);
+    for source in butter::audio::PRESETS { engine.hardware.put(&format!("audio-capture:{source}"),"[]"); }
+    engine
+}
+#[test]
+fn phone_mic_restores_owned_preferences_and_preserves_external_edits() {
+    let engine=audio_fixture();
+    engine.apply(Feature::PhoneMic,"",false,false).unwrap();
+    for source in butter::audio::PRESETS { assert!(engine.hardware.read(&format!("audio-capture:{source}")).unwrap().contains("bottom")); }
+    engine.hardware.put("audio-capture:7",r#"[{"type":7,"address":"earbuds"}]"#);
+    engine.apply(Feature::PhoneMic,"",true,false).unwrap();
+    assert_eq!(engine.hardware.read("audio-capture:1").unwrap(),"[]");
+    assert_eq!(engine.hardware.read("audio-capture:5").unwrap(),"[]");
+    assert!(engine.hardware.read("audio-capture:7").unwrap().contains("earbuds"));
+    assert!(!butter::hardware::allowed(&engine.hardware,&Feature::PhoneMic,"audio-capture:4"));
+    assert!(!butter::hardware::allowed(&engine.hardware,&Feature::PhoneMic,"audio-output:1"));
+}
+#[test]
+fn phone_mic_write_failure_rolls_back_and_bad_preferences_are_rejected() {
+    let engine=audio_fixture(); engine.hardware.fail_at.set(Some(2));
+    assert!(engine.apply(Feature::PhoneMic,"",false,false).is_err());
+    for source in butter::audio::PRESETS { assert_eq!(engine.hardware.read(&format!("audio-capture:{source}")).unwrap(),"[]"); }
+    for value in [r#"[{"type":0,"address":""}]"#,r#"[{"type":15,"address":"","output":true}]"#,r#"[{"type":15,"address":""},{"type":15,"address":"other"}]"#] { assert!(butter::audio::normalize(value).is_err()); }
+}
+#[test]
+fn saved_microphone_intent_survives_disconnect_and_reconnect() {
+    use butter::{preferences::{SavedControl,resume},runtime::{RuntimeState,Context}};
+    let engine=audio_fixture(); let mut state=RuntimeState::default();
+    let controls=BTreeMap::from([("phone-mic".into(),SavedControl{setting:String::new(),expires_utc:None})]);
+    resume(&engine,&controls,&mut state,&Context::default(),1_800_000_000,10);
+    assert!(engine.session(&Feature::PhoneMic).unwrap().is_some());
+    engine.hardware.put(butter::audio::STATUS,r#"{"available":true,"bluetoothConnected":false}"#);
+    resume(&engine,&controls,&mut state,&Context::default(),1_800_000_006,16);
+    assert!(engine.session(&Feature::PhoneMic).unwrap().is_none());
+    assert!(controls.contains_key("phone-mic"));
+    engine.hardware.put(butter::audio::STATUS,r#"{"available":true,"bluetoothConnected":true,"phoneMic":{"type":15,"address":"bottom"}}"#);
+    resume(&engine,&controls,&mut state,&Context::default(),1_800_000_012,22);
+    assert!(engine.session(&Feature::PhoneMic).unwrap().is_some());
+    assert!(state.preference_errors.is_empty());
+}
+#[test]
+fn saved_controls_resume_once_and_do_not_fight_later_rom_changes() {
+    use butter::{preferences::{SavedControl,resume},runtime::{RuntimeState,Context}};
+    let engine=fixture(); let mut state=RuntimeState::default();
+    let controls=BTreeMap::from([("tcp".into(),SavedControl{setting:"bbr".into(),expires_utc:None})]);
+    resume(&engine,&controls,&mut state,&Context::default(),1_800_000_000,10);
+    assert_eq!(engine.hardware.read(TCP).unwrap(),"bbr");
+    let writes=engine.hardware.writes.get(); engine.hardware.put(TCP,"cubic");
+    resume(&engine,&controls,&mut state,&Context::default(),1_800_000_001,11);
+    assert_eq!(engine.hardware.read(TCP).unwrap(),"cubic"); assert_eq!(engine.hardware.writes.get(),writes);
+    let next_boot=fixture(); let mut fresh_state=RuntimeState::default();
+    resume(&next_boot,&controls,&mut fresh_state,&Context::default(),1_800_000_010,3);
+    assert_eq!(next_boot.hardware.read(TCP).unwrap(),"bbr");
+}
+#[test]
+fn saved_override_expiry_is_not_renewed_by_reboot_and_safety_still_applies() {
+    use butter::{preferences::{SavedControl,resume,remaining},runtime::{RuntimeState,Context}};
+    let saved=SavedControl{setting:String::new(),expires_utc:Some(1_800_000_040)};
+    assert_eq!(remaining(&saved,&Feature::CpuLock,1_800_000_020),Some(20));
+    assert_eq!(remaining(&saved,&Feature::CpuLock,1_800_000_040),None);
+    assert_eq!(remaining(&saved,&Feature::CpuLock,1),None);
+    let engine=fixture(); let mut state=RuntimeState::default();
+    let controls=BTreeMap::from([("cpu-lock".into(),saved)]);
+    resume(&engine,&controls,&mut state,&Context::default(),1_800_000_020,3);
+    assert_eq!(engine.hardware.writes.get(),0);
+    let ctx=Context{awake:Some(true),temperature:Some(350),soc_millic:Some(40000),saver:Some(false),battery:Some(80),..Default::default()};
+    resume(&engine,&controls,&mut state,&ctx,1_800_000_020,3);
+    assert_eq!(state.advanced_deadlines.get("cpu-lock"),Some(&23));
+    resume(&engine,&controls,&mut state,&ctx,1_800_000_040,24);
+    assert!(engine.session(&Feature::CpuLock).unwrap().is_none());
+}

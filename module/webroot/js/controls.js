@@ -88,6 +88,15 @@ export function renderControls(state, run, requestAdvanced) {
     const choices = state.tcp.choices.filter(v => /^[a-z][a-z0-9_-]{0,31}$/.test(v)); const selected = selection('tcp-choice','TCP congestion control',choices,state.tcp.current,tcp);
     tcp.append(actions(button('Apply',()=>run('tcp '+selected.value)),button('Restore',()=>run('restore tcp'),state.tcp.original === true)));
   } else tcp.append(paragraph(state.tcp?.reason || 'The kernel does not expose TCP controls.'));
+  const audio = state.audio || {}, audioHost = $('audio-controls'); audioHost.replaceChildren();
+  const savedMic = !!state.supervisor?.config?.controls?.['phone-mic'];
+  let audioSummary = !audio.available ? audio.reason || 'Input-routing API is not exposed by this ROM.' : !audio.bluetoothConnected ? 'Connect Bluetooth earbuds. A saved preference will resume when they reconnect.' : audio.active ? 'Phone microphone preference is set.' : 'Ready to set a phone microphone preference.';
+  const observed = audio.activeInputs || [];
+  if (observed.length) audioSummary += observed.every(input=>input.phoneMic) ? ' Observed recording inputs use the phone microphone.' : observed.some(input=>input.phoneMic) ? ' Observed inputs include both phone and external microphones.' : ' Observed recording inputs still use an external microphone.';
+  else audioSummary += ' No active app input is reported; actual routing is unverified.';
+  audioHost.append(paragraph(audioSummary,'caption'),actions(button(savedMic ? 'Reapply preference' : 'Prefer phone microphone',()=>run('enable phone-mic'),audio.available && audio.bluetoothConnected),button('Use previous preferences',()=>run('restore phone-mic'),savedMic || audio.active === true)));
+  const errors = state.supervisor?.runtime?.preference_errors || {};
+  $('preferences-status').textContent = Object.keys(errors).length ? 'Some saved options could not resume: '+Object.entries(errors).map(([name,error])=>name+': '+error).join(' · ') : 'Applied options are remembered after reboot. Temporary overrides retain their original expiry.';
   const host = $('advanced-controls'); host.replaceChildren();
   for (const [key,[title,description]] of Object.entries(advanced)) {
     const capability = state[key] || {}, row = document.createElement('div'); row.className = 'control'; const heading = document.createElement('h3'); heading.textContent = title;
