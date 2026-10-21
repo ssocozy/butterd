@@ -1,0 +1,8 @@
+#!/system/bin/sh
+MODDIR=${0%/bin/*}
+umask 077
+[ "$(id -u)" = 0 ] || { echo "Root is required."; exit 1; }
+case "$(getprop ro.product.device):$(getprop ro.product.vendor.device)" in
+  duchamp:*|*:duchamp) ;; *) echo "Duchamp is required."; exit 1 ;;
+esac
+CLASSPATH="$MODDIR/bin/catalog.dex" exec /system/bin/app_process /system/bin dev.butterd.butter.Engine "$@"
