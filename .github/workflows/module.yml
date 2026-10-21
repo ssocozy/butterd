@@ -24,6 +24,8 @@ jobs:
       RELEASE_CHANNEL: ${{ inputs.channel || 'development' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Check release version
         env:
           GH_TOKEN: ${{ github.token }}
@@ -150,10 +152,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          python3 tools/release_notes.py --version "$MODULE_VERSION" --channel "$RELEASE_CHANNEL" --output build/release-notes.txt
           if [ "$RELEASE_CHANNEL" = production ]; then
-            gh release create "v$MODULE_VERSION" dist/*.zip dist/SHA256SUMS --target "$GITHUB_SHA" --title "Butterd $MODULE_VERSION" --notes "Release build with the Rust butter engine. Automated tests, Clippy and packaging checks passed. Hardware validation remains pending."
+            gh release create "v$MODULE_VERSION" dist/*.zip dist/SHA256SUMS --target "$GITHUB_SHA" --title "Butterd $MODULE_VERSION" --notes-file build/release-notes.txt
           else
-            gh release create "module-debug-${GITHUB_RUN_NUMBER}" dist/*.zip dist/SHA256SUMS --prerelease --target "$GITHUB_SHA" --title "Butterd module #${GITHUB_RUN_NUMBER}" --notes "Development module with the Rust butter engine. Hardware validation remains pending."
+            gh release create "module-debug-${GITHUB_RUN_NUMBER}" dist/*.zip dist/SHA256SUMS --prerelease --target "$GITHUB_SHA" --title "Butterd module #${GITHUB_RUN_NUMBER}" --notes-file build/release-notes.txt
           fi
       - uses: actions/upload-artifact@v4
         with:
