@@ -21,6 +21,17 @@ pub const THERMAL: &str = "/sys/class/thermal";
 pub const TCP: &str = "/proc/sys/net/ipv4/tcp_congestion_control";
 pub const TCP_AVAILABLE: &str = "/proc/sys/net/ipv4/tcp_available_congestion_control";
 pub const BOOT: &str = "/proc/sys/kernel/random/boot_id";
+pub const PAUSE: &str = "/proc/mtk_battery_cmd/current_cmd";
+pub const BYPASS_ACTIVE: &str = "/sys/class/power_supply/battery/bypass_charging_active";
+pub fn bypass_node(hardware: &impl Hardware) -> Result<String> {
+    if hardware.read("/sys/class/power_supply/battery/bypass_charging_supported")? != "1" || !matches!(hardware.read(BYPASS_ACTIVE)?.as_str(), "0" | "1") {
+        return Err("Kernel does not advertise observable battery bypass".into());
+    }
+    for node in ["/sys/class/power_supply/battery/bypass_charging", "/sys/class/power_supply/battery/bypass_charge"] {
+        if hardware.read(node).is_ok_and(|value| matches!(value.as_str(), "0" | "1")) { return Ok(node.into()); }
+    }
+    Err("No supported battery bypass control exposed".into())
+}
 
 pub trait Hardware {
     fn read(&self, path: &str) -> Result<String>;
@@ -43,13 +54,16 @@ pub fn read_bounded(path: &Path, limit: u64) -> Result<String> {
 }
 impl Hardware for SystemHardware {
     fn check_write(&self, path: &str) -> Result<()> {
+        if crate::android::parse_setting(path).is_some() { return Ok(()); }
         OpenOptions::new().write(true).open(path)?;
         Ok(())
     }
     fn read(&self, path: &str) -> Result<String> {
+        if let Some((user, key)) = crate::android::parse_setting(path) { return crate::android::setting(user, key, None); }
         Ok(read_bounded(Path::new(path), 4096)?.trim().to_string())
     }
     fn write(&self, path: &str, value: &str) -> Result<()> {
+        if let Some((user, key)) = crate::android::parse_setting(path) { crate::android::setting(user, key, Some(value))?; return Ok(()); }
         // Open an existing node only. Never create a device path or change its permissions.
         OpenOptions::new()
             .write(true)
@@ -111,9 +125,29 @@ pub fn allowed(hardware: &impl Hardware, feature: &Feature, path: &str) -> bool 
         Feature::Governor(policy) => {
             valid_policy(policy) && path == format!("{CPU}/{policy}/scaling_governor")
         }
+        Feature::CpuRange(policy) => valid_policy(policy) && ["scaling_min_freq", "scaling_max_freq"].iter().any(|field| path == format!("{CPU}/{policy}/{field}")),
+        Feature::GpuRange => [GPU, GPU_ALT].iter().any(|node| path == *node || path == node.replace("min_freq", "max_freq")),
+        Feature::Profile => {
+            let cpu = path.strip_prefix(&format!("{CPU}/")).and_then(|tail| tail.split_once('/')).is_some_and(|(policy, field)| valid_policy(policy) && matches!(field, "scaling_min_freq" | "scaling_max_freq"));
+            cpu || allowed(hardware, &Feature::GpuRange, path)
+        }
+        Feature::Refresh(user) => crate::android::parse_setting(path).is_some_and(|(id, _)| id == *user),
+        Feature::ChargingPause => path == PAUSE,
+        Feature::Bypass => bypass_node(hardware).is_ok_and(|node| node == path),
     }
 }
 pub fn validate_value(feature: &Feature, value: &str) -> Result<()> {
+    if matches!(feature, Feature::Refresh(_)) {
+        if value == "null" { return Ok(()); }
+        let hz: f64 = value.parse()?;
+        if !hz.is_finite() || !(0.0..=144.1).contains(&hz) { return Err("Invalid refresh value".into()); }
+        return Ok(());
+    }
+    if *feature == Feature::ChargingPause {
+        let fields: Vec<_> = value.split_whitespace().collect();
+        if fields.len() != 2 || fields.iter().any(|v| !matches!(*v, "0" | "1")) { return Err("Invalid charging command".into()); }
+        return Ok(());
+    }
     if *feature == Feature::Tcp {
         if !valid_algorithm(value) {
             return Err("Invalid TCP algorithm".into());
@@ -124,7 +158,7 @@ pub fn validate_value(feature: &Feature, value: &str) -> Result<()> {
         }
     } else {
         number(value)?;
-        if matches!(feature, Feature::Touch | Feature::ChargingThermal)
+        if matches!(feature, Feature::Touch | Feature::ChargingThermal | Feature::Bypass)
             && value != "0"
             && value != "1"
         {
@@ -206,6 +240,20 @@ pub fn plan(
             }
             targets.push((format!("{CPU}/{policy}/scaling_governor"), setting.into()));
         }
+        Feature::ChargingPause => {
+            let current = hardware.read(PAUSE)?;
+            validate_value(feature, &current)?;
+            targets.push((PAUSE.into(), format!("{} 1", current.split_whitespace().next().ok_or("Missing charging flag")?)));
+        }
+        Feature::Bypass => targets.push((bypass_node(hardware)?, "1".into())),
+        Feature::CpuRange(policy) => {
+            targets = crate::presets::range(hardware, &format!("{CPU}/{policy}"), true, setting)?;
+        }
+        Feature::GpuRange => {
+            let node = if hardware.read(GPU).is_ok() { GPU } else { GPU_ALT };
+            targets = crate::presets::range(hardware, node.trim_end_matches("/min_freq"), false, setting)?;
+        }
+        Feature::Profile | Feature::Refresh(_) => return Err("Use the managed profile controller".into()),
     }
     if targets.is_empty() || targets.len() > 16 {
         return Err("Supported controls are not exposed".into());

@@ -48,10 +48,25 @@ fn run() -> Result<()> {
             store: DiskStore::new("/data/adb/butterd"),
             boot,
         };
-        println!("{}", serde_json::to_string(&engine.status())?);
+        let mut status = engine.status();
+        status["supervisor"] = serde_json::json!({"config": butter::runtime::config()?, "runtime": butter::runtime::state(&engine.boot)?, "uptime": butter::runtime::uptime()?});
+        println!("{}", serde_json::to_string(&status)?);
         return Ok(());
     }
+    match args.as_slice() {
+        [command] if command == "daemon" => return butter::runtime::daemon(&boot),
+        [command] if command == "boot" => return butter::runtime::launch_if_requested(&boot),
+        [command] if command == "diagnostics" => { println!("{}", serde_json::to_string_pretty(&butter::runtime::diagnostics(&boot)?)?); return Ok(()); }
+        [command] if command == "shutdown" => { println!("{}", butter::runtime::shutdown(&boot)?); return Ok(()); }
+        [command, package] if command == "measure" => { println!("{}", butter::runtime::frame_sample(package)?); return Ok(()); }
+        [command, ..] if matches!(command.as_str(), "preset" | "auto" | "app" | "boost" | "logging" | "reset" | "monitor") => { println!("{}", butter::runtime::configure(&boot, &args)?); return Ok(()); }
+        _ => {}
+    }
     let (feature, setting, restoring, accepted) = match args.as_slice() {
+        [command, policy, range] if command == "range" && valid_policy(policy) => (Feature::CpuRange(policy.clone()), range.as_str(), false, false),
+        [command, gpu, range] if command == "range" && gpu == "gpu" => (Feature::GpuRange, range.as_str(), false, false),
+        [command, range] if command == "restore-range" && valid_policy(range) => (Feature::CpuRange(range.clone()), "", true, false),
+        [command, range] if command == "restore-range" && range == "gpu" => (Feature::GpuRange, "", true, false),
         [command, algorithm] if command == "tcp" => (Feature::Tcp, algorithm.as_str(), false, false),
         [command, policy, governor] if command == "governor" && valid_policy(policy) => (Feature::Governor(policy.clone()), governor.as_str(), false, false),
         [command, policy] if command == "restore" && valid_policy(policy) => (Feature::Governor(policy.clone()), "", true, false),
@@ -60,12 +75,18 @@ fn run() -> Result<()> {
         [command, feature, accepted] if command == "enable" && accepted == "--accept-risk" => (Feature::parse(feature)?, "", false, true),
         _ => return Err("Usage: butter status | governor policyN VALUE | enable CONTROL --accept-risk | enable touch 240|480|high | restore CONTROL".into()),
     };
+    if feature.advanced() && !restoring && accepted {
+        println!("{}", butter::runtime::guarded_apply(&boot, feature)?);
+        return Ok(());
+    }
     let engine = Engine {
         hardware,
         store: DiskStore::locked("/data/adb/butterd")?,
         boot,
     };
-    println!("{}", engine.apply(feature, setting, restoring, accepted)?);
+    let result = engine.apply(feature, setting, restoring, accepted);
+    butter::runtime::log_control(&args, result.as_ref().err().map(|error| error.to_string()).as_deref());
+    println!("{}", result?);
     Ok(())
 }
 fn main() {

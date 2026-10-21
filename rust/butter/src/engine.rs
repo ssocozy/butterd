@@ -17,7 +17,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             || &journal.feature != feature
             || journal.boot.len() != 36
             || journal.entries.is_empty()
-            || journal.entries.len() > 16
+            || journal.entries.len() > 64
         {
             return Err("Invalid session journal".into());
         }
@@ -60,15 +60,31 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         if feature.advanced() && !restoring && !accepted_risk {
             return Err("Advanced controls require --accept-risk".into());
         }
+        let targets = if restoring { Vec::new() } else { hardware::plan(&self.hardware, &feature, setting)? };
+        self.apply_targets(feature, targets, restoring)
+    }
+    pub fn apply_targets(&self, feature: Feature, mut targets: Vec<(String, String)>, restoring: bool) -> Result<String> {
+        feature.validate()?;
         let saved = self.session(&feature)?;
-        if restoring && saved.is_none() {
-            return Ok("No active session to restore.".into());
+        if restoring && saved.is_none() { return Ok("No active session to restore.".into()); }
+        if !restoring {
+            if targets.is_empty() || targets.len() > 64 { return Err("Invalid target count".into()); }
+            let mut paths = std::collections::HashSet::new();
+            for (path, value) in &targets {
+                if !hardware::allowed(&self.hardware, &feature, path) || !paths.insert(path) { return Err("Invalid target path".into()); }
+                hardware::validate_value(&feature, value)?;
+                hardware::validate_value(&feature, &hardware::value(&self.hardware, path)?)?;
+                self.hardware.check_write(path)?;
+            }
+            for other in self.controls() {
+                if other == feature { continue; }
+                if let Some(journal) = self.session(&other)? {
+                    if journal.entries.iter().any(|entry| targets.iter().any(|(path, _)| path == &entry.path)) {
+                        return Err(format!("Restore {} before changing overlapping controls", other.key()).into());
+                    }
+                }
+            }
         }
-        let mut targets = if restoring {
-            Vec::new()
-        } else {
-            hardware::plan(&self.hardware, &feature, setting)?
-        };
         let mut journal = match saved {
             Some(journal) => journal,
             None => {
@@ -133,6 +149,16 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         if targets.len() != journal.entries.len() {
             return Err("Capabilities changed; restore first".into());
         }
+        // Widen limits before narrowing them, for both application and restoration.
+        journal.entries.sort_by_key(|entry| {
+            let target = targets.iter().find(|(path, _)| path == &entry.path).map(|(_, value)| value.as_str()).unwrap_or("");
+            let old = hardware::value(&self.hardware, &entry.path).ok().and_then(|value| value.parse::<u64>().ok());
+            let new = target.parse::<u64>().ok();
+            match (old, new) {
+                (Some(old), Some(new)) if (entry.path.ends_with("min_freq") && new <= old) || (entry.path.ends_with("max_freq") && new >= old) => 0,
+                _ => 1,
+            }
+        });
         for index in 0..journal.entries.len() {
             let path = journal.entries[index].path.clone();
             let target = targets
@@ -175,6 +201,28 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         }
         .into())
     }
+    pub fn controls(&self) -> Vec<Feature> {
+        let mut controls = vec![Feature::CpuLock, Feature::GpuLock, Feature::ChargingThermal, Feature::GpuThermal, Feature::Touch, Feature::Tcp, Feature::Profile, Feature::GpuRange, Feature::ChargingPause, Feature::Bypass];
+        if let Ok(policies) = self.hardware.list(CPU) {
+            for policy in policies.into_iter().filter(|value| valid_policy(value)).take(16) {
+                controls.push(Feature::Governor(policy.clone()));
+                controls.push(Feature::CpuRange(policy));
+            }
+        }
+        controls
+    }
+    pub fn preset(&self, mode: crate::presets::Mode) -> Result<String> {
+        if mode == crate::presets::Mode::Balanced { return self.apply_targets(Feature::Profile, Vec::new(), true); }
+        let baseline = self.session(&Feature::Profile)?;
+        let targets = crate::presets::plan(&self.hardware, mode, baseline.as_ref())?;
+        match self.apply_targets(Feature::Profile, targets, false) {
+            Ok(message) => Ok(message),
+            Err(error) => {
+                let cleanup = self.apply_targets(Feature::Profile, Vec::new(), true);
+                Err(format!("Profile failed: {error}; cleanup: {}", cleanup.unwrap_or_else(|error| error.to_string())).into())
+            }
+        }
+    }
     pub fn state(&self, feature: &Feature) -> Result<&'static str> {
         let Some(journal) = self.session(feature)? else {
             return Ok("Off");
@@ -201,6 +249,8 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             Feature::ChargingThermal,
             Feature::GpuThermal,
             Feature::Touch,
+            Feature::ChargingPause,
+            Feature::Bypass,
         ] {
             let capability = (|| -> Result<Value> {
                 let targets = hardware::plan(
@@ -246,7 +296,11 @@ impl<H: Hardware, S: Store> Engine<H, S> {
                         .collect();
                     Ok(
                         json!({"id": policy, "governor": governor, "cores": self.hardware.read(&format!("{CPU}/{policy}/related_cpus"))?, "choices": choices,
-                        "original": self.session(&Feature::Governor(policy.clone()))?.is_some()}),
+                        "original": self.session(&Feature::Governor(policy.clone()))?.is_some(),
+                        "frequencies":self.hardware.read(&format!("{CPU}/{policy}/scaling_available_frequencies")).unwrap_or_default(),
+                        "min":self.hardware.read(&format!("{CPU}/{policy}/scaling_min_freq")).unwrap_or_default(),
+                        "max":self.hardware.read(&format!("{CPU}/{policy}/scaling_max_freq")).unwrap_or_default(),
+                        "rangeActive":self.session(&Feature::CpuRange(policy.clone()))?.is_some()}),
                     )
                 })();
                 if let Ok(item) = item {
@@ -275,6 +329,9 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             "tcp".into(),
             tcp.unwrap_or_else(|error| json!({"available":false,"reason":error.to_string()})),
         );
+        let gpu_path = if self.hardware.read(hardware::GPU).is_ok() { hardware::GPU } else { hardware::GPU_ALT };
+        let gpu_base = gpu_path.trim_end_matches("/min_freq");
+        output.insert("gpuRange".into(), json!({"frequencies":self.hardware.read(&format!("{gpu_base}/available_frequencies")).unwrap_or_default(), "min":self.hardware.read(gpu_path).unwrap_or_default(), "max":self.hardware.read(&format!("{gpu_base}/max_freq")).unwrap_or_default(), "active":self.session(&Feature::GpuRange).ok().flatten().is_some()}));
         output.insert("cpuPolicies".into(), json!(policies));
         output.insert(
             "engine".into(),

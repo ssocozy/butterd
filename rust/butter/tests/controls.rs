@@ -62,8 +62,8 @@ struct MemoryStore {
     fail_save: Cell<bool>,
 }
 impl Store for MemoryStore {
-    fn load(&self, _: &Feature) -> Result<Option<Journal>> {
-        Ok(self.saved.borrow().clone())
+    fn load(&self, feature: &Feature) -> Result<Option<Journal>> {
+        Ok(self.saved.borrow().clone().filter(|journal| &journal.feature == feature))
     }
     fn save(&self, journal: &Journal) -> Result<()> {
         if self.fail_save.get() {
@@ -244,4 +244,71 @@ fn readonly_status_does_not_create_session_files() {
     let store = DiskStore::new(&path);
     assert!(store.load(&Feature::Touch).unwrap().is_none());
     assert!(!path.exists());
+}
+
+#[test]
+fn profiles_use_baseline_without_compounding_and_restore() {
+    use butter::presets::Mode;
+    let engine = fixture();
+    engine.preset(Mode::Battery).unwrap();
+    engine.preset(Mode::Performance).unwrap();
+    assert_eq!(engine.hardware.read(&format!("{CPU}/policy0/scaling_max_freq")).unwrap(), "1600000");
+    engine.preset(Mode::Balanced).unwrap();
+    assert_eq!(engine.hardware.read(&format!("{CPU}/policy0/scaling_min_freq")).unwrap(), "480000");
+    assert_eq!(engine.hardware.read(&format!("{CPU}/policy0/scaling_max_freq")).unwrap(), "1600000");
+}
+#[test]
+fn failed_profile_rolls_back_earlier_nodes() {
+    let engine = fixture();
+    engine.hardware.fail_at.set(Some(2));
+    assert!(engine.preset(butter::presets::Mode::Performance).is_err());
+    assert_eq!(engine.hardware.read(&format!("{CPU}/policy0/scaling_min_freq")).unwrap(), "480000");
+    assert!(engine.session(&Feature::Profile).unwrap().is_none());
+}
+#[test]
+fn manual_ranges_cannot_overlap_an_active_profile() {
+    let engine = fixture();
+    engine.preset(butter::presets::Mode::Performance).unwrap();
+    let writes = engine.hardware.writes.get();
+    assert!(engine.apply(Feature::CpuRange("policy0".into()), "480000:1200000", false, false).is_err());
+    assert_eq!(engine.hardware.writes.get(), writes);
+}
+#[test]
+fn ranges_reject_overclock_and_inverted_limits_before_writes() {
+    let engine = fixture();
+    for range in ["1200000:480000", "480000:2200000", "0:1200000", "480000:;reboot"] {
+        assert!(engine.apply(Feature::CpuRange("policy0".into()), range, false, false).is_err());
+    }
+    assert_eq!(engine.hardware.writes.get(), 0);
+    engine.apply(Feature::CpuRange("policy0".into()), "480000:1200000", false, false).unwrap();
+    engine.apply(Feature::CpuRange("policy0".into()), "", true, false).unwrap();
+}
+#[test]
+fn bypass_requires_capability_control_and_observable_state() {
+    use butter::hardware::{bypass_node, BYPASS_ACTIVE};
+    let engine = fixture();
+    engine.hardware.put("/sys/class/power_supply/battery/bypass_charging", "0");
+    assert!(bypass_node(&engine.hardware).is_err());
+    engine.hardware.put("/sys/class/power_supply/battery/bypass_charging_supported", "1");
+    assert!(bypass_node(&engine.hardware).is_err());
+    engine.hardware.put(BYPASS_ACTIVE, "0");
+    assert!(bypass_node(&engine.hardware).is_ok());
+}
+#[test]
+fn charging_pause_preserves_unlimited_flag_and_never_changes_current_limit() {
+    let engine = fixture();
+    engine.hardware.put(butter::hardware::PAUSE, "1 0");
+    engine.apply(Feature::ChargingPause, "", false, true).unwrap();
+    assert_eq!(engine.hardware.read(butter::hardware::PAUSE).unwrap(), "1 1");
+    engine.apply(Feature::ChargingPause, "", true, false).unwrap();
+    assert_eq!(engine.hardware.read(butter::hardware::PAUSE).unwrap(), "1 0");
+    assert_eq!(engine.hardware.writes.get(), 2);
+}
+#[test]
+fn refresh_journals_cannot_target_another_user_or_non_display_setting() {
+    let engine = fixture();
+    for path in ["android:10:peak_refresh_rate", "android:0:screen_brightness", "/system/build.prop"] {
+        assert!(engine.apply_targets(Feature::Refresh(0), vec![(path.into(), "120".into())], false).is_err());
+    }
+    assert_eq!(engine.hardware.writes.get(), 0);
 }

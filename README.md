@@ -9,13 +9,31 @@ Powered by **butter**, a Rust optimization engine built for Duchamp’s Dimensit
 
 ## Controls
 
-- Per-cluster CPU governors and CPU/GPU clock locking.
+- Balanced, Performance and Battery CPU/GPU presets, with per-cluster governor and frequency controls.
+- Opt-in foreground app profiles, temporary launch boosts and per-app display preferences.
+- Battery, temperature, workload and screen-state monitoring, with explainable profile decisions.
 - TCP congestion-control selection from your kernel’s available algorithms.
 - Goodix 240/480 Hz touch modes and high sampling mode on supported firmware.
-- Optional GPU cooling and charging thermal-vote overrides.
+- Optional, time-limited clock, GPU cooling and charging thermal-vote overrides.
+- Observable kernel battery bypass where supported; a separately labelled experimental primary-charger pause.
+- Local diagnostic reports, optional logcat events and app frame-duration samples.
 - Pixel 6a–9a compatibility profiles, fetched automatically during installation.
 
-Configure controls in the module WebUI. Availability depends on your kernel and touch panel. Advanced thermal controls are opt-in and can increase heat and power use. Automatic game profiles are still in development.
+Configure controls in the module WebUI. Availability depends on your kernel and touch panel. Advanced thermal controls are opt-in and can increase heat and power use. Automatic mode starts only when enabled; app profiles require a package rule. Initial frequency-table presets still need device benchmarks.
+
+## How butter works
+
+butter is a device-aware Rust control engine for Duchamp. Its supervisor follows the foreground app, screen state, battery saver, battery temperature and sampled CPU activity. App rules choose a preset; short boost leases overlap independently and expire without a permanent clock lock. Idle workloads release performance floors, and heat takes priority over boosts.
+
+The engine discovers CPU policies and Mali frequency tables at runtime. Performance raises moderate frequency floors; Battery lowers ceilings; Balanced returns profile limits to the ROM. It does not assume every kernel exposes the same nodes. Display requests use Android preferences, accept only advertised internal-display modes and yield when another controller changes those preferences.
+
+These are explicit policies, not machine learning. The frequency choices are conservative starting points, not proven efficiency sweet spots. Diagnostics provide readings and recent app-rendered frame durations so changes can be compared on the same workload. No FPS or battery-life improvement is claimed without device measurements.
+
+> [!IMPORTANT]
+> Automated source checks, unit tests and release-build checks run before publication. This version is awaiting physical-device validation; passing CI does not establish stability on every ROM or kernel. Keep a known-working module ZIP and know how to disable modules through your root manager's recovery procedure.
+
+> [!WARNING]
+> Root controls can increase heat, power consumption and instability. Advanced overrides are off by default and expire automatically, but they cannot make unsupported hardware behavior safe. Avoid overlapping performance controllers. Use Butterd at your own risk; the project provides no warranty and accepts no responsibility for damage, data loss or boot failures caused by misuse or incompatible modifications. See [LICENSE](LICENSE).
 
 ## Installation
 
@@ -26,6 +44,10 @@ Configure controls in the module WebUI. Availability depends on your kernel and 
 3. Open the WebUI to configure Butterd. Magisk users need a compatible WebUI host.
 
 Fresh installs randomly select a Pixel profile from 6a through 9a, with build, Play Store build and scoped property spoofing enabled. Change the model in the WebUI; updates keep your selection. Offline profiles are included. A Play Integrity verdict is not guaranteed.
+
+## Diagnostics
+
+Enable logcat output in the WebUI, reproduce the issue, then export the diagnostics report. Engine messages use the `butter` tag. Reports include app package names and configuration; review them before sharing. Frame samples describe recent app-rendered durations, not game FPS.
 
 ## Credits
 

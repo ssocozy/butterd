@@ -11,6 +11,12 @@ pub enum Feature {
     Touch,
     Tcp,
     Governor(String),
+    Profile,
+    CpuRange(String),
+    GpuRange,
+    Refresh(u32),
+    ChargingPause,
+    Bypass,
 }
 impl Feature {
     pub fn parse(value: &str) -> Result<Self> {
@@ -21,6 +27,10 @@ impl Feature {
             "gpu-thermal" => Self::GpuThermal,
             "touch" => Self::Touch,
             "tcp" => Self::Tcp,
+            "profile" => Self::Profile,
+            "gpu-range" => Self::GpuRange,
+            "charging-pause" => Self::ChargingPause,
+            "bypass" => Self::Bypass,
             _ => return Err("Unknown control".into()),
         })
     }
@@ -33,18 +43,27 @@ impl Feature {
             Self::Touch => "touch".into(),
             Self::Tcp => "tcp".into(),
             Self::Governor(policy) => format!("governor-{policy}"),
+            Self::Profile => "profile".into(),
+            Self::CpuRange(policy) => format!("range-{policy}"),
+            Self::GpuRange => "gpu-range".into(),
+            Self::Refresh(user) => format!("refresh-{user}"),
+            Self::ChargingPause => "charging-pause".into(),
+            Self::Bypass => "bypass".into(),
         }
     }
     pub fn validate(&self) -> Result<()> {
-        if let Self::Governor(policy) = self {
+        if let Self::Governor(policy) | Self::CpuRange(policy) = self {
             if !valid_policy(policy) {
                 return Err("Invalid CPU policy".into());
             }
         }
+        if matches!(self, Self::Refresh(user) if *user > 99999) {
+            return Err("Invalid Android user".into());
+        }
         Ok(())
     }
     pub fn advanced(&self) -> bool {
-        !matches!(self, Self::Touch | Self::Tcp | Self::Governor(_))
+        matches!(self, Self::CpuLock | Self::GpuLock | Self::ChargingThermal | Self::GpuThermal | Self::ChargingPause | Self::Bypass)
     }
 }
 pub fn valid_policy(value: &str) -> bool {

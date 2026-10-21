@@ -44,6 +44,8 @@ document.querySelector('#refresh').addEventListener('click', readings);
   await readings();
 })();
 const featureDescriptions = {
+  'bypass': ['Battery bypass', 'Requires a kernel-advertised bypass control and a separate active-state readback. This is not available on every stock kernel. Ends on unplug, low battery, heat or after 30 minutes.'],
+  'charging-pause': ['Experimental charging pause', 'Disables the primary charger using the MediaTek current command. This is not verified direct-power bypass: the battery may still discharge, and charge-pump behavior depends on your ROM. No wattage or charge-current workaround is forced. Ends on unplug, low battery, heat or after 30 minutes.'],
   'cpu-lock': ['CPU clock lock', 'Requests each CPU cluster’s highest advertised clock within its current maximum limit. This can substantially increase battery use and heat.'],
   'gpu-lock': ['GPU clock lock', 'Requests the highest advertised Mali clock within the current maximum limit. This can substantially increase battery use and heat.'],
   'gpu-thermal': ['GPU cooling override', 'Requests cooling state zero for the Duchamp Mali cooling device. This removes that cooling restriction temporarily; the ROM may replace it. It does not disable all thermal protection.'],
@@ -51,7 +53,7 @@ const featureDescriptions = {
 };
 let engineBusy = false, pendingFeature = '';
 const engineFeedback = document.querySelector('#engine-feedback'), riskDialog = document.querySelector('#risk-dialog');
-function engineButtons(disabled) { document.querySelectorAll('[data-enable],[data-restore],[data-touch],.cpu-control,.tcp-control').forEach(button => { button.disabled = disabled || button.dataset.available !== 'true'; }); }
+function engineButtons(disabled) { document.querySelectorAll('[data-enable],[data-restore],[data-touch],.cpu-control,.tcp-control,.engine-control').forEach(button => { button.disabled = disabled || button.dataset.available !== 'true'; }); }
 async function engineCommand(command) {
   if (engineBusy) return;
   engineBusy = true; engineButtons(true); engineFeedback.textContent = 'Applying and checking the request…';
@@ -64,9 +66,11 @@ async function engineStatus() {
     const state = JSON.parse(await exec('/data/adb/modules/butterd/bin/butter status'));
     renderCpuPolicies(state.cpuPolicies || []);
     renderTcp(state.tcp);
+    renderSupervisor(state.supervisor);
+    renderRange(document.querySelector('#gpu-range'), 'gpu', state.gpuRange || {});
     const container = document.querySelector('#advanced-controls'); container.replaceChildren();
     for (const [feature, [title, description]] of Object.entries(featureDescriptions)) {
-      const capability = state[feature], row = document.createElement('div'); row.className = 'control';
+      const capability = state[feature] || {available:false}, row = document.createElement('div'); row.className = 'control';
       const heading = document.createElement('h3'); heading.textContent = title; row.append(heading);
       const status = document.createElement('p'); status.textContent = capability.available ? capability.state : 'Not exposed by this kernel'; row.append(status);
       const actions = document.createElement('div'); actions.className = 'actions';
@@ -79,6 +83,7 @@ async function engineStatus() {
       const restore = document.createElement('button'); restore.textContent = 'Restore'; restore.dataset.restore = feature;
       restore.dataset.available = String(capability.available && capability.state !== 'Off');
       restore.addEventListener('click', () => engineCommand('restore ' + feature));
+      if (!capability.available && capability.reason) status.textContent += ' · ' + capability.reason;
       actions.append(enable, restore); row.append(actions); container.append(row);
     }
     const touch = state.touch;
@@ -127,7 +132,8 @@ function renderCpuPolicies(policies) {
     }
     applyGovernor.addEventListener('click', () => changeGovernor(false));
     const restore = document.createElement('button'); restore.textContent = 'Restore'; restore.className = 'cpu-control'; restore.dataset.available = String(policy.original === true); restore.addEventListener('click', () => changeGovernor(true));
-    actions.append(applyGovernor,restore); row.append(label,select,actions); host.append(row);
+    actions.append(applyGovernor,restore); row.append(label,select,actions);
+    const range = document.createElement('div'); renderRange(range, policy.id, {frequencies:policy.frequencies,min:policy.min,max:policy.max,active:policy.rangeActive}); row.append(range); host.append(row);
   }
 }
 
@@ -148,3 +154,67 @@ function renderTcp(tcp) {
   const restore = document.createElement('button'); restore.textContent = 'Restore'; restore.className = 'tcp-control'; restore.dataset.available = String(tcp.original === true);
   restore.addEventListener('click', () => engineCommand('restore tcp')); actions.append(apply,restore); host.append(label,select,actions);
 }
+
+function renderRange(host, id, range) {
+  host.replaceChildren();
+  const min = Number(range.min), max = Number(range.max);
+  const clocks = [...new Set(String(range.frequencies || '').trim().split(/\s+/).filter(v => /^[0-9]{1,11}$/.test(v)).map(Number))].filter(v => v > 0 && v >= min && v <= max).sort((a,b) => a-b);
+  if (!clocks.length) { const text = document.createElement('p'); text.textContent = 'Frequency ranges are not exposed by this kernel.'; host.append(text); return; }
+  const fields = document.createElement('div'); fields.className = 'range-fields';
+  const selects = ['Minimum','Maximum'].map((title,index) => {
+    const label = document.createElement('label'); label.textContent = title + (id === 'gpu' ? ' · driver units' : ' · kHz');
+    const select = document.createElement('select'); select.className = 'engine-control'; select.dataset.available = 'true';
+    for (const clock of clocks) { const option = document.createElement('option'); option.value = String(clock); option.textContent = String(clock); select.append(option); }
+    select.value = String(index === 0 ? clocks[0] : clocks[clocks.length-1]); label.append(select); fields.append(label); return select;
+  });
+  const actions = document.createElement('div'); actions.className = 'actions';
+  const apply = document.createElement('button'); apply.textContent = 'Apply range'; apply.className = 'engine-control'; apply.dataset.available = 'true';
+  apply.addEventListener('click', () => { const low = Number(selects[0].value), high = Number(selects[1].value); if (low > high) { engineFeedback.textContent = 'Minimum must not exceed maximum.'; return; } engineCommand('range ' + id + ' ' + low + ':' + high); });
+  const restore = document.createElement('button'); restore.textContent = 'Restore range'; restore.className = 'engine-control'; restore.dataset.available = String(range.active === true); restore.addEventListener('click', () => engineCommand('restore-range ' + id));
+  actions.append(apply, restore); host.append(fields, actions);
+}
+let lastSupervisor = null;
+function renderSupervisor(supervisor) {
+  if (!supervisor) return;
+  lastSupervisor = supervisor;
+  const config = supervisor.config || {}, state = supervisor.runtime || {}, data = state.telemetry || {};
+  document.querySelector('#automatic').checked = config.automatic === true;
+  document.querySelector('#logcat').checked = config.logcat === true;
+  document.querySelector('#decision').textContent = (state.active || 'balanced') + ' · ' + (state.reason || 'Monitoring is stopped.') + (state.error ? ' · ' + state.error : '') + (state.sampled_at && supervisor.uptime - state.sampled_at > 30 ? ' · Readings are stale; restart monitoring.' : '');
+  const watts = document.querySelector('#live-watts'); watts.textContent = Number.isFinite(data.batteryWatts) ? (data.batteryWatts > 0 ? '+' : '') + data.batteryWatts.toFixed(1) : '—';
+  const metrics = document.querySelector('#live-metrics'); metrics.replaceChildren();
+  const entries = [ ['Battery', data.batteryPercent == null ? 'Not reported' : data.batteryPercent + '%'], ['Temperature', data.batteryTempC == null ? 'Not reported' : data.batteryTempC.toFixed(1) + ' °C'], ['Display', data.screenHz == null ? 'Not reported' : data.screenHz.toFixed(1) + ' Hz'], ['CPU busy', data.cpuBusyPercent == null ? 'Collecting samples' : data.cpuBusyPercent.toFixed(0) + '%'], ['Charge cycles', data.cycleCount == null ? 'Not reported by firmware' : String(data.cycleCount)], ['Battery health', data.healthPercent == null ? (data.health || 'Not reported by firmware') : data.healthPercent.toFixed(0) + '% of design capacity'] ];
+  for (const [name,value] of entries) { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = name; dd.textContent = value; metrics.append(dt,dd); }
+  const host = document.querySelector('#app-rules'); host.replaceChildren();
+  for (const rule of config.rules || []) {
+    if (!/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(rule.package)) continue;
+    const row = document.createElement('div'); row.className = 'control'; const text = document.createElement('p'); text.textContent = rule.package + ' · ' + rule.preset + ' · ' + (rule.hz ? rule.hz + ' Hz' : 'ROM refresh rate');
+    const remove = document.createElement('button'); remove.textContent = 'Remove rule'; remove.className = 'engine-control'; remove.dataset.available = 'true'; remove.addEventListener('click', () => engineCommand('app ' + rule.package + ' remove rom')); row.append(text,remove); host.append(row);
+  }
+}
+const presetDialog = document.querySelector('#preset-dialog');
+document.querySelector('#open-presets').addEventListener('click', () => presetDialog.showModal());
+document.querySelectorAll('[data-preset]').forEach(button => button.addEventListener('click', () => { presetDialog.close(); engineCommand('preset ' + button.dataset.preset); }));
+document.querySelectorAll('[data-command]').forEach(button => button.addEventListener('click', () => engineCommand(button.dataset.command)));
+document.querySelector('#automatic').addEventListener('change', event => engineCommand('auto ' + (event.target.checked ? 'on' : 'off')));
+document.querySelector('#logcat').addEventListener('change', event => engineCommand('logging ' + (event.target.checked ? 'on' : 'off')));
+document.querySelector('#app-rule').addEventListener('submit', event => {
+  event.preventDefault(); const packageName = document.querySelector('#app-package').value.trim(), mode = document.querySelector('#app-preset').value, hz = document.querySelector('#app-hz').value;
+  if (!/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(packageName) || !['balanced','performance','battery'].includes(mode) || !['rom','60','90','120'].includes(hz)) { engineFeedback.textContent = 'Enter a valid app package and supported options.'; return; }
+  engineCommand('app ' + packageName + ' ' + mode + ' ' + hz);
+});
+async function report(command, download) {
+  const feedback = document.querySelector('#report-feedback'), preview = document.querySelector('#report-preview');
+  feedback.textContent = 'Collecting engine diagnostics…';
+  try {
+    const raw = await exec('/data/adb/modules/butterd/bin/butter ' + command); const text = JSON.stringify(JSON.parse(raw), null, 2);
+    preview.hidden = false; preview.textContent = text; feedback.textContent = 'Report ready. Review app names before sharing.';
+    if (download) { const url = URL.createObjectURL(new Blob([text], {type:'application/json'})); const link = document.createElement('a'); link.href = url; link.download = 'butter-diagnostics.json'; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
+  } catch (error) { feedback.textContent = error.message; }
+}
+document.querySelector('#export-report').addEventListener('click', () => report('diagnostics', true));
+document.querySelector('#measure-app').addEventListener('click', () => { const packageName = lastSupervisor?.runtime?.foreground; if (!packageName || !/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(packageName)) { document.querySelector('#report-feedback').textContent = 'Start monitoring with one app in the foreground first.'; return; } report('measure ' + packageName, false); });
+setInterval(async () => {
+  if (document.hidden || engineBusy) return;
+  try { const state = JSON.parse(await exec('/data/adb/modules/butterd/bin/butter status')); if (!engineBusy) renderSupervisor(state.supervisor); } catch (_) { /* Explicit refresh retains actionable errors. */ }
+}, 5000);
