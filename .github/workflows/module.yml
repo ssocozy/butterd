@@ -37,14 +37,56 @@ jobs:
               exit 1
             fi
           fi
+      - name: Locate dependency caches
+        id: cache-paths
+        run: |
+          echo "sdk=$ANDROID_HOME" >> "$GITHUB_OUTPUT"
+          echo "cargo=${CARGO_HOME:-$HOME/.cargo}" >> "$GITHUB_OUTPUT"
+          echo "rustup=${RUSTUP_HOME:-$HOME/.rustup}" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS:-linux}" >> "$GITHUB_OUTPUT"
+      - name: Cache Android SDK packages
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ steps.cache-paths.outputs.sdk }}/ndk/28.2.13676358
+            ${{ steps.cache-paths.outputs.sdk }}/platforms/android-36
+            ${{ steps.cache-paths.outputs.sdk }}/build-tools/36.0.0
+            ${{ steps.cache-paths.outputs.sdk }}/cmdline-tools/16.0
+          key: android-v1-${{ runner.os }}-${{ runner.arch }}-cmdline12266719-ndk28.2.13676358-api36-tools36.0.0
       - uses: android-actions/setup-android@v3
         with:
+          cmdline-tools-version: '12266719'
           packages: 'ndk;28.2.13676358 platforms;android-36 build-tools;36.0.0'
           log-accepted-android-sdk-licenses: false
+      - name: Cache Rust toolchain
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.cache-paths.outputs.rustup }}/toolchains/1.90.0-x86_64-unknown-linux-gnu
+          key: rust-toolchain-v1-${{ runner.os }}-${{ runner.arch }}-1.90.0-clippy-rustfmt-aarch64-android
       - name: Install Rust toolchain
         run: |
           rustup toolchain install 1.90.0 --profile minimal --component clippy --component rustfmt --target aarch64-linux-android
           echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang" >> "$GITHUB_ENV"
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ steps.cache-paths.outputs.cargo }}/registry/index
+            ${{ steps.cache-paths.outputs.cargo }}/registry/cache
+            ${{ steps.cache-paths.outputs.cargo }}/registry/src
+            ${{ steps.cache-paths.outputs.cargo }}/git/db
+            ${{ steps.cache-paths.outputs.cargo }}/git/checkouts
+          key: cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust/butter/Cargo.lock') }}
+          restore-keys: |
+            cargo-v1-${{ runner.os }}-${{ runner.arch }}-
+      - name: Cache Rust build outputs
+        uses: actions/cache@v5
+        with:
+          path: rust/butter/target
+          key: butter-target-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-paths.outputs.image }}-rust1.90.0-ndk28.2.13676358-api34-page16k-${{ hashFiles('rust/butter/Cargo.lock', 'rust/butter/Cargo.toml') }}-${{ github.sha }}
+          restore-keys: |
+            butter-target-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-paths.outputs.image }}-rust1.90.0-ndk28.2.13676358-api34-page16k-${{ hashFiles('rust/butter/Cargo.lock', 'rust/butter/Cargo.toml') }}-
+            butter-target-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-paths.outputs.image }}-rust1.90.0-ndk28.2.13676358-api34-page16k-
       - name: Validate module and compatibility configuration
         run: |
           python3 tools/validate.py
