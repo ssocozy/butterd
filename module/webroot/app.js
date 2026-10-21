@@ -51,7 +51,7 @@ const featureDescriptions = {
 };
 let engineBusy = false, pendingFeature = '';
 const engineFeedback = document.querySelector('#engine-feedback'), riskDialog = document.querySelector('#risk-dialog');
-function engineButtons(disabled) { document.querySelectorAll('[data-enable],[data-restore],[data-touch],.cpu-control').forEach(button => { button.disabled = disabled || button.dataset.available !== 'true'; }); }
+function engineButtons(disabled) { document.querySelectorAll('[data-enable],[data-restore],[data-touch],.cpu-control,.tcp-control').forEach(button => { button.disabled = disabled || button.dataset.available !== 'true'; }); }
 async function engineCommand(command) {
   if (engineBusy) return;
   engineBusy = true; engineButtons(true); engineFeedback.textContent = 'Applying and checking the request…';
@@ -63,6 +63,7 @@ async function engineStatus() {
   try {
     const state = JSON.parse(await exec('/data/adb/modules/butterd/bin/butter status'));
     renderCpuPolicies(state.cpuPolicies || []);
+    renderTcp(state.tcp);
     const container = document.querySelector('#advanced-controls'); container.replaceChildren();
     for (const [feature, [title, description]] of Object.entries(featureDescriptions)) {
       const capability = state[feature], row = document.createElement('div'); row.className = 'control';
@@ -128,4 +129,22 @@ function renderCpuPolicies(policies) {
     const restore = document.createElement('button'); restore.textContent = 'Restore'; restore.className = 'cpu-control'; restore.dataset.available = String(policy.original === true); restore.addEventListener('click', () => changeGovernor(true));
     actions.append(applyGovernor,restore); row.append(label,select,actions); host.append(row);
   }
+}
+
+function renderTcp(tcp) {
+  const host = document.querySelector('#tcp-controls'); host.replaceChildren();
+  if (!tcp || !tcp.available) { host.textContent = 'TCP controls are not exposed by this kernel.'; return; }
+  const valid = value => typeof value === 'string' && /^[a-z][a-z0-9_-]{0,31}$/.test(value);
+  const label = document.createElement('label'); label.htmlFor = 'tcp-algorithm'; label.textContent = 'Congestion-control algorithm';
+  const select = document.createElement('select'); select.id = label.htmlFor; select.className = 'tcp-control'; select.dataset.available = 'true';
+  for (const algorithm of [...new Set(tcp.choices.filter(valid))]) {
+    const option = document.createElement('option'); option.value = algorithm; option.textContent = algorithm; select.append(option);
+  }
+  select.value = tcp.current;
+  const actions = document.createElement('div'); actions.className = 'actions';
+  const apply = document.createElement('button'); apply.textContent = 'Apply algorithm'; apply.className = 'tcp-control'; apply.dataset.available = 'false';
+  select.addEventListener('change', () => { apply.dataset.available = String(valid(select.value) && select.value !== tcp.current); apply.disabled = engineBusy || apply.dataset.available !== 'true'; });
+  apply.addEventListener('click', () => { if (valid(select.value)) engineCommand('tcp ' + select.value); });
+  const restore = document.createElement('button'); restore.textContent = 'Restore'; restore.className = 'tcp-control'; restore.dataset.available = String(tcp.original === true);
+  restore.addEventListener('click', () => engineCommand('restore tcp')); actions.append(apply,restore); host.append(label,select,actions);
 }

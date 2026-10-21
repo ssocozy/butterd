@@ -5,11 +5,12 @@
   <p><a href="https://github.com/ssocozy/butterd/releases">Download</a> | <a href="https://github.com/ssocozy/butterd/issues">Issues</a></p>
 </div>
 
-Powered by **butter**, an optimization engine built for Duchamp’s Dimensity 8300 Ultra and Mali GPU.
+Powered by **butter**, a Rust optimization engine built for Duchamp’s Dimensity 8300 Ultra and Mali GPU.
 
 ## Controls
 
 - Per-cluster CPU governors and CPU/GPU clock locking.
+- TCP congestion-control selection from your kernel’s available algorithms.
 - Goodix 240/480 Hz touch modes and high sampling mode on supported firmware.
 - Optional GPU cooling and charging thermal-vote overrides.
 - Pixel 6a–9a compatibility profiles, fetched automatically during installation.

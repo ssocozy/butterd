@@ -16,6 +16,7 @@ for conflict in /data/adb/modules/*; do
       abort "Disable the conflicting module ${conflict##*/} before installing Butterd." ;;
   esac
 done
+[ -f "$MODPATH/bin/butter-engine" ] || abort "The compiled Rust engine is missing."
 [ -f "$MODPATH/zygisk/arm64-v8a.so" ] || abort "The compiled compatibility library is missing."
 # Fetch metadata during installation; an offline install keeps bundled profiles.
 selected=bluejay
@@ -34,6 +35,7 @@ for directory in bin lib compatibility zygisk; do
 done
 set_perm "$MODPATH/bin/butterctl" 0 0 0755
 set_perm "$MODPATH/bin/butter" 0 0 0755
+set_perm "$MODPATH/bin/butter-engine" 0 0 0755
 set_perm "$MODPATH/service.sh" 0 0 0755
 set_perm "$MODPATH/action.sh" 0 0 0755
 ui_print "- No system overlay, thermal overrides or boot performance writes."

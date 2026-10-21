@@ -5,3 +5,5 @@
 
 module/bin/catalog.dex
 __pycache__/
+
+rust/butter/target/

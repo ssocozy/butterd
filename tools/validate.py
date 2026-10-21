@@ -19,3 +19,9 @@ for profile in profiles:
     assert all(values.get(key) == 'true' for key in ('spoofBuild', 'spoofVendingBuild', 'spoofProps'))
     assert set(values) <= {'FINGERPRINT', 'MANUFACTURER', 'MODEL', 'SECURITY_PATCH', 'spoofBuild', 'spoofVendingBuild', 'spoofProps'}
 print('Module structure and shell syntax validated; no device scripts executed.')
+
+assert (root / 'rust/butter/Cargo.toml').is_file()
+assert not (root / 'java/dev/butterd/butter/Engine.java').exists()
+assert not (root / 'module/lib/cpu.sh').exists()
+assert 'app_process' not in (root / 'module/bin/butter').read_text()
+assert 'butter-engine' in (root / 'module/bin/butter').read_text()
