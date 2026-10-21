@@ -17,6 +17,19 @@ import org.json.JSONObject;
 public final class PixelCatalog {
     private static final String[] DEVICES = {"bluejay","panther","cheetah","lynx","shiba","husky","akita","tokay","caiman","komodo","tegu"};
     private static final String[] MODELS = {"Pixel 6a","Pixel 7","Pixel 7 Pro","Pixel 7a","Pixel 8","Pixel 8 Pro","Pixel 8a","Pixel 9","Pixel 9 Pro","Pixel 9 Pro XL","Pixel 9a"};
+    private static final int[] INITIAL_API = {32,33,33,33,34,34,34,34,34,34,35};
+    private static String securityPatch(String bulletin, String month) {
+        Matcher rows = Pattern.compile("<tr\\b[^>]*>.*?</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE).matcher(bulletin);
+        while (rows.find()) {
+            String row = rows.group();
+            if (!row.contains("/pixel/"+month.substring(0,4)+"/"+month+"-")) continue;
+            Matcher cells = Pattern.compile("<td\\b[^>]*>(.*?)</td>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE).matcher(row);
+            String last = "";
+            while (cells.find()) last = cells.group(1).replaceAll("<[^>]*>", "").trim();
+            if (last.matches(Pattern.quote(month)+"-(?:0[1-9]|[12][0-9]|3[01])")) return last;
+        }
+        return null;
+    }
     private static long deadline;
     private static String get(String address) throws Exception {
         if (System.currentTimeMillis() >= deadline) throw new IllegalStateException("Fetch deadline reached");
@@ -65,11 +78,10 @@ public final class PixelCatalog {
                 if (!release.matches("[A-Za-z0-9._-]{1,64}")) continue;
                 String text = "FINGERPRINT=google/"+device+"_beta/"+device+":CANARY/"+release+"/"+latestId+":user/release-keys\nMANUFACTURER=Google\nMODEL="+MODELS[index]+"\n";
                 Matcher period = Pattern.compile("canary-([0-9]{4})([0-9]{2})").matcher(latest.getJSONObject("previewMetadata").optString("id"));
-                if (period.matches()) {
-                    String month = period.group(1)+"-"+period.group(2);
-                    Matcher patch = Pattern.compile("<td[^>]*>\\s*"+month+"\\s*</td>\\s*<td[^>]*>\\s*("+month+"-[0-9]{2})\\s*</td>").matcher(bulletin);
-                    if (patch.find()) text += "SECURITY_PATCH="+patch.group(1)+"\n";
-                }
+                if (!period.matches()) throw new IllegalStateException("Unknown Canary month");
+                String patch = securityPatch(bulletin, period.group(1)+"-"+period.group(2));
+                if (patch == null) throw new IllegalStateException("No verified patch for Canary month");
+                text += "SECURITY_PATCH="+patch+"\nDEVICE_INITIAL_SDK_INT="+INITIAL_API[index]+"\n";
                 text += "spoofBuild=true\nspoofVendingBuild=true\nspoofProps=true\n";
                 Path temporary = directory.resolve(device+".tmp");
                 Files.write(temporary, text.getBytes(StandardCharsets.UTF_8));

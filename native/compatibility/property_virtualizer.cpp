@@ -226,6 +226,9 @@ const char *overrideFor(const Config &config, std::string_view name) {
     if (name == "ro.build.version.security_patch") {
         return config.securityPatch.empty() ? nullptr : config.securityPatch.c_str();
     }
+    if (name == "ro.product.first_api_level") {
+        return config.deviceInitialSdkInt.empty() ? nullptr : config.deviceInitialSdkInt.c_str();
+    }
     return nullptr;
 }
 

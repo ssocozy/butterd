@@ -10,7 +10,7 @@ struct Config {
     bool spoofVendingBuild = true;
     bool spoofProps = true;
     static constexpr bool debug = false;
-    std::string buildId, securityPatch;
+    std::string buildId, securityPatch, deviceInitialSdkInt;
 };
 Config parseConfig(std::string_view content);
 }

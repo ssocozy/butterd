@@ -8,7 +8,8 @@ for path in (root / 'module').rglob('*'):
 props = dict(line.split('=', 1) for line in (root / 'module/compatibility/pif.prop').read_text().splitlines() if '=' in line and not line.startswith('#'))
 assert {key for key in props if key.startswith('spoof')} == {'spoofBuild', 'spoofVendingBuild', 'spoofProps'}
 assert all(props[key] == 'true' for key in props if key.startswith('spoof'))
-assert 'DEVICE_INITIAL_SDK_INT' not in props
+assert props.get('DEVICE_INITIAL_SDK_INT', '').isdigit()
+assert props.get('SECURITY_PATCH')
 assert not (root / 'module/system.prop').exists()
 assert (root / 'module/skip_mount').exists()
 assert not (root / 'module/post-fs-data.sh').exists()
@@ -17,7 +18,9 @@ assert len(profiles) == 11, 'Every selectable model needs an offline profile'
 for profile in profiles:
     values = dict(line.split('=', 1) for line in profile.read_text().splitlines() if '=' in line)
     assert all(values.get(key) == 'true' for key in ('spoofBuild', 'spoofVendingBuild', 'spoofProps'))
-    assert set(values) <= {'FINGERPRINT', 'MANUFACTURER', 'MODEL', 'SECURITY_PATCH', 'spoofBuild', 'spoofVendingBuild', 'spoofProps'}
+    assert values.get('SECURITY_PATCH')
+    assert values.get('DEVICE_INITIAL_SDK_INT', '').isdigit()
+    assert set(values) <= {'FINGERPRINT', 'MANUFACTURER', 'MODEL', 'SECURITY_PATCH', 'DEVICE_INITIAL_SDK_INT', 'spoofBuild', 'spoofVendingBuild', 'spoofProps'}
 print('Module structure and shell syntax validated; no device scripts executed.')
 
 assert (root / 'rust/butter/Cargo.toml').is_file()

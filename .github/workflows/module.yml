@@ -97,6 +97,7 @@ jobs:
       - name: Validate module and compatibility configuration
         run: |
           python3 tools/validate.py
+          python3 tests/catalog_test.py
           for script in module/webroot/js/*.js; do node --check "$script"; done
           mkdir -p build
           g++ -std=c++20 -Wall -Wextra -Werror -Inative/compatibility native/compatibility/pif_config.cpp tests/config_test.cpp -o build/config-test
@@ -138,8 +139,10 @@ jobs:
         run: |
           python3 tools/package.py
           unzip -t dist/butterd-module.zip
+          unzip -t dist/butterd-sources.zip
           if [ "$RELEASE_CHANNEL" = production ]; then
             mv dist/butterd-module.zip "dist/butterd-$MODULE_VERSION.zip"
+            mv dist/butterd-sources.zip "dist/butterd-$MODULE_VERSION-sources.zip"
           fi
           sha256sum dist/*.zip > dist/SHA256SUMS
       - name: Publish module ZIP

@@ -7,10 +7,11 @@ License: GPL-3.0 (full text in LICENSE)
 Retained/adapted: process-local property virtualizer, native build-field updates,
 fingerprint expansion and Magisk installer bootstrap.
 Changes: only spoofBuild, spoofVendingBuild and spoofProps remain configurable;
-removed dex/provider/signature paths, SDK overrides, USB/ADB masking, upstream automatic
+removed dex/provider/signature paths, current-SDK overrides, USB/ADB masking, upstream automatic
 fingerprint scripts and global property scripts. Butterd supplies its own bounded
 metadata-only fetcher for the Pixel 6a–9a catalog. Added bounded config transport,
-explicit target-process checks and Butterd paths. Original authors retain copyright.
+explicit target-process checks and Butterd paths. Initial-device API metadata is
+used only for scoped ro.product.first_api_level; Build.VERSION.SDK_INT is unchanged. Original authors retain copyright.
 
 Zygisk public API header
 Source: included in the PlayIntegrityFix revision above, originally the Magisk project.
@@ -30,7 +31,9 @@ itoa, proc-macro2, quote, syn: MIT OR Apache-2.0
 memchr: Unlicense OR MIT
 unicode-ident: (MIT OR Apache-2.0) AND Unicode-3.0
 ryu: Apache-2.0 OR BSL-1.0
-Dependency licenses and corresponding crate sources are included in release ZIPs.
+Dependency licenses are included in the installable module. Complete corresponding
+source and vendored dependencies are provided in the matching -sources.zip asset
+on the same GitHub release. The source archive is not an installable module.
 
 Phosphor Icons (selected regular SVG assets), MIT
 https://github.com/phosphor-icons/core

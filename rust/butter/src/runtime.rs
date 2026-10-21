@@ -479,5 +479,5 @@ pub fn compatibility_status() -> Value {
         Ok(text) => text, Err(error) => return json!({"error":error.to_string()}),
     };
     let fields: BTreeMap<_,_> = text.lines().filter_map(|line| line.split_once('=' )).collect();
-    json!({"selectedModel":fields.get("selectedModel"),"model":fields.get("MODEL"),"spoofBuild":fields.get("spoofBuild").map(|value| *value == "true" || *value == "1"),"spoofVendingBuild":fields.get("spoofVendingBuild").map(|value| *value == "true" || *value == "1"),"spoofProps":fields.get("spoofProps").map(|value| *value == "true" || *value == "1"),"scope":"GMS unstable and Play Store","injectionVerified":false})
+    json!({"selectedModel":fields.get("selectedModel"),"model":fields.get("MODEL"),"fingerprint":fields.get("FINGERPRINT"),"securityPatch":fields.get("SECURITY_PATCH"),"initialApi":fields.get("DEVICE_INITIAL_SDK_INT"),"spoofBuild":fields.get("spoofBuild").map(|value| *value == "true" || *value == "1"),"spoofVendingBuild":fields.get("spoofVendingBuild").map(|value| *value == "true" || *value == "1"),"spoofProps":fields.get("spoofProps").map(|value| *value == "true" || *value == "1"),"scope":"GMS unstable and Play Store","injectionVerified":false})
 }

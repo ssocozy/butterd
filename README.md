@@ -39,11 +39,11 @@ These are explicit policies, not machine learning. The frequency choices are con
 
 **Requirements:** Duchamp, Android 14+, arm64, and KernelSU or Magisk. Pixel compatibility requires Zygisk or a compatible KernelSU Zygisk provider.
 
-1. Download the module ZIP from [Releases](https://github.com/ssocozy/butterd/releases).
+1. Download `butterd-VERSION.zip` (the `-sources.zip` archive is for source code) from [Releases](https://github.com/ssocozy/butterd/releases).
 2. Install it through your root manager and reboot.
 3. Open the WebUI to configure Butterd. Magisk users need a compatible WebUI host.
 
-Fresh installs randomly select a Pixel profile from 6a through 9a, with build, Play Store build and scoped property spoofing enabled. Change the model in the WebUI; updates keep your selection. Offline profiles are included. A Play Integrity verdict is not guaranteed.
+Fresh installs randomly select a Pixel profile from 6a through 9a, with build, Play Store build and scoped property spoofing enabled. Change the model in the WebUI; updates keep your selection. Offline profiles include the model’s initial API and a matching published Pixel security patch. These identity properties are scoped to the target process; the Android SDK version is unchanged. A Play Integrity verdict is not guaranteed.
 
 ## Why Play Integrity Fix is included
 

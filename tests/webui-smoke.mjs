@@ -91,6 +91,8 @@ try {
   await evaluate(`document.querySelector('[data-select=theme]').click()`); await until(`document.getElementById('choice-dialog').open`);
   await evaluate(`[...document.querySelectorAll('#choice-list button')].find(node=>node.textContent.includes('Dark')).click()`);
   assert.equal(await evaluate(`document.documentElement.dataset.theme`),'dark');
+  assert.equal(await evaluate(`document.querySelectorAll('.bottom-nav .ph-icon').length`),3);
+  assert.equal(await evaluate(`[...document.querySelectorAll('.select-trigger')].every(node=>node.querySelector('svg.ph-icon') && !node.textContent.includes('⌄'))`),true);
   await screenshot('webui-settings-dark.png');
   assert.equal(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),true,'Mobile settings overflow horizontally');
   await evaluate(`document.querySelector('[data-page=apps]').click()`); await until(`!document.getElementById('page-apps').hidden`);

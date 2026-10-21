@@ -109,7 +109,7 @@ public:
         if (ok) { text.resize(size); ok = transfer(fd, text.data(), size, false); }
         close(fd);
         if (ok) config = pif::parseConfig(text);
-        loaded = ok && !config.propMap.empty();
+        loaded = ok && config.propMap.contains("FINGERPRINT");
         if (!loaded) { __android_log_print(ANDROID_LOG_ERROR, "butter", "PIF identity missing or invalid; no spoof applied"); api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); return; }
         if (gms && config.spoofProps) {
             propsApplied = pif::property_virtualizer::install(config);
@@ -120,7 +120,7 @@ public:
         if (!loaded) return;
         const bool buildRequested = (gms && config.spoofBuild) || (store && config.spoofVendingBuild);
         const size_t fields = buildRequested ? updateBuild(env, config) : 0;
-        __android_log_print(ANDROID_LOG_INFO, "butter", "PIF process=%s buildRequested=%d fieldsVerified=%zu propsApplied=%d", gms ? "gms.unstable" : "vending", buildRequested, fields, propsApplied);
+        __android_log_print(ANDROID_LOG_INFO, "butter", "PIF process=%s buildRequested=%d fieldsVerified=%zu propsApplied=%d fingerprint=%s patch=%s initialApi=%s", gms ? "gms.unstable" : "vending", buildRequested, fields, propsApplied, config.propMap.at("FINGERPRINT").c_str(), config.securityPatch.c_str(), config.deviceInitialSdkInt.c_str());
     }
     void preServerSpecialize(zygisk::ServerSpecializeArgs*) override { api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); }
 };

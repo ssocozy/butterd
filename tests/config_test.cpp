@@ -7,6 +7,13 @@ int main() {
     auto config = pif::parseConfig("spoofBuild=false\nspoofProps=0\nspoofVendingBuild=false\nspoofSignature=true\nSDK_INT=25\nDEVICE_INITIAL_SDK_INT=25\n");
     assert(!config.spoofBuild && !config.spoofProps && !config.spoofVendingBuild);
     assert(config.propMap.empty());
+    assert(config.deviceInitialSdkInt == "25");
+    assert(pif::parseConfig("DEVICE_INITIAL_SDK_INT=invalid\n").deviceInitialSdkInt.empty());
+    assert(pif::parseConfig("DEVICE_INITIAL_SDK_INT=999\n").deviceInitialSdkInt.empty());
+    assert(pif::parseConfig("SDK_INT=25\n").propMap.empty());
+    auto metadata = pif::parseConfig("SECURITY_PATCH=2026-10-05\nDEVICE_INITIAL_SDK_INT=35\n");
+    assert(metadata.securityPatch == "2026-10-05" && metadata.deviceInitialSdkInt == "35");
+    assert(metadata.propMap.count("DEVICE_INITIAL_SDK_INT") == 0);
     config = pif::parseConfig("FINGERPRINT=brand/product/device:14/BUILD/123:user/release-keys\nMODEL=Example\n");
     assert(config.propMap.at("DEVICE") == "device");
     assert(config.propMap.at("ID") == "BUILD");

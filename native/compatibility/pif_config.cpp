@@ -33,6 +33,12 @@ Config parseConfig(std::string_view text) {
                 bool* flag = key == "spoofBuild" ? &config.spoofBuild : key == "spoofProps" ? &config.spoofProps
                              : key == "spoofVendingBuild" ? &config.spoofVendingBuild : nullptr;
                 if (flag) *flag = value == "true" || value == "1";
+                else if (key == "DEVICE_INITIAL_SDK_INT") {
+                    // Metadata for ro.product.first_api_level, not Android's current SDK.
+                    if (value.size() == 2 && value >= "21" && value <= "36"
+                            && value[0] >= '0' && value[0] <= '9' && value[1] >= '0' && value[1] <= '9')
+                        config.deviceInitialSdkInt = value;
+                }
                 else if (allowed(key) && !value.empty()) config.propMap[key] = value;
             }
         }
