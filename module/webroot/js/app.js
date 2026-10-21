@@ -51,11 +51,11 @@ async function refresh() {
   catch (error) { $('engine-state').textContent = 'Connection failed'; $('engine-reason').textContent = error.message; notify(error.message,true); }
   finally { polling = false; }
 }
-async function run(command,message) {
+async function run(command,message,quiet=false) {
   if (!command) { notify(message || 'Invalid request.',true); return; }
   if (busy) return;
-  busy = true; setBusy(true); notify('Applying your request…');
-  try { const result = await exec(binary+' '+command); notify(result || 'Request completed.'); }
+  busy = true; setBusy(true); if (!quiet) notify('Applying your request…');
+  try { const result = await exec(binary+' '+command); if (!quiet) notify(result || 'Request completed.'); }
   catch (error) { notify(error.message,true); }
   finally { busy = false; await refresh(); setBusy(false); updateSelectors(); }
 }
@@ -123,7 +123,7 @@ setPage(); updateSelectors();
   try {
     const uid=await exec('/system/bin/id -u'); if (uid!=='0') throw new Error('The WebUI host has no root access. Grant its app root permission in KernelSU.');
     await refresh();
-    if (snapshot && snapshot.supervisor?.health?.running!==true) { await run('monitor'); }
+    if (snapshot && snapshot.supervisor?.health?.running!==true) { await run('monitor',null,true); }
   } catch (error) { $('engine-state').textContent='Root connection needed'; $('engine-reason').textContent=error.message; notify(error.message,true); }
 })();
 setInterval(()=>{ if (!document.hidden && !busy) refresh(); },5000);

@@ -69,7 +69,7 @@ try {
   assert.equal(await evaluate(`document.getElementById('watts').textContent`),'-2.4');
   assert.equal(await evaluate(`document.querySelectorAll('#spoof-options dd').length`),3);
   assert.equal(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),true,'Mobile overview overflows horizontally');
-  const screenshot=async name=>{const image=await send('Page.captureScreenshot',{format:'png'});await fs.writeFile(path.join(output,name),Buffer.from(image.data,'base64'));};
+  const screenshot=async name=>{await evaluate(`window.scrollTo(0,0)`);await delay(300);const image=await send('Page.captureScreenshot',{format:'png'});await fs.writeFile(path.join(output,name),Buffer.from(image.data,'base64'));};
   await screenshot('webui-overview.png');
   await evaluate(`document.getElementById('open-presets').click()`); await until(`document.getElementById('preset-dialog').open`);
   await evaluate(`document.querySelector('[data-preset=performance]').click()`); await until(`document.getElementById('preset-label').textContent==='Performance'`);

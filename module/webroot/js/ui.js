@@ -1,5 +1,9 @@
 export const $ = id => document.getElementById(id);
-export function notify(message, error = false) { const host = $('feedback'); host.textContent = message; host.dataset.error = String(error); host.hidden = !message; }
+let noticeTimer;
+export function notify(message, error = false) {
+  clearTimeout(noticeTimer); const host = $('feedback'); host.textContent = message; host.dataset.error = String(error); host.hidden = !message;
+  if (message && !error) noticeTimer = setTimeout(() => { host.hidden = true; }, 5000);
+}
 export function button(text, action, enabled = true, style = 'secondary') {
   const node = document.createElement('button'); node.type = 'button'; node.className = style; node.textContent = text; node.dataset.capable = String(enabled); node.disabled = !enabled; node.addEventListener('click', action); return node;
 }
