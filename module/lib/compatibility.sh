@@ -59,7 +59,11 @@ preserve_identity() {
   [ "$(printf '%s\n' "$existing_values" | grep -c '^FINGERPRINT=')" -eq 1 ] || return 1
   printf '%s\n' "$existing_values" | grep -Eq '^FINGERPRINT=[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' || return 1
   [ "$(printf '%s\n' "$existing_values" | grep -c '^MODEL=')" -eq 1 ] || return 1
-  printf '%s\n' "$existing_values" | LC_ALL=C grep -Eq '^MODEL=[ -~]{1,256}$' || return 1
+  # Android's regex engine rejects repetition bounds above 255, even for short models.
+  # Check length separately so valid identities behave identically on Android and CI.
+  existing_model=$(printf '%s\n' "$existing_values" | sed -n 's/^MODEL=//p')
+  [ "${#existing_model}" -ge 1 ] && [ "${#existing_model}" -le 256 ] || return 1
+  printf '%s\n' "$existing_model" | LC_ALL=C grep -Eq '^[ -~]+$' || return 1
   for existing_flag in spoofBuild spoofVendingBuild spoofProps; do
     existing_count=$(printf '%s\n' "$existing_values" | grep -c "^$existing_flag=" || true)
     [ "$existing_count" -le 1 ] || return 1

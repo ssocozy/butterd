@@ -42,3 +42,39 @@ if preserve_identity "$scratch/missing.prop"; then echo 'Missing profile accepte
 printf 'spoofProps=true\n' >> "$scratch/changed.prop"
 if preserve_identity "$scratch/changed.prop"; then echo 'Duplicate flag accepted'; exit 1; fi
 echo 'Upgrade profile preservation fixtures passed'
+
+# Reproduce Android's regex repetition limit rather than relying on GNU grep alone.
+grep() {
+  for argument do
+    case "$argument" in *'{1,256}'*) echo 'Android regex: repetition bound exceeds 255' >&2; return 2 ;; esac
+  done
+  command grep "$@"
+}
+cat > "$scratch/pixel8a.prop" <<'PROFILE'
+FINGERPRINT=google/akita_beta/akita:CANARY/ZP11.260918.007/16484274:user/release-keys
+MANUFACTURER=Google
+MODEL=Pixel 8a
+SECURITY_PATCH=2026-10-05
+DEVICE_INITIAL_SDK_INT=34
+spoofBuild=true
+spoofVendingBuild=true
+spoofProps=true
+selectedModel=akita
+PROFILE
+preserve_identity "$scratch/pixel8a.prop"
+cmp "$scratch/pixel8a.prop" "$MODDIR/compatibility/pif.prop"
+for model_length in 0 256 257; do
+  model=$(awk -v count="$model_length" 'BEGIN {for (i=0;i<count;i++) printf "A"}')
+  sed "s/^MODEL=.*/MODEL=$model/" "$scratch/pixel8a.prop" > "$scratch/length.prop"
+  if [ "$model_length" -eq 256 ]; then
+    preserve_identity "$scratch/length.prop"
+    cmp "$scratch/length.prop" "$MODDIR/compatibility/pif.prop"
+  elif preserve_identity "$scratch/length.prop"; then
+    echo 'Invalid model length accepted'; exit 1
+  fi
+done
+sed 's/^MODEL=.*/MODEL=Pixel\t8a/' "$scratch/pixel8a.prop" > "$scratch/control.prop"
+if preserve_identity "$scratch/control.prop"; then echo 'Control character accepted'; exit 1; fi
+printf 'MODEL=Pixel 8a\n' >> "$scratch/pixel8a.prop"
+if preserve_identity "$scratch/pixel8a.prop"; then echo 'Duplicate model accepted'; exit 1; fi
+echo 'Android-compatible model validation fixtures passed'

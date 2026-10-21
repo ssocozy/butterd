@@ -34,7 +34,7 @@ else
     existing_size=$(wc -c < "$existing")
     if [ "$existing_size" -le 16384 ]; then
       cp "$existing" "$MODPATH/compatibility/pif.previous.prop" || abort "Unable to back up the previous Pixel profile."
-      ui_print "- Previous profile was invalid; backed up as compatibility/pif.previous.prop."
+      ui_print "- Previous profile did not pass format checks; saved as compatibility/pif.previous.prop."
     fi
   fi
   selected=$(random_identity) || abort "Unable to select a random Pixel profile."
