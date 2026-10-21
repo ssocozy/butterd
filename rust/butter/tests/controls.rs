@@ -172,11 +172,13 @@ fn disk_failure_prevents_any_kernel_write() {
 #[test]
 fn external_changes_are_not_overwritten_during_restore() {
     let engine = fixture();
-    engine.apply(Feature::Touch, "480", false, false).unwrap();
-    engine.hardware.put(GOODIX, "0");
+    engine.apply(Feature::Tcp, "bbr", false, false).unwrap();
+    // Neither the saved original (cubic) nor butter's requested value (bbr).
+    engine.hardware.put(TCP, "westwood");
     let writes = engine.hardware.writes.get();
-    assert!(engine.apply(Feature::Touch, "", true, false).is_err());
+    assert!(engine.apply(Feature::Tcp, "", true, false).is_err());
     assert_eq!(engine.hardware.writes.get(), writes);
+    assert_eq!(engine.hardware.read(TCP).unwrap(), "westwood");
 }
 #[test]
 fn stale_boot_does_not_restore_older_values() {
