@@ -36,6 +36,7 @@ pub fn plan(hardware: &impl Hardware, mode: Mode, baseline: Option<&Journal>) ->
     if hardware.read(GPU).is_ok() { bases.push((GPU.trim_end_matches("/min_freq").into(), false)); }
     else if hardware.read(GPU_ALT).is_ok() { bases.push((GPU_ALT.trim_end_matches("/min_freq").into(), false)); }
     let original = |path: &str| -> Result<String> {
+        if let Some(value) = baseline.and_then(|j| j.cpu_limits.get(path)) { return Ok(value.clone()); }
         if let Some(entry) = baseline.and_then(|j| j.entries.iter().find(|entry| entry.path == path)) { Ok(entry.original.clone()) } else { hardware.read(path) }
     };
     for (base, cpu) in bases {
@@ -56,5 +57,5 @@ pub fn plan(hardware: &impl Hardware, mode: Mode, baseline: Option<&Journal>) ->
         targets.push((min_path, low.to_string())); targets.push((max_path, high.to_string()));
     }
     if targets.is_empty() { return Err("No profile controls exposed".into()); }
-    Ok(targets)
+    Ok(crate::vendor::profile_targets(hardware, targets))
 }

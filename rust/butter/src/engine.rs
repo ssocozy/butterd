@@ -21,16 +21,23 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         {
             return Err("Invalid session journal".into());
         }
+        if !journal.cpu_limits.is_empty() {
+            if *feature != Feature::Profile || journal.cpu_limits.len() != 6 || !journal.entries.iter().any(|entry| entry.path == crate::vendor::POWERHAL) { return Err("Invalid CPU baseline metadata".into()); }
+            for (path,value) in &journal.cpu_limits {
+                if !path.starts_with(&format!("{CPU}/")) || !hardware::allowed(&self.hardware, feature, path) { return Err("Invalid CPU baseline path".into()); }
+                crate::model::number(value)?;
+            }
+        }
         let mut seen = std::collections::HashSet::new();
         for entry in &journal.entries {
             if !hardware::allowed(&self.hardware, feature, &entry.path) || !seen.insert(&entry.path)
             {
                 return Err("Invalid or duplicated session path".into());
             }
-            hardware::validate_value(feature, &entry.original)?;
-            hardware::validate_value(feature, &entry.expected)?;
+            hardware::validate_path_value(feature, &entry.path, &entry.original)?;
+            hardware::validate_path_value(feature, &entry.path, &entry.expected)?;
             if let Some(before) = &entry.before {
-                hardware::validate_value(feature, before)?;
+                hardware::validate_path_value(feature, &entry.path, before)?;
             }
         }
         Ok(())
@@ -72,14 +79,16 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             let mut paths = std::collections::HashSet::new();
             for (path, value) in &targets {
                 if !hardware::allowed(&self.hardware, &feature, path) || !paths.insert(path) { return Err("Invalid target path".into()); }
-                hardware::validate_value(&feature, value)?;
-                hardware::validate_value(&feature, &hardware::value(&self.hardware, path)?)?;
+                hardware::validate_path_value(&feature, path, value)?;
+                hardware::validate_path_value(&feature, path, &hardware::value(&self.hardware, path)?)?;
                 self.hardware.check_write(path)?;
             }
             for other in self.controls() {
                 if other == feature { continue; }
                 if let Some(journal) = self.session(&other)? {
-                    if journal.entries.iter().any(|entry| targets.iter().any(|(path, _)| path == &entry.path)) {
+                    let vendor_overlap = (targets.iter().any(|(path,_)| path == crate::vendor::POWERHAL) && matches!(other, Feature::CpuLock | Feature::CpuRange(_)))
+                        || (matches!(feature, Feature::CpuLock | Feature::CpuRange(_)) && journal.entries.iter().any(|entry| entry.path == crate::vendor::POWERHAL));
+                    if vendor_overlap || journal.entries.iter().any(|entry| targets.iter().any(|(path, _)| path == &entry.path)) {
                         return Err(format!("Restore {} before changing overlapping controls", other.key()).into());
                     }
                 }
@@ -98,7 +107,17 @@ impl<H: Hardware, S: Store> Engine<H, S> {
                         before: None,
                     });
                 }
+                let mut cpu_limits = std::collections::BTreeMap::new();
+                if feature == Feature::Profile && targets.iter().any(|(path,_)| path == crate::vendor::POWERHAL) {
+                    for policy in self.hardware.list(CPU)?.into_iter().filter(|policy| valid_policy(policy)) {
+                        for field in ["scaling_min_freq", "scaling_max_freq"] {
+                            let path = format!("{CPU}/{policy}/{field}");
+                            cpu_limits.insert(path.clone(), self.hardware.read(&path)?);
+                        }
+                    }
+                }
                 Journal {
+                    cpu_limits,
                     schema: 1,
                     boot: self.boot.clone(),
                     feature: feature.clone(),
@@ -110,6 +129,15 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         if restoring && journal.entries.iter().all(|entry| hardware::value(&self.hardware, &entry.path).is_ok_and(|current| current == entry.original)) {
             self.store.remove(&feature)?;
             return Ok("Original values are already active; session released.".into());
+        }
+        if restoring && feature == Feature::Profile {
+            // The shared vendor request may already belong to the ROM again. Preserve it.
+            let mut adopted = false;
+            for entry in journal.entries.iter_mut().filter(|entry| entry.path == crate::vendor::POWERHAL) {
+                let current = hardware::value(&self.hardware, &entry.path)?;
+                if !entry.owned(&current) { entry.original = current.clone(); entry.expected = current; entry.before = None; adopted = true; }
+            }
+            if adopted { self.store.save(&journal)?; }
         }
         // Preflight every node, including originals loaded from older versions, before any write.
         for entry in &journal.entries {
@@ -226,6 +254,19 @@ impl<H: Hardware, S: Store> Engine<H, S> {
                 Err(format!("Profile failed: {error}; cleanup: {}", cleanup.unwrap_or_else(|error| error.to_string())).into())
             }
         }
+    }
+    pub fn reconcile_vendor_profile(&self, mode: crate::presets::Mode) -> Result<String> {
+        let mut journal = self.session(&Feature::Profile)?.ok_or("No vendor CPU profile to reconcile")?;
+        if !journal.entries.iter().any(|entry| entry.path == crate::vendor::POWERHAL) { return Err("Profile uses the cpufreq fallback; no vendor request can be reconciled".into()); }
+        for entry in &mut journal.entries {
+            let current = hardware::value(&self.hardware, &entry.path)?;
+            if !entry.owned(&current) {
+                if entry.path != crate::vendor::POWERHAL { return Err("Non-vendor profile setting changed; no override made".into()); }
+                entry.original = current.clone(); entry.expected = current; entry.before = None;
+            }
+        }
+        self.store.save(&journal)?;
+        self.preset(mode)
     }
     pub fn state(&self, feature: &Feature) -> Result<&'static str> {
         let Some(journal) = self.session(feature)? else {

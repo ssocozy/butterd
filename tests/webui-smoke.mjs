@@ -67,6 +67,11 @@ try {
   await send('Page.navigate',{url:'http://127.0.0.1:'+server.address().port+'/index.html'});
   await until(`document.getElementById('engine-state')?.textContent==='Monitoring active'`);
   assert.equal(await evaluate(`document.getElementById('watts').textContent`),'-2.4');
+  await evaluate(`document.getElementById('refresh').click()`);
+  assert.equal(await evaluate(`document.getElementById('refresh').getAttribute('aria-busy')`),'true');
+  await until(`document.getElementById('feedback').textContent==='Readings updated.'`);
+  await until(`!document.getElementById('refresh').disabled`);
+
   assert.equal(await evaluate(`document.getElementById('boost')`),null,'Manual launch boost should not be in the interface');
   assert.equal(await evaluate(`document.querySelectorAll('#spoof-options dd').length`),3);
   assert.equal(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),true,'Mobile overview overflows horizontally');

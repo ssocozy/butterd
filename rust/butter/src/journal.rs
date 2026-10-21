@@ -32,6 +32,8 @@ pub struct Journal {
     pub boot: String,
     pub feature: Feature,
     pub entries: Vec<Entry>,
+    #[serde(default)]
+    pub cpu_limits: std::collections::BTreeMap<String,String>,
 }
 pub trait Store {
     fn load(&self, feature: &Feature) -> Result<Option<Journal>>;
@@ -101,6 +103,7 @@ pub fn decode_legacy(feature: &Feature, text: &str) -> Result<Journal> {
             return Err("Invalid legacy governor journal".into());
         }
         return Ok(Journal {
+            cpu_limits: Default::default(),
             schema: 1,
             boot: fields[0].into(),
             feature: feature.clone(),
@@ -147,6 +150,7 @@ pub fn decode_legacy(feature: &Feature, text: &str) -> Result<Journal> {
         });
     }
     Ok(Journal {
+        cpu_limits: Default::default(),
         schema: 1,
         boot: get("boot")?.into(),
         feature: feature.clone(),

@@ -93,6 +93,7 @@ impl Hardware for SystemHardware {
 }
 pub fn value(hardware: &impl Hardware, path: &str) -> Result<String> {
     let raw = hardware.read(path)?;
+    if path == crate::vendor::POWERHAL { return crate::vendor::canonical(&raw); }
     if path == GOODIX {
         touch_value(&raw)
     } else {
@@ -132,12 +133,19 @@ pub fn allowed(hardware: &impl Hardware, feature: &Feature, path: &str) -> bool 
         Feature::GpuRange => [GPU, GPU_ALT].iter().any(|node| path == *node || path == node.replace("min_freq", "max_freq")),
         Feature::Profile => {
             let cpu = path.strip_prefix(&format!("{CPU}/")).and_then(|tail| tail.split_once('/')).is_some_and(|(policy, field)| valid_policy(policy) && matches!(field, "scaling_min_freq" | "scaling_max_freq"));
-            cpu || allowed(hardware, &Feature::GpuRange, path)
+            cpu || path == crate::vendor::POWERHAL || allowed(hardware, &Feature::GpuRange, path)
         }
         Feature::Refresh(user) => crate::android::parse_setting(path).is_some_and(|(id, _)| id == *user),
         Feature::ChargingPause => path == PAUSE,
         Feature::Bypass => bypass_node(hardware).is_ok_and(|node| node == path),
     }
+}
+pub fn validate_path_value(feature: &Feature, path: &str, value: &str) -> Result<()> {
+    if path == crate::vendor::POWERHAL {
+        if *feature != Feature::Profile { return Err("Vendor CPU requests belong to the overall profile".into()); }
+        crate::vendor::parse(value)?; return Ok(());
+    }
+    validate_value(feature, value)
 }
 pub fn validate_value(feature: &Feature, value: &str) -> Result<()> {
     if matches!(feature, Feature::Refresh(_)) {

@@ -47,11 +47,24 @@ function render(state) {
   if (appsLoaded && rulesSignature !== appRulesSignature) { appRulesSignature = rulesSignature; renderApps(); }
   updateSelectors();
 }
-async function refresh() {
-  if (polling) return; polling = true;
-  try { render(JSON.parse(await exec(binary+' status'))); }
-  catch (error) { $('engine-state').textContent = 'Connection failed'; $('engine-reason').textContent = error.message; notify(error.message,true); }
-  finally { polling = false; }
+async function refresh(manual = false) {
+  const trigger = $('refresh');
+  if ((manual && trigger.dataset.refreshing === 'true') || (!manual && polling)) return;
+  const started = performance.now();
+  if (manual) { trigger.dataset.refreshing='true'; trigger.disabled=true; trigger.setAttribute('aria-busy','true'); trigger.setAttribute('aria-label','Updating device readings'); notify('Updating readings…'); }
+  try {
+    while (polling) await new Promise(resolve=>setTimeout(resolve,40));
+    polling = true;
+    render(JSON.parse(await exec(binary+' status')));
+    if (manual) notify('Readings updated.');
+  } catch (error) { $('engine-state').textContent = 'Connection failed'; $('engine-reason').textContent = error.message; notify(error.message,true); }
+  finally {
+    polling = false;
+    if (manual) {
+      await new Promise(resolve=>setTimeout(resolve,Math.max(0,350-(performance.now()-started))));
+      trigger.dataset.refreshing='false'; trigger.disabled=false; trigger.setAttribute('aria-busy','false'); trigger.setAttribute('aria-label','Refresh device readings');
+    }
+  }
 }
 async function run(command,message,quiet=false) {
   if (!command) { notify(message || 'Invalid request.',true); return; }
@@ -61,7 +74,7 @@ async function run(command,message,quiet=false) {
   catch (error) { notify(error.message,true); }
   finally { busy = false; await refresh(); setBusy(false); updateSelectors(); }
 }
-$('refresh').addEventListener('click',refresh);
+$('refresh').addEventListener('click',()=>refresh(true));
 $('open-presets').addEventListener('click',()=>$('preset-dialog').showModal());
 document.querySelectorAll('[data-preset]').forEach(node=>node.addEventListener('click',()=>{ $('preset-dialog').close(); run('preset '+node.dataset.preset); }));
 $('release').addEventListener('click',()=>run('reset'));

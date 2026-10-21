@@ -360,3 +360,46 @@ fn touch_returning_to_original_releases_session_without_a_write() {
     assert_eq!(engine.hardware.writes.get(), writes);
     assert!(engine.session(&Feature::Touch).unwrap().is_none());
 }
+
+fn vendor_fixture() -> Engine<FakeHardware,MemoryStore> {
+    let engine = fixture();
+    for (field,value) in [("scaling_min_freq","480000"),("scaling_max_freq","1600000"),("scaling_available_frequencies","480000 800000 1200000 1600000") ] {
+        engine.hardware.put(&format!("{CPU}/policy7/{field}"),value);
+    }
+    engine.hardware.put(butter::vendor::POWERHAL,"-1 -1 -1 -1 -1 -1");
+    engine
+}
+#[test]
+fn vendor_qos_uses_all_clusters_and_preserves_cpu_baseline() {
+    use butter::presets::Mode;
+    let engine = vendor_fixture();
+    engine.preset(Mode::Performance).unwrap();
+    let journal = engine.session(&Feature::Profile).unwrap().unwrap();
+    assert_eq!(journal.cpu_limits.len(),6);
+    assert_eq!(journal.entries.len(),1);
+    assert_eq!(journal.entries[0].path,butter::vendor::POWERHAL);
+    assert_eq!(butter::vendor::parse(&journal.entries[0].expected).unwrap().len(),6);
+    let first = engine.hardware.read(butter::vendor::POWERHAL).unwrap();
+    engine.hardware.put(&format!("{CPU}/policy0/scaling_min_freq"),"1200000");
+    engine.preset(Mode::Performance).unwrap();
+    assert_eq!(engine.hardware.read(butter::vendor::POWERHAL).unwrap(),first);
+    assert!(engine.apply(Feature::CpuRange("policy0".into()),"1200000:1200000",false,false).is_err());
+    engine.preset(Mode::Balanced).unwrap();
+    assert_eq!(engine.hardware.read(butter::vendor::POWERHAL).unwrap(),"-1 -1 -1 -1 -1 -1");
+}
+#[test]
+fn vendor_reconcile_preserves_latest_rom_request_on_release() {
+    use butter::presets::Mode;
+    let engine = vendor_fixture();
+    engine.preset(Mode::Performance).unwrap();
+    let rom = "480000 1200000 -1 -1 -1 -1";
+    engine.hardware.put(butter::vendor::POWERHAL,rom);
+    engine.reconcile_vendor_profile(Mode::Performance).unwrap();
+    assert_ne!(engine.hardware.read(butter::vendor::POWERHAL).unwrap(),rom);
+    engine.preset(Mode::Balanced).unwrap();
+    assert_eq!(engine.hardware.read(butter::vendor::POWERHAL).unwrap(),rom);
+    assert!(butter::vendor::parse("0 1000000 2000000").is_err());
+    assert!(butter::vendor::parse("0 0 0 0 0 0").is_err());
+    assert!(butter::vendor::parse("-2 -1 -1 -1 -1 -1").is_err());
+    assert!(butter::hardware::validate_path_value(&Feature::Profile,GOODIX,"-1 -1 -1 -1 -1 -1").is_err());
+}

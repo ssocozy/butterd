@@ -30,7 +30,7 @@ pub struct RuntimeState {
     pub boot: String, pub active: Mode, pub reason: String, pub foreground: Option<String>,
     pub tuning_requested: bool, pub selected: Mode, pub advanced_deadlines: BTreeMap<String, u64>, pub leases: Vec<Lease>, pub blocked: bool, pub refresh_user: Option<u32>, pub refresh_hz: Option<u32>, pub idle_samples: u8, pub sampled_at: u64,
     pub telemetry: Value, pub error: Option<String>, pub pending_preset: Option<Mode>,
-    pub refresh_error: Option<String>, pub refresh_blocked: bool,
+    pub refresh_error: Option<String>, pub refresh_blocked: bool, pub profile_retries: u8,
 }
 pub fn uptime() -> Result<u64> {
     let text = read_bounded(Path::new("/proc/uptime"), 128)?;
@@ -118,7 +118,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
             [command] if command == "monitor" => {},
             [command, choice] if command == "auto" && matches!(choice.as_str(), "on" | "off") => { state.refresh_blocked = false; state.refresh_error = None; cfg.automatic = choice == "on"; state.tuning_requested = cfg.automatic; state.blocked = false; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = None; }
             [command, choice] if command == "logging" && matches!(choice.as_str(), "on" | "off") => cfg.logcat = choice == "on",
-            [command, mode] if command == "preset" => { let mode = Mode::parse(mode)?; if mode == Mode::Boost { return Err("Use boost SECONDS".into()); } state.tuning_requested = true; cfg.preset = mode; state.selected = mode; state.pending_preset = Some(mode); state.blocked = false; state.leases.clear(); }
+            [command, mode] if command == "preset" => { let mode = Mode::parse(mode)?; if mode == Mode::Boost { return Err("Use boost SECONDS".into()); } state.tuning_requested = true; cfg.preset = mode; state.selected = mode; state.pending_preset = Some(mode); state.blocked = false; state.profile_retries = 0; state.leases.clear(); }
             [command, seconds] if command == "boost" => {
                 let seconds = number(seconds)?;
                 if !(1..=30).contains(&seconds) { return Err("Boost duration must be 1–30 seconds".into()); }
@@ -134,7 +134,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
                     cfg.rules.push(AppRule { package: package.clone(), preset, hz });
                     cfg.automatic = true; state.tuning_requested = true;
                 }
-                state.blocked = false; state.refresh_blocked = false; state.refresh_error = None;
+                state.profile_retries = 0; state.blocked = false; state.refresh_blocked = false; state.refresh_error = None;
             }
             [command] if command == "reset" => {
                 cfg.automatic = false; state.refresh_blocked = false; state.refresh_error = None; state.tuning_requested = false; cfg.preset = Mode::Balanced; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = Some(Mode::Balanced); state.blocked = false;
@@ -332,6 +332,7 @@ pub fn daemon(boot: &str) -> Result<()> {
             return Ok(());
         }
         let cfg = cfg?;
+        if state.foreground != ctx.app { state.profile_retries = 0; }
         // A ROM/driver can return touch to its original state; no write is needed to release that session.
         if matches!(e.state(&Feature::Touch), Ok("Original values active; release session")) && e.apply_targets(Feature::Touch, Vec::new(), true).is_ok() {
             event(&cfg, "touch", "Touch returned to its original value; session released without a write");
@@ -339,7 +340,14 @@ pub fn daemon(boot: &str) -> Result<()> {
         let (desired, reason) = decide(&cfg, &mut state, &ctx, now);
         let result = (|| -> Result<()> {
             thermal_cleanup(&e, &mut state, &ctx, now)?;
-            if e.session(&Feature::Profile)?.is_some() && !matches!(e.state(&Feature::Profile)?, "Request active" | "Off") { return Err("Profile changed externally or interrupted; automatic tuning paused".into()); }
+            if e.session(&Feature::Profile)?.is_some() && !matches!(e.state(&Feature::Profile)?, "Request active" | "Off") {
+                if desired == Mode::Balanced { e.preset(Mode::Balanced)?; }
+                else if state.profile_retries < 3 {
+                    state.profile_retries += 1;
+                    e.reconcile_vendor_profile(desired)?;
+                    event(&cfg, "vendor-request", "Reapplied the selected CPU QoS request; thermal policy remains unchanged");
+                } else { return Err("Vendor CPU request changed repeatedly; profile paused after three retries".into()); }
+            }
             if desired != state.active || (desired == Mode::Balanced && e.session(&Feature::Profile)?.is_some()) { e.preset(desired)?; }
             Ok(())
         })();
@@ -373,6 +381,7 @@ pub fn daemon(boot: &str) -> Result<()> {
         state.telemetry["wakeSource"] = json!(wake_events.last_wake);
         state.telemetry["eventStreamRunning"] = json!(wake_events.available());
         state.telemetry["displayRequestHz"] = json!(state.refresh_hz);
+        state.telemetry["cpuBackend"] = json!(if e.session(&Feature::Profile).ok().flatten().is_some_and(|journal| journal.entries.iter().any(|entry| entry.path == crate::vendor::POWERHAL)) { "powerhal-qos" } else { "cpufreq" });
         state.foreground = ctx.app; state.sampled_at = now;
         if now.saturating_sub(last_sample_event) >= if cfg.logcat { 10 } else { 30 } {
             event(&cfg, "sample", &state.telemetry.to_string()); last_sample_event = now;
