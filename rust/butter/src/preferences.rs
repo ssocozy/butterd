@@ -32,6 +32,9 @@ fn ready(feature: &Feature, ctx: &Context) -> bool {
     else { ctx.awake==Some(true) && ctx.soc_millic.is_some_and(|value| value<75000) }
 }
 pub fn resume<H:Hardware,S:Store>(engine: &Engine<H,S>, controls: &BTreeMap<String,SavedControl>, state: &mut RuntimeState, ctx: &Context, epoch: u64, now: u64) {
+    if !controls.contains_key("phone-mic") && engine.session(&Feature::PhoneMic).ok().flatten().is_some() {
+        if let Err(error) = engine.apply(Feature::PhoneMic,"",true,false) { state.preference_errors.insert("phone-mic".into(),error.to_string()); }
+    }
     for (key,saved) in controls {
         let result = (|| -> Result<()> {
             let feature = feature(key)?;
@@ -65,6 +68,9 @@ pub fn resume<H:Hardware,S:Store>(engine: &Engine<H,S>, controls: &BTreeMap<Stri
                 Err(error) => { let _ = engine.apply(feature,"",true,false); Err(error) }
             }
         })();
-        if let Err(error) = result { state.preference_errors.insert(key.clone(),error.to_string()); }
+        if let Err(error) = result {
+            let cleanup = if key == "phone-mic" { engine.apply(Feature::PhoneMic,"",true,false).err().map(|error| error.to_string()) } else { None };
+            state.preference_errors.insert(key.clone(),format!("{error}{}",cleanup.map(|error| format!("; cleanup: {error}")).unwrap_or_default()));
+        }
     }
 }

@@ -89,7 +89,12 @@ fn run() -> Result<()> {
         boot,
     };
     let result = engine.apply(feature.clone(), setting, restoring, accepted);
-    if restoring || result.is_ok() { butter::runtime::remember_applied(&engine.boot,&feature,setting,restoring,None)?; }
+    if restoring || result.is_ok() {
+        if let Err(error) = butter::runtime::remember_applied(&engine.boot,&feature,setting,restoring,None) {
+            let cleanup=engine.apply_targets(feature.clone(),Vec::new(),true);
+            return Err(format!("Could not save the control preference: {error}; cleanup: {}",cleanup.unwrap_or_else(|error| error.to_string())).into());
+        }
+    }
     butter::runtime::log_control(&args, result.as_ref().err().map(|error| error.to_string()).as_deref());
     println!("{}", result?);
     drop(engine); butter::runtime::ensure_daemon()?;

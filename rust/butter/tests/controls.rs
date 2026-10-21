@@ -618,3 +618,19 @@ fn saved_override_expiry_is_not_renewed_by_reboot_and_safety_still_applies() {
     resume(&engine,&controls,&mut state,&ctx,1_800_000_040,24);
     assert!(engine.session(&Feature::CpuLock).unwrap().is_none());
 }
+
+#[test]
+fn audio_status_failure_or_removed_intent_releases_the_owned_override() {
+    use butter::{preferences::{SavedControl,resume},runtime::{RuntimeState,Context}};
+    let engine=audio_fixture(); let mut state=RuntimeState::default();
+    let controls=BTreeMap::from([("phone-mic".into(),SavedControl{setting:String::new(),expires_utc:None})]);
+    resume(&engine,&controls,&mut state,&Context::default(),1_800_000_000,10);
+    engine.hardware.put(butter::audio::STATUS,"bad status");
+    resume(&engine,&controls,&mut state,&Context::default(),1_800_000_006,16);
+    assert!(engine.session(&Feature::PhoneMic).unwrap().is_none());
+    assert!(state.preference_errors.contains_key("phone-mic"));
+    engine.hardware.put(butter::audio::STATUS,r#"{"available":true,"bluetoothConnected":true,"phoneMic":{"type":15,"address":"bottom"}}"#);
+    engine.apply(Feature::PhoneMic,"",false,false).unwrap();
+    resume(&engine,&BTreeMap::new(),&mut state,&Context::default(),1_800_000_012,22);
+    assert!(engine.session(&Feature::PhoneMic).unwrap().is_none());
+}

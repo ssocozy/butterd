@@ -492,7 +492,12 @@ pub fn guarded_apply(boot: &str, feature: Feature) -> Result<String> {
         Ok(message)
     });
     match result {
-        Ok(message) => { remember_applied(boot,&feature,"",false,Some(epoch()+seconds))?; event(&config()?, "control", &format!("{} enabled for at most {seconds}s", feature.key())); Ok(message) }
+        Ok(message) => {
+            if let Err(error)=remember_applied(boot,&feature,"",false,Some(epoch()+seconds)) {
+                let cleanup=e.apply_targets(feature.clone(),Vec::new(),true);
+                return Err(format!("Could not save the override: {error}; cleanup: {}",cleanup.unwrap_or_else(|error| error.to_string())).into());
+            }
+            event(&config()?, "control", &format!("{} enabled for at most {seconds}s", feature.key())); Ok(message) }
         Err(error) => {
             let cleanup = e.apply_targets(feature.clone(), Vec::new(), true);
             let message = format!("{error}; cleanup: {}", cleanup.unwrap_or_else(|error| error.to_string()));
@@ -551,7 +556,7 @@ fn epoch() -> u64 { std::time::SystemTime::now().duration_since(std::time::UNIX_
 pub fn remember_applied(boot: &str, feature: &Feature, setting: &str, restoring: bool, expires_utc: Option<u64>) -> Result<()> {
     let mut cfg=config()?; let mut state=state(boot)?; let key=feature.key();
     if *feature == Feature::Profile {
-        cfg.preset=Mode::Balanced; state.selected=Mode::Balanced; state.tuning_requested=cfg.automatic;
+        cfg.preset=Mode::Balanced; state.selected=Mode::Balanced; state.pending_preset=None; state.tuning_requested=cfg.automatic;
         save("config.json",&cfg)?; save("runtime.json",&state)?; return Ok(());
     }
     crate::preferences::feature(&key)?;
