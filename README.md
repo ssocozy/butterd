@@ -1,6 +1,7 @@
 <div align="center">
   <img src="module/webroot/butter.png" width="128" alt="Butterd">
   <h1>Butterd</h1>
+  <a href="https://github.com/ssocozy/butterd/releases"><img src="https://img.shields.io/github/downloads/ssocozy/butterd/total?style=flat-square&amp;color=181818&amp;label=downloads" alt="Total release downloads"></a>
   <p>Make your device optimized, one step at a time</p>
   <p><a href="https://github.com/ssocozy/butterd/releases">Download</a> | <a href="https://github.com/ssocozy/butterd/issues">Issues</a></p>
 </div>
