@@ -48,9 +48,9 @@ function render(state) {
   if (appsLoaded && rulesSignature !== appRulesSignature) { appRulesSignature = rulesSignature; renderApps(); }
   updateSelectors();
 }
-async function refresh(manual = false) {
+async function refresh(manual = false, force = false) {
   const trigger = $('refresh');
-  if ((manual && trigger.dataset.refreshing === 'true') || (!manual && polling)) return;
+  if ((manual && trigger.dataset.refreshing === 'true') || (!manual && polling && !force)) return;
   const started = performance.now();
   if (manual) { trigger.dataset.refreshing='true'; trigger.disabled=true; trigger.setAttribute('aria-busy','true'); trigger.setAttribute('aria-label','Updating device readings'); notify('Updating readings…'); }
   try {
@@ -69,11 +69,13 @@ async function refresh(manual = false) {
 }
 async function run(command,message,quiet=false) {
   if (!command) { notify(message || 'Invalid request.',true); return; }
-  if (busy) return;
+  if (busy) return false;
+  let succeeded = false;
   busy = true; setBusy(true); if (!quiet) notify('Applying your request…');
-  try { const result = await exec(binary+' '+command); if (!quiet) notify(result || 'Request completed.'); }
+  try { const result = await exec(binary+' '+command); succeeded = true; if (!quiet) notify(result || 'Request completed.'); }
   catch (error) { notify(error.message,true); }
-  finally { busy = false; await refresh(); setBusy(false); updateSelectors(); }
+  finally { await refresh(false,true); busy = false; setBusy(false); updateSelectors(); }
+  return succeeded;
 }
 $('refresh').addEventListener('click',()=>refresh(true));
 $('open-presets').addEventListener('click',()=>$('preset-dialog').showModal());

@@ -53,10 +53,11 @@ function toggle(title, checked, enabled, command, run, summary) {
   input.setAttribute('aria-label',title); input.setAttribute('role','switch'); input.dataset.capable = String(enabled); input.disabled = !enabled;
   const track = document.createElement('span'); track.setAttribute('aria-hidden','true');
   input.addEventListener('change',async()=>{
-    const requested = input.checked; input.checked = checked;
-    if (!requested) { input.disabled = true; row.setAttribute('aria-busy','true'); await run(command.off); row.removeAttribute('aria-busy'); }
-    else if (command.confirm) command.confirm();
-    else { input.disabled = true; row.setAttribute('aria-busy','true'); await run(command.on); row.removeAttribute('aria-busy'); }
+    const requested = input.checked;
+    if (requested && command.confirm) { input.checked = checked; command.confirm(); return; }
+    input.disabled = true; row.setAttribute('aria-busy','true');
+    try { if (!await run(requested ? command.on : command.off)) input.checked = checked; }
+    finally { row.removeAttribute('aria-busy'); input.disabled = input.dataset.capable === 'false'; }
   });
   const copy = document.createElement('div'); copy.className = 'control-copy'; copy.append(heading);
   if (summary) copy.append(paragraph(summary,'caption'));
