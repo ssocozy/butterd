@@ -207,7 +207,7 @@ pub fn active_hz(text: &str) -> Option<f64> {
         if let Some(id) = line.split("modeId ").nth(1).or_else(|| line.split("modeId=").nth(1)) {
             let id: String = id.chars().take_while(char::is_ascii_digit).collect();
             if !id.is_empty() {
-                if let Some(mode) = line.split("supportedModes").nth(1).and_then(|modes| modes.split(&format!("id={id},")).nth(1)).and_then(|tail| tail.split('}').next()) {
+                if let Some(mode) = android::advertised_modes(line).and_then(|modes| modes.split(&format!("id={id},")).nth(1)).and_then(|tail| tail.split('}').next()) {
                     if let Some(fps) = mode.split("fps=").nth(1) {
                         let number: String = fps.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
                         if let Ok(hz) = number.parse::<f64>() { if hz.is_finite() && (1.0..=144.1).contains(&hz) { return Some(hz); } }

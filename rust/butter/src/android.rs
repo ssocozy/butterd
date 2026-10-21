@@ -53,17 +53,30 @@ pub fn foreground(text: &str) -> Option<String> {
     }
     if packages.len() == 1 { packages.into_iter().next() } else { None }
 }
+/// Extract the entire nested mode list, excluding external displays and later fields.
+pub fn advertised_modes(line: &str) -> Option<&str> {
+    if !line.contains("DisplayDeviceInfo{") || !line.contains("type INTERNAL") { return None; }
+    let tail = line.split_once("supportedModes")?.1.trim_start_matches([' ', '=']);
+    if !tail.starts_with('[') { return None; }
+    let mut depth = 0u32;
+    for (index, byte) in tail.bytes().enumerate() {
+        match byte {
+            b'[' => depth += 1,
+            b']' => { depth -= 1; if depth == 0 { return Some(&tail[1..index]); } },
+            _ => (),
+        }
+    }
+    None
+}
 pub fn display_rates(text: &str) -> Vec<u32> {
-    // Only parse the physical built-in display's advertised mode list.
+    // Nested alternativeRefreshRates and HDR arrays are part of each mode.
     let mut rates = Vec::new();
-    for line in text.lines().filter(|line| line.contains("DisplayDeviceInfo{") && line.contains("type INTERNAL")) {
-        if let Some(modes) = line.split("supportedModes").nth(1).and_then(|tail| tail.split(']').next()) {
-            for tail in modes.split("fps=").skip(1) {
-                let raw: String = tail.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
-                if let Ok(value) = raw.parse::<f64>() {
-                    let rounded = value.round() as u32;
-                    if (value - f64::from(rounded)).abs() < 0.1 && (30..=144).contains(&rounded) { rates.push(rounded); }
-                }
+    for modes in text.lines().filter_map(advertised_modes) {
+        for tail in modes.split("fps=").skip(1) {
+            let raw: String = tail.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+            if let Ok(value) = raw.parse::<f64>() {
+                let rounded = value.round() as u32;
+                if (value - f64::from(rounded)).abs() < 0.1 && (30..=144).contains(&rounded) { rates.push(rounded); }
             }
         }
     }

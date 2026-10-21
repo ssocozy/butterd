@@ -87,3 +87,12 @@ fn leaving_a_game_cancels_its_launch_lease() {
     state.foreground=ctx.app.clone(); ctx.app=Some("com.example.other".into());
     assert_eq!(decide(&cfg,&mut state,&ctx,101).0,Mode::Balanced); assert!(state.leases.is_empty());
 }
+
+#[test]
+fn display_modes_survive_nested_hdr_and_alternative_rate_arrays() {
+    let dump = "DisplayDeviceInfo{built-in, modeId 2, supportedModes [{id=1, fps=60.000004, alternativeRefreshRates=[120.0], supportedHdrTypes=[2, 3]}, {id=2, fps=120.00001, alternativeRefreshRates=[60.0], supportedHdrTypes=[2, 3]}], colorModes=[fps=90.0], type INTERNAL}";
+    assert_eq!(display_rates(dump), vec![60,120]);
+    assert_eq!(butter::runtime::active_hz(dump), Some(120.00001));
+    assert!(display_rates(&dump.replace("type INTERNAL", "type EXTERNAL")).is_empty());
+    assert!(display_rates("DisplayDeviceInfo{supportedModes [{id=1, fps=120, alternativeRefreshRates=[]}, type INTERNAL}").is_empty());
+}
