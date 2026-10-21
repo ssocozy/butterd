@@ -291,6 +291,9 @@ impl<H: Hardware, S: Store> Engine<H, S> {
     }
     pub fn status(&self) -> Value {
         let mut output = Map::new();
+        let profile = self.session(&Feature::Profile).ok().flatten();
+        let requested = |path: &str| profile.as_ref().and_then(|journal| journal.entries.iter().find(|entry| entry.path == path)).map(|entry| entry.expected.clone());
+        let vendor_request = requested(crate::vendor::POWERHAL).and_then(|value| crate::vendor::parse(&value).ok());
         for feature in [
             Feature::CpuLock,
             Feature::GpuLock,
@@ -322,12 +325,10 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             output.insert(feature.key(), capability.unwrap_or_else(|error| json!({"available": false, "state": "Not exposed", "reason": error.to_string()})));
         }
         let mut policies = Vec::new();
-        if let Ok(names) = self.hardware.list(CPU) {
-            for policy in names
-                .into_iter()
-                .filter(|value| valid_policy(value))
-                .take(16)
-            {
+        if let Ok(mut names) = self.hardware.list(CPU) {
+            names.retain(|value| valid_policy(value));
+            names.sort_by_key(|value| value.trim_start_matches("policy").parse::<u32>().unwrap_or(u32::MAX));
+            for (index, policy) in names.into_iter().take(16).enumerate() {
                 let item = (|| -> Result<Value> {
                     let governor = self
                         .hardware
@@ -342,8 +343,12 @@ impl<H: Hardware, S: Store> Engine<H, S> {
                         .filter(|value| selectable_governor(value))
                         .map(str::to_owned)
                         .collect();
+                    let request_min = vendor_request.as_ref().and_then(|values| values.get(index*2)).filter(|value| **value > 0).map(ToString::to_string)
+                        .or_else(|| requested(&format!("{CPU}/{policy}/scaling_min_freq")));
+                    let request_max = vendor_request.as_ref().and_then(|values| values.get(index*2+1)).filter(|value| **value > 0).map(ToString::to_string)
+                        .or_else(|| requested(&format!("{CPU}/{policy}/scaling_max_freq")));
                     Ok(
-                        json!({"id": policy, "governor": governor, "cores": self.hardware.read(&format!("{CPU}/{policy}/related_cpus"))?, "choices": choices,
+                        json!({"requestedMin":request_min,"requestedMax":request_max,"id": policy, "governor": governor, "cores": self.hardware.read(&format!("{CPU}/{policy}/related_cpus"))?, "choices": choices,
                         "original": self.session(&Feature::Governor(policy.clone()))?.is_some(),
                         "frequencies":self.hardware.read(&format!("{CPU}/{policy}/scaling_available_frequencies")).unwrap_or_default(),
                         "hardwareMax":self.hardware.read(&format!("{CPU}/{policy}/cpuinfo_max_freq")).unwrap_or_default(),
@@ -380,7 +385,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         );
         let gpu_path = if self.hardware.read(hardware::GPU).is_ok() { hardware::GPU } else { hardware::GPU_ALT };
         let gpu_base = gpu_path.trim_end_matches("/min_freq");
-        output.insert("gpuRange".into(), json!({"frequencies":self.hardware.read(&format!("{gpu_base}/available_frequencies")).unwrap_or_default(), "min":self.hardware.read(gpu_path).unwrap_or_default(), "max":self.hardware.read(&format!("{gpu_base}/max_freq")).unwrap_or_default(), "active":self.session(&Feature::GpuRange).ok().flatten().is_some()}));
+        output.insert("gpuRange".into(), json!({"frequencies":self.hardware.read(&format!("{gpu_base}/available_frequencies")).unwrap_or_default(), "min":self.hardware.read(gpu_path).unwrap_or_default(), "max":self.hardware.read(&format!("{gpu_base}/max_freq")).unwrap_or_default(), "requestedMin":requested(gpu_path),"requestedMax":requested(&format!("{gpu_base}/max_freq")), "active":self.session(&Feature::GpuRange).ok().flatten().is_some()}));
         output.insert("cpuPolicies".into(), json!(policies));
         output.insert(
             "engine".into(),

@@ -44,7 +44,7 @@ try {
   await send('Page.enable'); await send('Runtime.enable');
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   const fixture={
-    engine:{version:'0.3.0'},cpuPolicies:[{id:'policy0',cores:'0 1 2 3',governor:'schedutil',choices:['schedutil','powersave'],frequencies:'500000 1000000 2000000',min:'500000',max:'2000000',original:false,rangeActive:false}],
+    engine:{version:'0.3.0'},cpuPolicies:[{id:'policy0',cores:'0 1 2 3',governor:'schedutil',choices:['schedutil','powersave'],frequencies:'500000 1000000 2000000',min:'500000',max:'2000000',requestedMin:'1000000',requestedMax:'2000000',original:false,rangeActive:false}],
     gpuRange:{frequencies:'300000000 600000000 1000000000',min:'300000000',max:'1000000000',active:false},
     touch:{available:true,state:'Off',driverHz:240},tcp:{available:true,current:'cubic',choices:['cubic','bbr'],original:false},
     compatibility:{selectedModel:'bluejay',spoofBuild:true,spoofVendingBuild:true,spoofProps:true},
@@ -103,6 +103,7 @@ try {
   assert.equal(await evaluate(`[...document.querySelectorAll('.select-trigger')].every(node=>node.querySelector('svg.ph-icon') && !node.textContent.includes('⌄'))`),true);
   await evaluate(`document.querySelector('#cpu-controls').closest('details').open=true`); await delay(250);
   assert.equal(await evaluate(`document.querySelector('[data-select=maximum-policy0]').textContent.includes('GHz')`),true);
+  assert.match(await evaluate(`document.querySelector('#cpu-controls .preset-request').textContent`),/Preset request: 1 GHz – 2 GHz/);
   assert.equal(await evaluate(`document.querySelector('#cpu-controls').closest('details').querySelector('summary').textContent.includes('−')`),false);
   const arrowX = await evaluate(`document.querySelector('#cpu-controls').closest('details').querySelector('summary>.ph-icon').getBoundingClientRect().right`);
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('#cpu-controls').closest('details').querySelector('summary'),'::after').content`),'none');

@@ -378,6 +378,10 @@ fn vendor_qos_uses_all_clusters_and_preserves_cpu_baseline() {
     assert_eq!(journal.cpu_limits.len(),6);
     assert_eq!(journal.entries.len(),1);
     assert_eq!(journal.entries[0].path,butter::vendor::POWERHAL);
+    engine.hardware.put(&format!("{CPU}/policy0/scaling_max_freq"),"1200000");
+    let status = engine.status();
+    assert_eq!(status["cpuPolicies"][0]["max"],"1200000");
+    assert_eq!(status["cpuPolicies"][0]["requestedMax"],"1600000");
     assert_eq!(butter::vendor::parse(&journal.entries[0].expected).unwrap().len(),6);
     let first = engine.hardware.read(butter::vendor::POWERHAL).unwrap();
     engine.hardware.put(&format!("{CPU}/policy0/scaling_min_freq"),"1200000");
