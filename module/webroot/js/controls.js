@@ -45,8 +45,8 @@ function range(host, id, data, run) {
     run('range '+id+' '+low.value+':'+high.value);
   }),button('Restore', () => run('restore-range '+id),data.active === true)));
 }
-function toggle(title, checked, enabled, command, run) {
-  const row = document.createElement('div'); row.className = 'setting-row';
+function toggle(title, checked, enabled, command, run, summary) {
+  const row = document.createElement('div'); row.className = 'setting-row control-switch';
   const heading = document.createElement('h3'); heading.textContent = title;
   const label = document.createElement('label'); label.className = 'switch';
   const input = document.createElement('input'); input.type = 'checkbox'; input.checked = checked;
@@ -58,7 +58,9 @@ function toggle(title, checked, enabled, command, run) {
     else if (command.confirm) command.confirm();
     else { input.disabled = true; row.setAttribute('aria-busy','true'); await run(command.on); row.removeAttribute('aria-busy'); }
   });
-  label.append(input,track); row.append(heading,label); return row;
+  const copy = document.createElement('div'); copy.className = 'control-copy'; copy.append(heading);
+  if (summary) copy.append(paragraph(summary,'caption'));
+  label.append(input,track); row.append(copy,label); return row;
 }
 export function renderControls(state, run, requestAdvanced) {
   const cpu = $('cpu-controls'); cpu.replaceChildren();
@@ -109,14 +111,14 @@ export function renderControls(state, run, requestAdvanced) {
   const observed = audio.activeInputs || [];
   if (observed.length) audioSummary += observed.every(input=>input.phoneMic) ? ' Observed recording inputs use the phone microphone.' : observed.some(input=>input.phoneMic) ? ' Observed inputs include both phone and external microphones.' : ' Observed recording inputs still use an external microphone.';
   else audioSummary += ' No active app input is reported; actual routing is unverified.';
-  audioHost.append(toggle('Prefer phone microphone',savedMic || audio.active === true,savedMic || audio.active === true || (audio.available && audio.bluetoothConnected),{on:'enable phone-mic',off:'restore phone-mic'},run),paragraph(audioSummary,'caption'));
+  audioHost.append(toggle('Prefer phone microphone',savedMic || audio.active === true,savedMic || audio.active === true || (audio.available && audio.bluetoothConnected),{on:'enable phone-mic',off:'restore phone-mic'},run,audioSummary));
   const errors = state.supervisor?.runtime?.preference_errors || {};
   $('preferences-status').textContent = Object.keys(errors).length ? 'Some saved options could not resume: '+Object.entries(errors).map(([name,error])=>name+': '+error).join(' · ') : 'Applied options are remembered after reboot. Temporary overrides retain their original expiry.';
   const host = $('advanced-controls'); host.replaceChildren();
   for (const [key,[title,description]] of Object.entries(advanced)) {
-    const capability = state[key] || {}, row = document.createElement('div'); row.className = 'control'; const heading = document.createElement('h3'); heading.textContent = title;
-    row.append(heading,paragraph(capability.available ? capability.state : capability.reason || 'Not exposed by this kernel.'));
-    row.prepend(toggle(title,capability.state === 'Request active',capability.available === true,{off:'restore '+key,confirm:()=>requestAdvanced(key,title,description)},run)); heading.remove(); host.append(row);
+    const capability = state[key] || {};
+    const summary = capability.available ? capability.state : 'Not supported by this kernel';
+    host.append(toggle(title,capability.state === 'Request active',capability.available === true,{off:'restore '+key,confirm:()=>requestAdvanced(key,title,description)},run,summary));
   }
   updateSelectors();
 }

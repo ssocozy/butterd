@@ -13,3 +13,13 @@
 .app-row{position:relative;isolation:isolate;overflow:hidden;border:0;border-radius:14px;padding:14px 12px;margin:3px 0}.app-row::after{content:"";position:absolute;left:68px;right:12px;bottom:0;height:1px;background:var(--line);pointer-events:none}.app-row:hover{background:transparent}.app-row:active,.app-row:focus-visible{background:var(--soft)}.app-row:active{transform:scale(.995)}.app-row:active::after{opacity:0}@media(hover:hover){.app-row:hover{background:var(--soft)}}
 
 .frame-result{margin-top:16px;padding:14px 16px;border-radius:12px;background:var(--soft);font-size:12px;line-height:1.65}.frame-result p+p{margin-top:6px}
+
+/* A single divider and a shared switch column keep multiline controls aligned. */
+.control-switch{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:20px;align-items:start;padding:20px 0}
+.control-switch:last-child{border-bottom:0}
+.control-copy{min-width:0;padding-top:8px}
+.control-copy h3{line-height:1.4;overflow-wrap:anywhere}
+.control-copy .caption{margin-top:6px;line-height:1.6;overflow-wrap:anywhere}
+.control-switch>.switch{justify-self:end;align-self:start}
+.control-switch input:disabled+span{opacity:.4}
+.control-switch[aria-busy=true] .switch span{opacity:.55}
