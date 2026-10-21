@@ -1,4 +1,16 @@
 #!/system/bin/sh
+random_identity() {
+  # Reject the incomplete range so all eleven models have equal probability.
+  while :; do
+    random_byte=$(od -An -N1 -tu1 /dev/urandom) || return 1
+    case "$random_byte" in *[!0-9\ ]*|'') return 1 ;; esac
+    [ "$random_byte" -lt 253 ] && break
+  done
+  set -- bluejay panther cheetah lynx shiba husky akita tokay caiman komodo tegu
+  shift "$((random_byte % 11))"
+  printf '%s\n' "$1"
+}
+
 select_identity() {
   case "$1" in bluejay|panther|cheetah|lynx|shiba|husky|akita|tokay|caiman|komodo|tegu) ;; *) echo "Invalid Pixel model."; return 2 ;; esac
   profile=$MODDIR/compatibility/profiles/$1.prop

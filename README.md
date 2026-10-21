@@ -25,7 +25,7 @@ Configure controls in the module WebUI. Availability depends on your kernel and 
 2. Install it through your root manager and reboot.
 3. Open the WebUI to configure Butterd. Magisk users need a compatible WebUI host.
 
-Pixel 6a is selected by default, with build, Play Store build and scoped property spoofing enabled. Offline profiles are included. A Play Integrity verdict is not guaranteed.
+Fresh installs randomly select a Pixel profile from 6a through 9a, with build, Play Store build and scoped property spoofing enabled. Change the model in the WebUI; updates keep your selection. Offline profiles are included. A Play Integrity verdict is not guaranteed.
 
 ## Credits
 

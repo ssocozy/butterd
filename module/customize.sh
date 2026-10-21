@@ -19,15 +19,16 @@ done
 [ -f "$MODPATH/bin/butter-engine" ] || abort "The compiled Rust engine is missing."
 [ -f "$MODPATH/zygisk/arm64-v8a.so" ] || abort "The compiled compatibility library is missing."
 # Fetch metadata during installation; an offline install keeps bundled profiles.
-selected=bluejay
+MODDIR=$MODPATH
+. "$MODPATH/lib/compatibility.sh"
+selected=
 if [ -f /data/adb/modules/butterd/compatibility/pif.prop ]; then
   previous=$(sed -n 's/^selectedModel=//p' /data/adb/modules/butterd/compatibility/pif.prop)
   case "$previous" in bluejay|panther|cheetah|lynx|shiba|husky|akita|tokay|caiman|komodo|tegu) selected=$previous ;; esac
 fi
+[ -n "$selected" ] || selected=$(random_identity) || abort "Unable to select a random Pixel profile."
 ui_print "- Refreshing Pixel 6a–9a profiles (offline fallback included)."
 CLASSPATH="$MODPATH/bin/catalog.dex" /system/bin/app_process /system/bin dev.butterd.module.PixelCatalog "$MODPATH/compatibility/profiles" || ui_print "- Network unavailable; keeping bundled profiles."
-MODDIR=$MODPATH
-. "$MODPATH/lib/compatibility.sh"
 select_identity "$selected" || abort "No usable Pixel identity is available."
 # Leave webroot permissions/context to the WebUI host.
 for directory in bin lib compatibility zygisk; do
