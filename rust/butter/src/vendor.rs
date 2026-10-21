@@ -12,9 +12,19 @@ pub fn parse(text: &str) -> Result<Vec<i64>> {
     Ok(values)
 }
 pub fn canonical(text: &str) -> Result<String> { Ok(parse(text)?.iter().map(ToString::to_string).collect::<Vec<_>>().join(" ")) }
+pub fn read(hardware: &impl Hardware) -> Result<String> {
+    let mut last = String::new();
+    for attempt in 0..5 {
+        let raw = hardware.read(POWERHAL)?;
+        if let Ok(value) = canonical(&raw) { return Ok(value); }
+        last = raw.chars().take(192).collect();
+        if attempt < 4 { std::thread::sleep(std::time::Duration::from_millis(20)); }
+    }
+    Err(format!("PowerHAL CPU readback remained incomplete or unsupported: {last:?}").into())
+}
 pub fn profile_targets(hardware: &impl Hardware, mut targets: Vec<(String,String)>) -> Vec<(String,String)> {
     // Other ROM layouts keep the ordinary bounded cpufreq path.
-    if hardware.read(POWERHAL).and_then(|text| parse(&text)).is_err() { return targets; }
+    if read(hardware).is_err() { return targets; }
     let mut policies: Vec<_> = targets.iter().filter_map(|(path,_)| path.strip_prefix(&format!("{CPU}/"))?.strip_suffix("/scaling_min_freq").map(str::to_owned)).collect();
     policies.sort_by_key(|policy| policy.trim_start_matches("policy").parse::<u32>().unwrap_or(u32::MAX));
     if policies.len() != 3 { return targets; }

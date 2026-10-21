@@ -61,6 +61,7 @@ try {
       else if(command.endsWith(' apps'))stdout=JSON.stringify({apps:[{package:'com.example.game',label:'Pocket Game',game:true},{package:'com.example.notes',label:'<img src=x onerror=alert(1)>',game:false}]});
       else if(command.includes('preset performance'))state.supervisor.runtime.active='performance';
       else if(command.includes(' app com.example.game '))state.supervisor.config.rules=[{package:'com.example.game',preset:'performance',hz:120}];
+      else if(command.includes(' measure '))stdout=JSON.stringify({frames:0,p50Ms:null,p95Ms:null});
       else if(command.endsWith(' diagnostics'))stdout=JSON.stringify({test:true,supervisor:state.supervisor});
       setTimeout(()=>globalThis[callback]?.(code,stdout,stderr),1);
     }};`});
@@ -90,6 +91,9 @@ try {
   await evaluate(`document.querySelector('[data-select=app-hz]').click()`); await until(`document.getElementById('choice-dialog').open`);
   await evaluate(`[...document.querySelectorAll('#choice-list button')].find(node=>node.textContent.includes('120 Hz')).click()`);
   assert.equal(await evaluate(`document.getElementById('app-hz').value`),'120');
+  await evaluate(`document.getElementById('measure-app').click()`);
+  await until(`document.getElementById('frame-result').textContent.includes('No usable Android UI frame timings')`);
+  assert.equal(await evaluate(`document.getElementById('app-dialog').open`),true,'Frame sampling should remain in the app sheet');
   await screenshot('webui-app-profile.png');
   await evaluate(`document.getElementById('app-form').dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}))`);
   await until(`__butterCommands.some(command=>command.endsWith('app com.example.game performance 120'))`);

@@ -106,6 +106,7 @@ function renderApps() {
   }
 }
 function openApp(app) {
+  $('frame-result').hidden=true; $('frame-result').replaceChildren();
   selectedApp=app; const rule=snapshot?.supervisor?.config?.rules?.find(rule=>rule.package===app.package);
   $('app-title').textContent=app.label || app.package; $('app-package').textContent=app.package; $('app-preset').value=rule?.preset || 'balanced';
   const rate=$('app-hz'); rate.replaceChildren(); const rom=document.createElement('option'); rom.value='rom'; rom.textContent='Let the ROM decide'; rate.append(rom);
@@ -130,7 +131,17 @@ async function report(command,download) {
   } catch (error) { notify(error.message,true); }
 }
 $('export').addEventListener('click',()=>report('diagnostics',true));
-$('measure-app').addEventListener('click',()=>{ if (selectedApp && validPackage(selectedApp.package)) { $('app-dialog').close(); report('measure '+selectedApp.package,false); } });
+$('measure-app').addEventListener('click',async()=>{
+  if (!selectedApp || !validPackage(selectedApp.package) || $('measure-app').disabled) return;
+  const control=$('measure-app'), result=$('frame-result'); control.disabled=true; result.hidden=false; result.textContent='Reading Android UI frame timings…';
+  try {
+    const data=JSON.parse(await exec(binary+' measure '+selectedApp.package));
+    result.replaceChildren();
+    if (!data.frames) result.append(paragraph('No usable Android UI frame timings were returned. Games may render through a separate surface, which this tool does not measure. This is not an FPS result.'));
+    else result.append(paragraph(data.frames+' UI frames sampled.'),paragraph('Median '+Number(data.p50Ms).toFixed(1)+' ms · 95th percentile '+Number(data.p95Ms).toFixed(1)+' ms.'));
+  } catch(error) { result.textContent='Frame timings could not be read: '+error.message; }
+  finally { control.disabled=false; }
+});
 try { const theme=localStorage.getItem('butter-theme'); if (['light','dark'].includes(theme)) { document.documentElement.dataset.theme=theme; $('theme').value=theme; } } catch (_) { /* Appearance remains system-controlled. */ }
 $('theme').addEventListener('change',event=>{ const theme=event.target.value; if (!['system','light','dark'].includes(theme)) return; if (theme==='system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme=theme; try { localStorage.setItem('butter-theme',theme); } catch (_) { /* Theme still applies for this session. */ } });
 setPage(); updateSelectors();

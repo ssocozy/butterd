@@ -407,3 +407,28 @@ fn vendor_reconcile_preserves_latest_rom_request_on_release() {
     assert!(butter::vendor::parse("-2 -1 -1 -1 -1 -1").is_err());
     assert!(butter::hardware::validate_path_value(&Feature::Profile,GOODIX,"-1 -1 -1 -1 -1 -1").is_err());
 }
+
+#[test]
+fn infinity_and_rom_display_votes_apply_and_restore_without_manufacturing_keys() {
+    let engine = fixture();
+    for (path,value) in [("android:0:min_refresh_rate","0"),("android:0:peak_refresh_rate","Infinity"),("display:0:preferred","null"),("rom-refresh:0:system:user_refresh_rate","120"),("rom-refresh:0:system:miui_refresh_rate","120"),("rom-refresh:0:system:is_smart_fps","1")] { engine.hardware.put(path,value); }
+    let dump = "DisplayDeviceInfo{supportedModes [{id=1, width=1220, height=2712, fps=60.0}, {id=2, width=1220, height=2712, fps=120.0}], type INTERNAL}";
+    let targets = butter::display::targets(&engine.hardware,0,60,dump).unwrap();
+    assert_eq!(targets.len(),6);
+    assert!(!targets.iter().any(|(path,_)| path.contains(":secure:")));
+    engine.apply_targets(Feature::Refresh(0),targets,false).unwrap();
+    assert_eq!(engine.hardware.read("display:0:preferred").unwrap(),"1220 2712 60");
+    assert_eq!(engine.hardware.read("android:0:peak_refresh_rate").unwrap(),"60");
+    engine.hardware.put("rom-refresh:0:system:user_refresh_rate","90");
+    engine.apply_targets(Feature::Refresh(0),Vec::new(),true).unwrap();
+    assert_eq!(engine.hardware.read("android:0:peak_refresh_rate").unwrap(),"Infinity");
+    assert_eq!(engine.hardware.read("android:0:min_refresh_rate").unwrap(),"0");
+    assert_eq!(engine.hardware.read("display:0:preferred").unwrap(),"null");
+    assert_eq!(engine.hardware.read("rom-refresh:0:system:user_refresh_rate").unwrap(),"90");
+    assert_eq!(engine.hardware.read("rom-refresh:0:system:is_smart_fps").unwrap(),"1");
+    assert!(butter::display::normalize("system","min_refresh_rate","Infinity").is_err());
+    assert!(butter::display::normalize("system","peak_refresh_rate","NaN").is_err());
+    assert!(butter::display::node("rom-refresh:0:global:miui_refresh_rate").is_none());
+    assert!(butter::hardware::validate_path_value(&Feature::Refresh(10),"display:0:preferred","null").is_err());
+    assert_eq!(butter::display::preferred_reply("User preferred display mode: null").unwrap(),"null");
+}

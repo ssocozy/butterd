@@ -11,3 +11,5 @@
 
 .preset-request{font-size:12px;color:var(--ink);margin:6px 0 12px;font-variant-numeric:tabular-nums}
 .app-row{position:relative;isolation:isolate;overflow:hidden;border:0;border-radius:14px;padding:14px 12px;margin:3px 0}.app-row::after{content:"";position:absolute;left:68px;right:12px;bottom:0;height:1px;background:var(--line);pointer-events:none}.app-row:hover{background:transparent}.app-row:active,.app-row:focus-visible{background:var(--soft)}.app-row:active{transform:scale(.995)}.app-row:active::after{opacity:0}@media(hover:hover){.app-row:hover{background:var(--soft)}}
+
+.frame-result{margin-top:16px;padding:14px 16px;border-radius:12px;background:var(--soft);font-size:12px;line-height:1.65}.frame-result p+p{margin-top:6px}

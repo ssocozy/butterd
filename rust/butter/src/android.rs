@@ -91,12 +91,14 @@ pub fn parse_setting(path: &str) -> Option<(u32, &str)> {
     if user > 99999 || parts.next().is_some() || !matches!(key, "min_refresh_rate" | "peak_refresh_rate") { return None; }
     Some((user, key))
 }
-pub fn setting(user: u32, key: &str, value: Option<&str>) -> Result<String> {
+pub fn setting(user: u32, key: &str, value: Option<&str>) -> Result<String> { setting_in(user,"system",key,value) }
+pub fn setting_in(user: u32, table: &str, key: &str, value: Option<&str>) -> Result<String> {
+    if !matches!(table,"system"|"secure") { return Err("Unsupported settings table".into()); }
     let user = user.to_string();
     let args = match value {
-        Some("null") => vec!["--user", &user, "delete", "system", key],
-        Some(value) => vec!["--user", &user, "put", "system", key, value],
-        None => vec!["--user", &user, "get", "system", key],
+        Some("null") => vec!["--user", &user, "delete", table, key],
+        Some(value) => vec!["--user", &user, "put", table, key, value],
+        None => vec!["--user", &user, "get", table, key],
     };
     command("/system/bin/settings", &args)
 }

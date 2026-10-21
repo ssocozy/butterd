@@ -12,3 +12,5 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + S
 pub mod events;
 
 pub mod vendor;
+
+pub mod display;

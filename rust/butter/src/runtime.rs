@@ -255,8 +255,11 @@ fn refresh(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &mut Runt
     state.refresh_user = Some(user); state.refresh_hz = Some(hz);
     // Save ownership before the first Android settings write.
     save("runtime.json", state)?;
-    let targets = ["peak_refresh_rate", "min_refresh_rate"].iter().map(|key| (android::setting_path(user, key), hz.to_string())).collect();
+    let dump = android::command("/system/bin/dumpsys", &["display"])?;
+    let targets = crate::display::targets(&e.hardware,user,hz,&dump)?;
+    let controls = targets.len();
     e.apply_targets(feature, targets, false)?;
+    event(cfg,"display-request",&format!("Requested {hz} Hz for {} using {controls} display preferences",ctx.app.as_deref().unwrap_or("unknown app")));
     Ok(())
 }
 fn thermal_cleanup(e: &Engine<SystemHardware, DiskStore>, state: &mut RuntimeState, ctx: &Context, now: u64) -> Result<()> {
@@ -381,6 +384,7 @@ pub fn daemon(boot: &str) -> Result<()> {
         state.telemetry["wakeSource"] = json!(wake_events.last_wake);
         state.telemetry["eventStreamRunning"] = json!(wake_events.available());
         state.telemetry["displayRequestHz"] = json!(state.refresh_hz);
+        state.telemetry["displayRequestSatisfied"] = json!(state.refresh_hz.zip(ctx.hz).map(|(requested,actual)| (f64::from(requested)-actual).abs()<0.1));
         state.telemetry["cpuBackend"] = json!(if e.session(&Feature::Profile).ok().flatten().is_some_and(|journal| journal.entries.iter().any(|entry| entry.path == crate::vendor::POWERHAL)) { "powerhal-qos" } else { "cpufreq" });
         state.foreground = ctx.app; state.sampled_at = now;
         if now.saturating_sub(last_sample_event) >= if cfg.logcat { 10 } else { 30 } {
@@ -403,8 +407,10 @@ pub fn diagnostics(boot: &str) -> Result<Value> {
     let state = state(boot).map(|state| json!(state)).unwrap_or_else(|error| json!({"error":error.to_string()}));
     let events = read_bounded(&Path::new(DIRECTORY).join("events.jsonl"), 270000).unwrap_or_default();
     let events: Vec<Value> = events.lines().rev().take(100).filter_map(|line| serde_json::from_str(line).ok()).collect();
-    let sessions: Vec<Value> = e.controls().iter().map(|feature| match e.session(feature) { Ok(session) => json!({"control":feature.key(),"journal":session}), Err(error) => json!({"control":feature.key(),"error":error.to_string()}) }).collect();
-    Ok(json!({"engine":e.status(),"sessions":sessions,"config":cfg,"runtime":state,"events":events,"supervisor":supervisor_status(boot),"compatibility":compatibility_status(),"startupLog":read_bounded(&Path::new(DIRECTORY).join("boot.log"),32768).ok(),"supervisorLog":read_bounded(&Path::new(DIRECTORY).join("supervisor.log"),32768).ok(),"kernel":read_bounded(Path::new("/proc/version"),4096).ok()}))
+    let mut controls = e.controls();
+    if let Some(user) = state.get("refresh_user").and_then(Value::as_u64).filter(|user| *user <= 99999) { controls.push(Feature::Refresh(user as u32)); }
+    let sessions: Vec<Value> = controls.iter().map(|feature| match e.session(feature) { Ok(session) => json!({"control":feature.key(),"journal":session}), Err(error) => json!({"control":feature.key(),"error":error.to_string()}) }).collect();
+    Ok(json!({"engine":e.status(),"sessions":sessions,"config":cfg,"runtime":state,"events":events,"supervisor":supervisor_status(boot),"compatibility":compatibility_status(),"startupLog":read_bounded(&Path::new(DIRECTORY).join("boot.log"),32768).ok(),"supervisorLog":read_bounded(&Path::new(DIRECTORY).join("supervisor.log"),32768).ok(),"kernel":read_bounded(Path::new("/proc/version"),4096).ok(),"displayPreferences":android::command("/system/bin/settings", &["get","system","peak_refresh_rate"]).ok(),"powerhalReadback":read_bounded(Path::new(crate::vendor::POWERHAL),4096).ok()}))
 }
 pub fn shutdown(boot: &str) -> Result<String> {
     let e = engine(boot)?;

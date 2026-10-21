@@ -139,6 +139,14 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             }
             if adopted { self.store.save(&journal)?; }
         }
+        if restoring && matches!(feature,Feature::Refresh(_)) {
+            // Release our remaining display votes while preserving settings the ROM already changed.
+            for entry in &mut journal.entries {
+                let current = hardware::value(&self.hardware, &entry.path)?;
+                if !entry.owned(&current) { entry.original = current.clone(); entry.expected = current; entry.before = None; }
+            }
+            self.store.save(&journal)?;
+        }
         // Preflight every node, including originals loaded from older versions, before any write.
         for entry in &journal.entries {
             let current = hardware::value(&self.hardware, &entry.path)?;
@@ -202,6 +210,10 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             let current = hardware::value(&self.hardware, &path)?;
             if !journal.entries[index].owned(&current) {
                 return Err("External change detected; session retained".into());
+            }
+            if restoring && matches!(feature,Feature::Refresh(_)) && current == target {
+                journal.entries[index].expected = target; journal.entries[index].before = None; self.store.save(&journal)?;
+                continue;
             }
             journal.entries[index].before = Some(current);
             journal.entries[index].expected = target.clone();

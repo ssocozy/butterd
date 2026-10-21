@@ -42,31 +42,38 @@ pub trait Hardware {
     }
 }
 pub struct SystemHardware;
-pub fn read_bounded(path: &Path, limit: u64) -> Result<String> {
+fn read_stream(reader: &mut impl Read, limit: u64) -> Result<String> {
     let mut bytes = Vec::new();
-    fs::File::open(path)?
-        .take(limit + 1)
-        .read_to_end(&mut bytes)?;
-    if bytes.len() as u64 > limit {
-        return Err("Read exceeded its limit".into());
+    let mut chunk = [0u8;4096];
+    loop {
+        let remaining = limit.saturating_add(1).saturating_sub(bytes.len() as u64).min(chunk.len() as u64) as usize;
+        if remaining == 0 { return Err("Read exceeded its limit".into()); }
+        let count = match reader.read(&mut chunk[..remaining]) {
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            result => result?,
+        };
+        if count == 0 { break; }
+        bytes.extend_from_slice(&chunk[..count]);
+        if bytes.len() as u64 > limit { return Err("Read exceeded its limit".into()); }
     }
     Ok(String::from_utf8(bytes)?)
 }
+pub fn read_bounded(path: &Path, limit: u64) -> Result<String> {
+    // Some vendor proc readers stop after any nonzero offset. Avoid read_to_end's small probe.
+    read_stream(&mut fs::File::open(path)?,limit)
+}
 impl Hardware for SystemHardware {
     fn check_write(&self, path: &str) -> Result<()> {
-        if crate::android::parse_setting(path).is_some() { return Ok(()); }
+        if crate::display::node(path).is_some() { return Ok(()); }
         OpenOptions::new().write(true).open(path)?;
         Ok(())
     }
     fn read(&self, path: &str) -> Result<String> {
-        if let Some((user, key)) = crate::android::parse_setting(path) {
-            let raw = crate::android::setting(user, key, None)?;
-            return if raw == "null" { Ok(raw) } else { let hz: f64 = raw.parse()?; if !hz.is_finite() { return Err("Invalid display preference".into()); } Ok(hz.to_string()) };
-        }
+        if let Some(value) = crate::display::read(path) { return value; }
         Ok(read_bounded(Path::new(path), 4096)?.trim().to_string())
     }
     fn write(&self, path: &str, value: &str) -> Result<()> {
-        if let Some((user, key)) = crate::android::parse_setting(path) { crate::android::setting(user, key, Some(value))?; return Ok(()); }
+        if let Some(result) = crate::display::write(path,value) { return result; }
         // Open an existing node only. Never create a device path or change its permissions.
         OpenOptions::new()
             .write(true)
@@ -92,8 +99,8 @@ impl Hardware for SystemHardware {
     }
 }
 pub fn value(hardware: &impl Hardware, path: &str) -> Result<String> {
+    if path == crate::vendor::POWERHAL { return crate::vendor::read(hardware); }
     let raw = hardware.read(path)?;
-    if path == crate::vendor::POWERHAL { return crate::vendor::canonical(&raw); }
     if path == GOODIX {
         touch_value(&raw)
     } else {
@@ -135,12 +142,16 @@ pub fn allowed(hardware: &impl Hardware, feature: &Feature, path: &str) -> bool 
             let cpu = path.strip_prefix(&format!("{CPU}/")).and_then(|tail| tail.split_once('/')).is_some_and(|(policy, field)| valid_policy(policy) && matches!(field, "scaling_min_freq" | "scaling_max_freq"));
             cpu || path == crate::vendor::POWERHAL || allowed(hardware, &Feature::GpuRange, path)
         }
-        Feature::Refresh(user) => crate::android::parse_setting(path).is_some_and(|(id, _)| id == *user),
+        Feature::Refresh(user) => crate::display::node(path).is_some_and(|(id, _, _)| id == *user),
         Feature::ChargingPause => path == PAUSE,
         Feature::Bypass => bypass_node(hardware).is_ok_and(|node| node == path),
     }
 }
 pub fn validate_path_value(feature: &Feature, path: &str, value: &str) -> Result<()> {
+    if let Some((user,table,key)) = crate::display::node(path) {
+        if !matches!(feature,Feature::Refresh(id) if *id == user) { return Err("Display preference belongs to another control or user".into()); }
+        crate::display::normalize(table,key,value)?; return Ok(());
+    }
     if path == crate::vendor::POWERHAL {
         if *feature != Feature::Profile { return Err("Vendor CPU requests belong to the overall profile".into()); }
         crate::vendor::parse(value)?; return Ok(());
@@ -278,4 +289,26 @@ pub fn plan(
         validate_value(feature, target)?;
     }
     Ok(targets)
+}
+
+#[cfg(test)]
+mod bounded_read_tests {
+    use super::*;
+    struct OneReadProc { bytes: Vec<u8>, used: bool }
+    impl Read for OneReadProc {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            if self.used { return Ok(0); }
+            self.used = true;
+            let count = buffer.len().min(self.bytes.len());
+            buffer[..count].copy_from_slice(&self.bytes[..count]); Ok(count)
+        }
+    }
+    #[test]
+    fn long_vendor_proc_reply_is_read_in_one_buffer() {
+        let raw = "1400000 1900000 1600000 2200000 1300000 2300000\n";
+        assert!(raw.len()>32);
+        let mut proc = OneReadProc { bytes:raw.as_bytes().to_vec(),used:false };
+        assert_eq!(read_stream(&mut proc,4096).unwrap(),raw);
+        assert!(read_stream(&mut std::io::Cursor::new(vec![b'x';4097]),4096).is_err());
+    }
 }
