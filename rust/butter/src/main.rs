@@ -85,7 +85,7 @@ fn run() -> Result<()> {
     }
     let engine = Engine {
         hardware,
-        store: DiskStore::locked("/data/adb/butterd")?,
+        store: DiskStore::locked_wait("/data/adb/butterd",std::time::Duration::from_secs(5))?,
         boot,
     };
     let result = engine.apply(feature.clone(), setting, restoring, accepted);

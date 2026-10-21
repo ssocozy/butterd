@@ -636,3 +636,17 @@ fn audio_status_failure_or_removed_intent_releases_the_owned_override() {
     resume(&engine,&BTreeMap::new(),&mut state,&Context::default(),1_800_000_012,22);
     assert!(engine.session(&Feature::PhoneMic).unwrap().is_none());
 }
+
+#[test]
+fn interactive_lock_waits_for_holder_and_times_out_when_busy() {
+    use std::time::Duration;
+    let path = std::env::temp_dir().join(format!("butter-wait-test-{}",std::process::id()));
+    let store = DiskStore::locked(&path).unwrap();
+    assert!(DiskStore::locked_wait(&path,Duration::ZERO).is_err());
+    let waiter_path = path.clone();
+    let waiter = std::thread::spawn(move || DiskStore::locked_wait(waiter_path,Duration::from_secs(2)).unwrap());
+    std::thread::sleep(Duration::from_millis(100));
+    drop(store);
+    drop(waiter.join().unwrap());
+    std::fs::remove_dir_all(path).unwrap();
+}

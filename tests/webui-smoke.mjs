@@ -59,14 +59,14 @@ try {
       if(command.endsWith('id -u'))stdout='0';
       else if(command.endsWith(' monitor')){state.supervisor.health={running:true,sampleAgeSeconds:2};state.supervisor.runtime.sampled_at=100;state.supervisor.runtime.reason='Monitoring only';state.supervisor.runtime.telemetry={batteryPercent:72,batteryWatts:-2.4,batteryTempC:34.2,socTempC:46,screenHz:120,supportedHz:[60,120],cpuBusyPercent:12,gpuBusyPercent:8,cycleCount:125,health:'Good',batteryStatus:'Discharging'};}
       else if(command.endsWith(' enable phone-mic')){state.audio.active=true;state.supervisor.config.controls={'phone-mic':{setting:'',expires_utc:null}};}
-      else if(command.endsWith(' restore phone-mic')){state.audio.active=false;state.supervisor.config.controls={};}
+      else if(command.endsWith(' restore phone-mic')){if(globalThis.__failMic){code=1;stderr='Example routing rejection';}else{state.audio.active=false;state.supervisor.config.controls={};}}
       else if(command.endsWith(' status'))stdout=JSON.stringify(state);
       else if(command.endsWith(' apps'))stdout=JSON.stringify({apps:[{package:'com.example.game',label:'Pocket Game',game:true},{package:'com.example.notes',label:'<img src=x onerror=alert(1)>',game:false}]});
       else if(command.includes('preset performance'))state.supervisor.runtime.active='performance';
       else if(command.includes(' app com.example.game '))state.supervisor.config.rules=[{package:'com.example.game',preset:'performance',hz:120}];
       else if(command.includes(' measure '))stdout=JSON.stringify({frames:0,p50Ms:null,p95Ms:null});
       else if(command.endsWith(' diagnostics'))stdout=JSON.stringify({test:true,supervisor:state.supervisor});
-      setTimeout(()=>globalThis[callback]?.(code,stdout,stderr),1);
+      setTimeout(()=>globalThis[callback]?.(code,stdout,stderr),command.endsWith('phone-mic') ? 500 : 1);
     }};`});
   await send('Page.navigate',{url:'http://127.0.0.1:'+server.address().port+'/index.html'});
   await until(`document.getElementById('engine-state')?.textContent==='Monitoring active'`);
@@ -113,11 +113,17 @@ try {
   assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('Prefer phone microphone')`),true);
   assert.equal(await evaluate(`document.querySelector('#audio-controls input[role=switch]').checked`),false);
   await evaluate(`document.querySelector('#audio-controls input').click()`);
+  assert.equal(await evaluate(`document.querySelector('#audio-controls input').checked && document.querySelector('#audio-controls input').disabled && document.querySelector('#audio-controls .caption').textContent==='Turning on…'`),true);
   await until(`document.querySelector('#audio-controls input').checked && !document.querySelector('#audio-controls input').disabled && document.body.getAttribute('aria-busy')==='false'`);
   await evaluate(`document.querySelector('#audio-controls input').click()`);
   await until(`!document.querySelector('#audio-controls input').checked && !document.querySelector('#audio-controls input').disabled && document.body.getAttribute('aria-busy')==='false'`);
   await evaluate(`document.querySelector('#audio-controls input').click()`);
   await until(`document.querySelector('#audio-controls input').checked && !document.querySelector('#audio-controls input').disabled && document.body.getAttribute('aria-busy')==='false'`);
+  await evaluate(`globalThis.__failMic=true;document.querySelector('#audio-controls input').click()`);
+  assert.equal(await evaluate(`!document.querySelector('#audio-controls input').checked && document.querySelector('#audio-controls .caption').textContent==='Turning off…'`),true);
+  await until(`document.querySelector('#audio-controls input').checked && !document.querySelector('#audio-controls input').disabled && document.body.getAttribute('aria-busy')==='false'`);
+  assert.equal(await evaluate(`document.querySelector('#feedback').textContent.includes('Example routing rejection')`),true);
+  await evaluate(`globalThis.__failMic=false`);
   await evaluate(`document.querySelector('#advanced-controls').closest('details').open=true`);
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('#advanced-controls > .control-switch')).every(row=>{const copy=row.querySelector('.control-copy').getBoundingClientRect(), control=row.querySelector('.switch').getBoundingClientRect();return copy.right+15<=control.left && row.querySelector('.caption')?.parentElement.classList.contains('control-copy');})`),true);
   await evaluate(`document.querySelector('#advanced-controls').closest('details').open=false`);

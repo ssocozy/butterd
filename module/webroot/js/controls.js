@@ -56,8 +56,14 @@ function toggle(title, checked, enabled, command, run, summary) {
     const requested = input.checked;
     if (requested && command.confirm) { input.checked = checked; command.confirm(); return; }
     input.disabled = true; row.setAttribute('aria-busy','true');
-    try { if (!await run(requested ? command.on : command.off)) input.checked = checked; }
-    finally { row.removeAttribute('aria-busy'); input.disabled = input.dataset.capable === 'false'; }
+    const status = row.querySelector('.caption'); const previous = status?.textContent;
+    if (status) { status.setAttribute('role','status'); status.textContent = requested ? 'Turning on…' : 'Turning off…'; }
+    try {
+      if (!await run(requested ? command.on : command.off)) {
+        input.checked = checked;
+        if (status) status.textContent = 'Change not confirmed. '+(previous || '');
+      } else if (status) status.textContent = requested ? 'Preference enabled.' : 'Preference disabled.';
+    } finally { row.removeAttribute('aria-busy'); input.disabled = input.dataset.capable === 'false'; }
   });
   const copy = document.createElement('div'); copy.className = 'control-copy'; copy.append(heading);
   if (summary) copy.append(paragraph(summary,'caption'));

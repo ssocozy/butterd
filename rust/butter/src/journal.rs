@@ -69,6 +69,20 @@ impl DiskStore {
         store._lock = Some(lock);
         Ok(store)
     }
+    /// Interactive requests tolerate a short supervisor transaction without failing a tap.
+    pub fn locked_wait(directory: impl Into<PathBuf>, timeout: std::time::Duration) -> Result<Self> {
+        let directory = directory.into();
+        let started = std::time::Instant::now();
+        loop {
+            match Self::locked(directory.clone()) {
+                Ok(store) => return Ok(store),
+                Err(error) if error.downcast_ref::<crate::lock::Busy>().is_some() && started.elapsed() < timeout => {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
     fn path(&self, feature: &Feature) -> Result<PathBuf> {
         feature.validate()?;
         Ok(self.directory.join(format!("{}.json", feature.key())))

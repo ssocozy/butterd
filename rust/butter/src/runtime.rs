@@ -326,6 +326,10 @@ pub fn daemon(boot: &str) -> Result<()> {
     loop {
         let ctx = context();
         let now = uptime()?;
+        // Read-only sensor collection must not delay interactive control commands.
+        let cpu = read_bounded(Path::new("/proc/stat"), 65536).ok().and_then(|text| cpu_counters(&text));
+        let load = previous_cpu.zip(cpu).and_then(|(old, new)| busy(old, new)); previous_cpu = cpu;
+        let sampled_telemetry = telemetry(&ctx, load);
         let e = match engine(boot) { Ok(e) => e, Err(_) => { std::thread::sleep(Duration::from_secs(1)); continue; } };
         let stopping = !Path::new(MODULE).is_dir() || ["disable", "remove"].iter().any(|file| Path::new(MODULE).join(file).exists()) || Path::new(DIRECTORY).join("stop").exists();
         let cfg = config();
@@ -394,9 +398,7 @@ pub fn daemon(boot: &str) -> Result<()> {
                 let _ = restore_refresh(&e, &mut state);
             }
         }
-        let cpu = read_bounded(Path::new("/proc/stat"), 65536).ok().and_then(|text| cpu_counters(&text));
-        let load = previous_cpu.zip(cpu).and_then(|(old, new)| busy(old, new)); previous_cpu = cpu;
-        state.telemetry = telemetry(&ctx, load);
+        state.telemetry = sampled_telemetry;
         state.telemetry["wakeSource"] = json!(wake_events.last_wake);
         state.telemetry["eventStreamRunning"] = json!(wake_events.available());
         state.telemetry["displayRequestHz"] = json!(state.refresh_hz);
