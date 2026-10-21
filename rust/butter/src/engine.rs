@@ -104,8 +104,10 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             Some(journal) => journal,
             None => {
                 let mut entries = Vec::new();
-                for (path, _) in &targets {
-                    let original = hardware::value(&self.hardware, path)?;
+                let originals = if feature == Feature::PhoneMic {
+                    self.hardware.read_many(&targets.iter().map(|(path,_)| path.as_str()).collect::<Vec<_>>())?
+                } else { targets.iter().map(|(path,_)| hardware::value(&self.hardware,path)).collect::<Result<Vec<_>>>()? };
+                for ((path, _), original) in targets.iter().zip(originals) {
                     entries.push(Entry {
                         path: path.clone(),
                         expected: original.clone(),
@@ -197,7 +199,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             return Err("Capabilities changed; restore first".into());
         }
         // Widen limits before narrowing them, for both application and restoration.
-        journal.entries.sort_by_key(|entry| {
+        if feature != Feature::PhoneMic { journal.entries.sort_by_key(|entry| {
             let target = targets.iter().find(|(path, _)| path == &entry.path).map(|(_, value)| value.as_str()).unwrap_or("");
             let old = hardware::value(&self.hardware, &entry.path).ok().and_then(|value| value.parse::<u64>().ok());
             let new = target.parse::<u64>().ok();
@@ -205,7 +207,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
                 (Some(old), Some(new)) if (entry.path.ends_with("min_freq") && new <= old) || (entry.path.ends_with("max_freq") && new >= old) => 0,
                 _ => 1,
             }
-        });
+        }); }
         for index in 0..journal.entries.len() {
             let path = journal.entries[index].path.clone();
             let target = targets
@@ -295,8 +297,10 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             return Ok("Original values active; release session");
         }
         let mut pending = false;
-        for entry in &journal.entries {
-            let actual = hardware::value(&self.hardware, &entry.path)?;
+        let actuals = if *feature == Feature::PhoneMic {
+            self.hardware.read_many(&journal.entries.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>())?
+        } else { journal.entries.iter().map(|entry| hardware::value(&self.hardware,&entry.path)).collect::<Result<Vec<_>>>()? };
+        for (entry,actual) in journal.entries.iter().zip(actuals) {
             pending |= entry.before.is_some();
             if !entry.owned(&actual) {
                 return Ok("Readback changed; request no longer active");

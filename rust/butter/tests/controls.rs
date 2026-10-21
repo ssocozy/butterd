@@ -556,7 +556,9 @@ fn phone_mic_restores_owned_preferences_and_preserves_external_edits() {
     let engine=audio_fixture();
     engine.apply(Feature::PhoneMic,"",false,false).unwrap();
     for source in butter::audio::PRESETS { assert!(engine.hardware.read(&format!("audio-capture:{source}")).unwrap().contains("bottom")); }
+    assert_eq!(engine.state(&Feature::PhoneMic).unwrap(),"Request active");
     engine.hardware.put("audio-capture:7",r#"[{"type":7,"address":"earbuds"}]"#);
+    assert_eq!(engine.state(&Feature::PhoneMic).unwrap(),"Readback changed; request no longer active");
     engine.apply(Feature::PhoneMic,"",true,false).unwrap();
     assert_eq!(engine.hardware.read("audio-capture:1").unwrap(),"[]");
     assert_eq!(engine.hardware.read("audio-capture:5").unwrap(),"[]");

@@ -36,6 +36,9 @@ pub fn bypass_node(hardware: &impl Hardware) -> Result<String> {
 pub trait Hardware {
     fn read(&self, path: &str) -> Result<String>;
     fn write(&self, path: &str, value: &str) -> Result<()>;
+    fn read_many(&self, paths: &[&str]) -> Result<Vec<String>> {
+        paths.iter().map(|path| self.read(path)).collect()
+    }
     fn list(&self, path: &str) -> Result<Vec<String>>;
     fn check_write(&self, _path: &str) -> Result<()> {
         Ok(())
@@ -63,6 +66,12 @@ pub fn read_bounded(path: &Path, limit: u64) -> Result<String> {
     read_stream(&mut fs::File::open(path)?,limit)
 }
 impl Hardware for SystemHardware {
+    fn read_many(&self, paths: &[&str]) -> Result<Vec<String>> {
+        if !paths.is_empty() && paths.iter().all(|path| crate::audio::preset(path).is_some()) {
+            return crate::audio::read_many(paths);
+        }
+        paths.iter().map(|path| self.read(path)).collect()
+    }
     fn check_write(&self, path: &str) -> Result<()> {
         if crate::audio::preset(path).is_some() { return Ok(()); }
         if crate::display::node(path).is_some() { return Ok(()); }

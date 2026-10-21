@@ -10,7 +10,7 @@ export function button(text, action, enabled = true, style = 'secondary') {
 }
 export function paragraph(text, className = 'caption') { const node = document.createElement('p'); node.className = className; node.textContent = text; return node; }
 export function actions(...buttons) { const node = document.createElement('div'); node.className = 'quick-actions'; node.append(...buttons); return node; }
-export function setBusy(busy) { document.body.setAttribute('aria-busy', String(busy)); document.querySelectorAll('button[data-capable]').forEach(node => { node.disabled = busy || node.dataset.capable === 'false'; }); }
+export function setBusy(busy) { document.body.setAttribute('aria-busy', String(busy)); document.querySelectorAll('button[data-capable],input[data-capable]').forEach(node => { node.disabled = busy || node.dataset.capable === 'false'; }); }
 const selectors = new Map();
 let choiceDialog;
 export function updateSelectors() {

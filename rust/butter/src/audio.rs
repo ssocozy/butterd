@@ -35,3 +35,9 @@ pub fn plan(hardware: &impl Hardware) -> Result<Vec<(String,String)>> {
     if mic.first().is_none_or(|device| device.kind != 15) { return Err("Built-in microphone not exposed".into()); }
     Ok(PRESETS.iter().map(|source| (format!("audio-capture:{source}"),value.clone())).collect())
 }
+
+/// One Android process for a fresh snapshot; no values are cached across operations.
+pub fn read_many(paths: &[&str]) -> Result<Vec<String>> {
+    let values: Value = serde_json::from_str(&bridge(&["preferences"])?)?;
+    paths.iter().map(|path| normalize(&values.get(*path).ok_or("Missing capture preference")?.to_string())).collect()
+}

@@ -64,6 +64,11 @@ public final class AudioRouteBridge {
         AudioManager manager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
         Class<?> attributes = Class.forName("android.media.AudioDeviceAttributes");
         validateContract(AudioManager.class,attributes);
+        if (args.length == 1 && args[0].equals("preferences")) {
+            JSONObject values = new JSONObject();
+            for (int source : new int[]{1,5,7}) values.put("audio-capture:"+source,preferences(manager,source,attributes));
+            System.out.println(values); return;
+        }
         if (args.length == 1 && args[0].equals("status")) { System.out.println(status(manager,attributes)); return; }
         if (args.length == 2 && args[0].equals("read")) { System.out.println(preferences(manager,preset(args[1]),attributes)); return; }
         if (args.length != 3 || !args[0].equals("write") || args[2].length() > 2048) throw new IllegalArgumentException("Invalid capture routing request");

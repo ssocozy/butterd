@@ -109,6 +109,8 @@ try {
   await evaluate(`document.querySelector('#cpu-controls').closest('details').open=true`); await delay(250);
   assert.equal(await evaluate(`document.querySelector('#governor-all').value`),'schedutil');
   assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('Prefer phone microphone')`),true);
+  assert.equal(await evaluate(`document.querySelector('#audio-controls input[role=switch]').checked`),false);
+  assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('Use previous preferences')`),false);
   assert.equal(await evaluate(`document.querySelector('#preferences-status').textContent.includes('remembered after reboot')`),true);
   assert.equal(await evaluate(`document.querySelector('#cpu-controls > details').open`),false);
   await evaluate(`document.querySelector('#cpu-controls > details').open=true`);
