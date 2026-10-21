@@ -180,10 +180,10 @@ function renderSupervisor(supervisor) {
   const config = supervisor.config || {}, state = supervisor.runtime || {}, data = state.telemetry || {};
   document.querySelector('#automatic').checked = config.automatic === true;
   document.querySelector('#logcat').checked = config.logcat === true;
-  document.querySelector('#decision').textContent = (state.active || 'balanced') + ' · ' + (state.reason || 'Monitoring is stopped.') + (state.error ? ' · ' + state.error : '') + (state.sampled_at && supervisor.uptime - state.sampled_at > 30 ? ' · Readings are stale; restart monitoring.' : '');
+  document.querySelector('#decision').textContent = (state.active || 'balanced') + ' · ' + (state.reason || 'Monitoring is stopped.') + (state.error || config.error ? ' · ' + (state.error || config.error) : '') + (state.sampled_at && supervisor.uptime - state.sampled_at > 30 ? ' · Readings are stale; restart monitoring.' : '');
   const watts = document.querySelector('#live-watts'); watts.textContent = Number.isFinite(data.batteryWatts) ? (data.batteryWatts > 0 ? '+' : '') + data.batteryWatts.toFixed(1) : '—';
   const metrics = document.querySelector('#live-metrics'); metrics.replaceChildren();
-  const entries = [ ['Battery', data.batteryPercent == null ? 'Not reported' : data.batteryPercent + '%'], ['Temperature', data.batteryTempC == null ? 'Not reported' : data.batteryTempC.toFixed(1) + ' °C'], ['Display', data.screenHz == null ? 'Not reported' : data.screenHz.toFixed(1) + ' Hz'], ['CPU busy', data.cpuBusyPercent == null ? 'Collecting samples' : data.cpuBusyPercent.toFixed(0) + '%'], ['Charge cycles', data.cycleCount == null ? 'Not reported by firmware' : String(data.cycleCount)], ['Battery health', data.healthPercent == null ? (data.health || 'Not reported by firmware') : data.healthPercent.toFixed(0) + '% of design capacity'] ];
+  const entries = [ ['Battery', data.batteryPercent == null ? 'Not reported' : data.batteryPercent + '%'], ['Temperature', data.batteryTempC == null ? 'Not reported' : data.batteryTempC.toFixed(1) + ' °C'], ['Display', data.screenHz == null ? 'Not reported' : data.screenHz.toFixed(1) + ' Hz'], ['SoC temperature', data.socTempC == null ? 'Not reported by firmware' : data.socTempC.toFixed(1) + ' °C'], ['GPU busy', data.gpuBusyPercent == null ? 'Not reported by firmware' : data.gpuBusyPercent.toFixed(0) + '%'], ['CPU busy', data.cpuBusyPercent == null ? 'Collecting samples' : data.cpuBusyPercent.toFixed(0) + '%'], ['Charge cycles', data.cycleCount == null ? 'Not reported by firmware' : String(data.cycleCount)], ['Battery health', data.healthPercent == null ? (data.health || 'Not reported by firmware') : data.healthPercent.toFixed(0) + '% of design capacity'] ];
   for (const [name,value] of entries) { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = name; dd.textContent = value; metrics.append(dt,dd); }
   const host = document.querySelector('#app-rules'); host.replaceChildren();
   for (const rule of config.rules || []) {
@@ -213,7 +213,7 @@ async function report(command, download) {
   } catch (error) { feedback.textContent = error.message; }
 }
 document.querySelector('#export-report').addEventListener('click', () => report('diagnostics', true));
-document.querySelector('#measure-app').addEventListener('click', () => { const packageName = lastSupervisor?.runtime?.foreground; if (!packageName || !/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(packageName)) { document.querySelector('#report-feedback').textContent = 'Start monitoring with one app in the foreground first.'; return; } report('measure ' + packageName, false); });
+document.querySelector('#measure-app').addEventListener('click', () => { const packageName = document.querySelector('#app-package').value.trim() || lastSupervisor?.runtime?.foreground; if (!packageName || !/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(packageName)) { document.querySelector('#report-feedback').textContent = 'Start monitoring with one app in the foreground first.'; return; } report('measure ' + packageName, false); });
 setInterval(async () => {
   if (document.hidden || engineBusy) return;
   try { const state = JSON.parse(await exec('/data/adb/modules/butterd/bin/butter status')); if (!engineBusy) renderSupervisor(state.supervisor); } catch (_) { /* Explicit refresh retains actionable errors. */ }

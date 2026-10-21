@@ -39,6 +39,6 @@ set_perm "$MODPATH/bin/butter" 0 0 0755
 set_perm "$MODPATH/bin/butter-engine" 0 0 0755
 set_perm "$MODPATH/service.sh" 0 0 0755
 set_perm "$MODPATH/action.sh" 0 0 0755
-ui_print "- No system overlay, thermal overrides or boot performance writes."
+ui_print "- Automatic tuning and advanced overrides stay off until you enable them."
 ui_print "- Compatibility requires enabled Zygisk (or a compatible KernelSU Zygisk provider)."
 ui_print "- Three compatibility options are included; no integrity verdict is guaranteed."

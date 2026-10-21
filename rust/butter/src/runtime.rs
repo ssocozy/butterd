@@ -100,8 +100,9 @@ pub fn ensure_daemon() -> Result<()> {
 pub fn configure(boot: &str, args: &[String]) -> Result<String> {
     {
         let e = engine(boot)?;
-        let mut cfg = config()?;
-        let mut state = state(boot)?;
+        let resetting = args == ["reset"];
+        let mut cfg = match config() { Ok(cfg) => cfg, Err(_) if resetting => Config::default(), Err(error) => return Err(error) };
+        let mut state = match state(boot) { Ok(state) => state, Err(_) if resetting => RuntimeState {boot:boot.into(), ..Default::default()}, Err(error) => return Err(error) };
         match args {
             [command] if command == "monitor" => {},
             [command, choice] if command == "auto" && matches!(choice.as_str(), "on" | "off") => { cfg.automatic = choice == "on"; state.tuning_requested = cfg.automatic; state.blocked = false; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = Some(Mode::Balanced); }
@@ -140,14 +141,15 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
 #[derive(Debug, Clone, Default)]
 pub struct Context {
     pub awake: Option<bool>, pub saver: Option<bool>, pub temperature: Option<i64>, pub battery: Option<u64>,
-    pub online: Option<bool>, pub user: Option<u32>, pub app: Option<String>, pub rates: Vec<u32>, pub hz: Option<f64>,
+    pub soc_millic: Option<i64>, pub gpu_busy: Option<f64>, pub online: Option<bool>, pub user: Option<u32>, pub app: Option<String>, pub rates: Vec<u32>, pub hz: Option<f64>,
 }
 pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now: u64) -> (Mode, &'static str) {
     state.leases.retain(|lease| lease.expires > now && lease.expires <= now.saturating_add(30));
     if !config.automatic && !state.tuning_requested { state.leases.clear(); return (Mode::Balanced, "Monitoring only"); }
     if state.blocked { state.leases.clear(); return (Mode::Balanced, "Paused after a conflict or failure; select a preset to retry"); }
     if context.awake != Some(true) { state.leases.clear(); return (Mode::Balanced, "Screen off or display state unknown"); }
-    let warm = context.temperature.is_none_or(|temp| temp >= if state.reason == "Cooling down" { 390 } else { 420 });
+    let cooling = state.reason == "Cooling down";
+    let warm = context.temperature.is_none_or(|temp| temp >= if cooling { 390 } else { 420 }) || context.soc_millic.is_some_and(|temp| temp >= if cooling { 75000 } else { 85000 });
     if warm { state.leases.clear(); return (Mode::Balanced, "Cooling down"); }
     if context.saver != Some(false) || context.battery.is_none_or(|level| level <= 20) { state.leases.clear(); return (Mode::Battery, "Battery saver or low battery"); }
     if context.app.is_none() { state.leases.clear(); return (Mode::Balanced, "Foreground app unknown or multiple resumed apps"); }
@@ -157,7 +159,7 @@ pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now:
         state.leases.retain(|lease| lease.source != "launch");
         state.leases.push(Lease { source: "launch".into(), expires: now.saturating_add(3) });
     }
-    let idle = state.telemetry.get("cpuBusyPercent").and_then(Value::as_f64).is_some_and(|load| load < 15.0);
+    let idle = state.telemetry.get("cpuBusyPercent").and_then(Value::as_f64).is_some_and(|load| load < 15.0) && context.gpu_busy.is_some_and(|load| load < 15.0);
     state.idle_samples = if idle { state.idle_samples.saturating_add(1).min(3) } else { 0 };
     if !state.leases.is_empty() { (Mode::Boost, "Temporary boost lease") }
     else if requested == Mode::Performance && state.idle_samples >= 3 { (Mode::Balanced, "Idle workload; frequency floors released") }
@@ -172,8 +174,18 @@ fn context() -> Context {
     let app = if awake == Some(true) { android::command("/system/bin/dumpsys", &["activity", "activities"]).ok().and_then(|text| android::foreground(&text)) } else { None };
     let user = android::command("/system/bin/am", &["get-current-user"]).ok().and_then(|value| value.parse().ok()).filter(|user| *user <= 99999);
     let display = if awake == Some(true) { android::command("/system/bin/dumpsys", &["display"]).unwrap_or_default() } else { String::new() };
+    let soc_millic = hw.list(crate::hardware::THERMAL).unwrap_or_default().into_iter().filter(|name| name.strip_prefix("thermal_zone").is_some_and(|suffix| !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit()))).filter_map(|name| {
+        let base = format!("{}/{name}", crate::hardware::THERMAL);
+        let kind = hw.read(&format!("{base}/type")).ok()?.to_ascii_lowercase();
+        if !(kind == "soc_max" || kind.contains("cpu") || kind == "gpu") { return None; }
+        hw.read(&format!("{base}/temp")).ok()?.parse::<i64>().ok().filter(|value| (0..=200000).contains(value))
+    }).max();
+    let gpu_busy = [crate::hardware::GPU,crate::hardware::GPU_ALT].iter().find_map(|node| {
+        let raw = hw.read(&format!("{}/load", node.trim_end_matches("/min_freq"))).ok()?;
+        raw.trim_end_matches('%').parse::<f64>().ok().filter(|value| value.is_finite() && (0.0..=100.0).contains(value))
+    });
     Context {
-        awake, saver, temperature: read("/sys/class/power_supply/battery/temp").and_then(|value| value.parse().ok()).filter(|v| (-200..=800).contains(v)),
+        awake, saver, soc_millic, gpu_busy, temperature: read("/sys/class/power_supply/battery/temp").and_then(|value| value.parse().ok()).filter(|v| (-200..=800).contains(v)),
         battery: read("/sys/class/power_supply/battery/capacity").and_then(|value| value.parse().ok()).filter(|value| *value <= 100),
         online: read("/sys/class/power_supply/usb/online").and_then(|value| match value.as_str() { "1" => Some(true), "0" => Some(false), _ => None }),
         user, app, rates: android::display_rates(&display), hz: active_hz(&display),
@@ -181,7 +193,18 @@ fn context() -> Context {
 }
 pub fn active_hz(text: &str) -> Option<f64> {
     for line in text.lines().filter(|line| line.contains("DisplayDeviceInfo{") && line.contains("type INTERNAL")) {
-        if let Some(tail) = line.split("renderFrameRate ").nth(1).or_else(|| line.split("refreshRate=").nth(1)) {
+        if let Some(id) = line.split("modeId ").nth(1).or_else(|| line.split("modeId=").nth(1)) {
+            let id: String = id.chars().take_while(char::is_ascii_digit).collect();
+            if !id.is_empty() {
+                if let Some(mode) = line.split("supportedModes").nth(1).and_then(|modes| modes.split(&format!("id={id},")).nth(1)).and_then(|tail| tail.split('}').next()) {
+                    if let Some(fps) = mode.split("fps=").nth(1) {
+                        let number: String = fps.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+                        if let Ok(hz) = number.parse::<f64>() { if hz.is_finite() && (1.0..=144.1).contains(&hz) { return Some(hz); } }
+                    }
+                }
+            }
+        }
+        if let Some(tail) = line.split("refreshRate=").nth(1) {
             let number: String = tail.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
             if let Ok(hz) = number.parse::<f64>() { if hz.is_finite() && (1.0..=144.1).contains(&hz) { return Some(hz); } }
         }
@@ -196,7 +219,7 @@ fn restore_refresh(e: &Engine<SystemHardware, DiskStore>, state: &mut RuntimeSta
     Ok(())
 }
 fn refresh(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &mut RuntimeState, ctx: &Context, desired: Mode) -> Result<()> {
-    let rule = if !state.blocked && cfg.automatic && ctx.awake == Some(true) && ctx.saver == Some(false) && ctx.temperature.is_some_and(|temp| temp < 420) && desired != Mode::Battery {
+    let rule = if !state.blocked && cfg.automatic && ctx.awake == Some(true) && ctx.saver == Some(false) && ctx.temperature.is_some_and(|temp| temp < 420) && ctx.soc_millic.is_none_or(|temp| temp < 85000) && desired != Mode::Battery {
         cfg.rules.iter().find(|rule| Some(&rule.package) == ctx.app.as_ref()).and_then(|rule| rule.hz)
     } else { None };
     if state.foreground != ctx.app || state.refresh_user != ctx.user || state.refresh_hz != rule || rule.is_none() { restore_refresh(e, state)?; }
@@ -217,11 +240,11 @@ fn refresh(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &mut Runt
     Ok(())
 }
 fn thermal_cleanup(e: &Engine<SystemHardware, DiskStore>, state: &mut RuntimeState, ctx: &Context, now: u64) -> Result<()> {
-    let unsafe_temperature = ctx.temperature.is_none_or(|temp| !(0..420).contains(&temp));
+    let unsafe_temperature = ctx.temperature.is_none_or(|temp| !(0..420).contains(&temp)) || ctx.soc_millic.is_some_and(|temp| temp >= 85000);
     let mut errors = Vec::new();
     for feature in [Feature::ChargingPause, Feature::ChargingThermal, Feature::GpuThermal, Feature::CpuLock, Feature::GpuLock, Feature::Bypass] {
         let charging = matches!(feature, Feature::ChargingPause | Feature::ChargingThermal | Feature::Bypass);
-        let should_restore = state.advanced_deadlines.get(&feature.key()).is_none_or(|expires| *expires <= now || *expires > now.saturating_add(1800)) || unsafe_temperature || ctx.battery.is_none_or(|level| level <= 20) || ctx.saver != Some(false) || (charging && ctx.online != Some(true)) || (!charging && ctx.awake != Some(true));
+        let should_restore = state.advanced_deadlines.get(&feature.key()).is_none_or(|expires| *expires <= now || *expires > now.saturating_add(1800)) || unsafe_temperature || ctx.battery.is_none_or(|level| level <= 20) || ctx.saver != Some(false) || (charging && ctx.online != Some(true)) || (!charging && (ctx.awake != Some(true) || ctx.soc_millic.is_none()));
         if should_restore {
             match e.session(&feature).and_then(|session| if session.is_some() { e.apply_targets(feature.clone(), Vec::new(), true).map(|_| ()) } else { Ok(()) }) {
                 Ok(()) => { state.advanced_deadlines.remove(&feature.key()); },
@@ -239,10 +262,10 @@ fn telemetry(ctx: &Context, cpu: Option<f64>) -> Value {
         if amps.unsigned_abs() > 50_000_000 || !(1_000_000..=10_000_000).contains(&volts) { return None; }
         let watts = (amps as f64 * volts as f64 / 1e12).abs();
         // Battery current polarity differs by driver. Use status to normalize the display.
-        match read("status").as_deref() { Some("Discharging") => Some(-watts), Some("Charging") => Some(watts), Some("Not charging" | "Full") => Some(0.0), _ => None }
+        match read("status").as_deref() { Some("Discharging") => Some(-watts), Some("Charging") => Some(watts), Some("Not charging") => Some(-watts), Some("Full") => Some(0.0), _ => None }
     });
     let health_percent = integer("charge_full").zip(integer("charge_full_design")).filter(|(full, design)| *full > 0 && *design > 0 && full <= &design.saturating_mul(2)).map(|(full, design)| full as f64 * 100.0 / design as f64);
-    json!({"batteryPercent":ctx.battery,"batteryTempC":ctx.temperature.map(|v| v as f64 / 10.0),"batteryWatts":watts,"usbOnline":ctx.online,"batteryStatus":read("status"),"health":read("health"),"healthPercent":health_percent,"cycleCount":integer("cycle_count"),"voltageUv":integer("voltage_now"),"currentUa":integer("current_now"),"screenHz":ctx.hz,"supportedHz":ctx.rates,"cpuBusyPercent":cpu})
+    json!({"batteryPercent":ctx.battery,"batteryTempC":ctx.temperature.map(|v| v as f64 / 10.0),"batteryWatts":watts,"usbOnline":ctx.online,"batteryStatus":read("status"),"health":read("health"),"healthPercent":health_percent,"cycleCount":integer("cycle_count"),"voltageUv":integer("voltage_now"),"currentUa":integer("current_now"),"screenHz":ctx.hz,"supportedHz":ctx.rates,"cpuBusyPercent":cpu,"gpuBusyPercent":ctx.gpu_busy,"socTempC":ctx.soc_millic.map(|v| v as f64 / 1000.0)})
 }
 pub fn cpu_counters(text: &str) -> Option<(u64, u64)> {
     let fields: Vec<_> = text.lines().next()?.split_whitespace().collect();
@@ -266,26 +289,25 @@ pub fn daemon(boot: &str) -> Result<()> {
     fs::set_permissions(DIRECTORY, fs::Permissions::from_mode(0o700))?;
     let mut previous_cpu = None;
     let mut last_error = String::new();
+    let mut last_sample_event = 0;
     loop {
-        let stopping = !Path::new(MODULE).is_dir() || ["disable", "remove"].iter().any(|file| Path::new(MODULE).join(file).exists()) || Path::new(DIRECTORY).join("stop").exists();
-        let cfg = config();
         let ctx = context();
         let now = uptime()?;
         let e = match engine(boot) { Ok(e) => e, Err(_) => { std::thread::sleep(Duration::from_secs(1)); continue; } };
+        let stopping = !Path::new(MODULE).is_dir() || ["disable", "remove"].iter().any(|file| Path::new(MODULE).join(file).exists()) || Path::new(DIRECTORY).join("stop").exists();
+        let cfg = config();
         let mut state = match state(boot) { Ok(state) => state, Err(error) => {
             event(&Config::default(), "error", &error.to_string());
             // Corrupt metadata never authorizes a new write. Keep journals for explicit recovery.
-            e.preset(Mode::Balanced)?;
+            let mut fallback_state = RuntimeState { boot:boot.into(), ..Default::default() };
+            let _ = cleanup_all(&e, &mut fallback_state);
+            let _ = recover_refresh(&e);
             return Err(error);
         } };
         if stopping || cfg.is_err() {
             let fallback = cfg.unwrap_or_default();
-            for feature in e.controls() {
-                if e.session(&feature)?.is_some() {
-                    if let Err(error) = e.apply_targets(feature, Vec::new(), true) { event(&fallback, "error", &error.to_string()); }
-                }
-            }
-            if let Err(error) = restore_refresh(&e, &mut state) { event(&fallback, "error", &error.to_string()); }
+            if let Err(error) = cleanup_all(&e, &mut state) { event(&fallback, "error", &error.to_string()); }
+            if let Err(error) = recover_refresh(&e) { event(&fallback, "error", &error.to_string()); }
             state.leases.clear(); state.active = Mode::Balanced; state.reason = "Supervisor stopped".into(); state.sampled_at = now; save("runtime.json", &state)?;
             return Ok(());
         }
@@ -315,6 +337,9 @@ pub fn daemon(boot: &str) -> Result<()> {
         let cpu = read_bounded(Path::new("/proc/stat"), 65536).ok().and_then(|text| cpu_counters(&text));
         let load = previous_cpu.zip(cpu).and_then(|(old, new)| busy(old, new)); previous_cpu = cpu;
         state.telemetry = telemetry(&ctx, load); state.foreground = ctx.app; state.sampled_at = now;
+        if now.saturating_sub(last_sample_event) >= if cfg.logcat { 10 } else { 30 } {
+            event(&cfg, "sample", &state.telemetry.to_string()); last_sample_event = now;
+        }
         save("runtime.json", &state)?;
         drop(e);
         std::thread::sleep(Duration::from_secs(if ctx.awake == Some(true) { 2 } else { 8 }));
@@ -322,7 +347,8 @@ pub fn daemon(boot: &str) -> Result<()> {
 }
 pub fn diagnostics(boot: &str) -> Result<Value> {
     let e = engine(boot)?;
-    let cfg = config()?; let state = state(boot)?;
+    let cfg = config().map(|cfg| json!(cfg)).unwrap_or_else(|error| json!({"error":error.to_string()}));
+    let state = state(boot).map(|state| json!(state)).unwrap_or_else(|error| json!({"error":error.to_string()}));
     let events = read_bounded(&Path::new(DIRECTORY).join("events.jsonl"), 270000).unwrap_or_default();
     let events: Vec<Value> = events.lines().rev().take(100).filter_map(|line| serde_json::from_str(line).ok()).collect();
     let sessions: Vec<Value> = e.controls().iter().map(|feature| match e.session(feature) { Ok(session) => json!({"control":feature.key(),"journal":session}), Err(error) => json!({"control":feature.key(),"error":error.to_string()}) }).collect();
@@ -363,6 +389,7 @@ pub fn parse_frames(text: &str) -> Value {
     json!({"frames":durations.len(),"p50Ms":percentile(50),"p95Ms":percentile(95),"note":"Recent app-rendered frame durations; not game FPS or proof of a performance gain. Compare the same scene and temperature."})
 }
 pub fn launch_if_requested(boot: &str) -> Result<()> {
+    { let e = engine(boot)?; recover_refresh(&e)?; }
     let cfg = config()?;
     if cfg.automatic { ensure_daemon()?; }
     else { let _ = state(boot)?; }
@@ -373,9 +400,12 @@ pub fn guarded_apply(boot: &str, feature: Feature) -> Result<String> {
     let ctx = context();
     if ctx.temperature.is_none_or(|value| !(0..400).contains(&value)) || ctx.battery.is_none_or(|value| value <= 20) || ctx.saver != Some(false) { return Err("Advanced controls require a known battery temperature below 40°C, battery above 20%, and battery saver off".into()); }
     let charging = matches!(feature, Feature::ChargingPause | Feature::ChargingThermal | Feature::Bypass);
+    if !charging && ctx.soc_millic.is_none_or(|value| value >= 75000) { return Err("Clock and GPU cooling overrides require a readable SoC temperature below 75°C".into()); }
     if (charging && ctx.online != Some(true)) || (!charging && ctx.awake != Some(true)) { return Err("Connect a charger for charging controls, or wake the screen for clock controls".into()); }
     ensure_daemon()?;
     let e = engine(boot)?;
+    let other = if feature == Feature::ChargingPause { Some(Feature::Bypass) } else if feature == Feature::Bypass { Some(Feature::ChargingPause) } else { None };
+    if other.as_ref().is_some_and(|other| e.session(other).is_ok_and(|session| session.is_some())) { return Err("Restore the other charging mode first".into()); }
     if feature == Feature::ChargingPause && e.session(&feature)?.is_none() {
         let raw = e.hardware.read(crate::hardware::PAUSE)?;
         if raw.split_whitespace().nth(1) != Some("0") { return Err("Charging is already paused outside butter".into()); }
@@ -405,9 +435,23 @@ fn cleanup_all(e: &Engine<SystemHardware, DiskStore>, state: &mut RuntimeState) 
         if let Err(error) = e.session(&feature).and_then(|session| if session.is_some() { e.apply_targets(feature.clone(), Vec::new(), true).map(|_| ()) } else { Ok(()) }) { errors.push(format!("{}: {error}", feature.key())); }
     }
     if let Err(error) = restore_refresh(e, state) { errors.push(error.to_string()); }
+    if let Err(error) = recover_refresh(e) { errors.push(error.to_string()); }
     if errors.is_empty() { Ok(()) } else { Err(errors.join("; ").into()) }
 }
 
 pub fn log_control(command: &[String], error: Option<&str>) {
     if let Ok(cfg) = config() { event(&cfg, if error.is_some() { "error" } else { "control" }, &format!("{}{}", command.join(" "), error.map_or(String::new(), |error| format!(": {error}")))); }
+}
+
+fn recover_refresh(e: &Engine<SystemHardware, DiskStore>) -> Result<()> {
+    let mut errors = Vec::new();
+    let mut count = 0;
+    for entry in fs::read_dir(DIRECTORY)? {
+        count += 1; if count > 512 { return Err("Too many state files".into()); }
+        let name = entry?.file_name(); let name = name.to_string_lossy();
+        if let Some(user) = name.strip_prefix("refresh-").and_then(|name| name.strip_suffix(".json")).and_then(|name| name.parse::<u32>().ok()).filter(|user| *user <= 99999) {
+            if let Err(error) = e.apply_targets(Feature::Refresh(user), Vec::new(), true) { errors.push(error.to_string()); }
+        }
+    }
+    if errors.is_empty() { Ok(()) } else { Err(errors.join("; ").into()) }
 }

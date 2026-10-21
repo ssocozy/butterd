@@ -43,7 +43,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         if journal.schema != 1 || &journal.feature != feature || journal.boot.len() != 36 {
             return Err("Invalid session identity".into());
         }
-        if journal.boot != self.boot {
+        if journal.boot != self.boot && !matches!(feature, Feature::Refresh(_)) {
             return Ok(None);
         }
         self.checked(feature, &journal)?;

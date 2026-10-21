@@ -49,7 +49,7 @@ fn run() -> Result<()> {
             boot,
         };
         let mut status = engine.status();
-        status["supervisor"] = serde_json::json!({"config": butter::runtime::config()?, "runtime": butter::runtime::state(&engine.boot)?, "uptime": butter::runtime::uptime()?});
+        status["supervisor"] = serde_json::json!({"config": butter::runtime::config().map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "runtime": butter::runtime::state(&engine.boot).map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "uptime": butter::runtime::uptime()?});
         println!("{}", serde_json::to_string(&status)?);
         return Ok(());
     }

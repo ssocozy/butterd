@@ -23,7 +23,7 @@ Configure controls in the module WebUI. Availability depends on your kernel and 
 
 ## How butter works
 
-butter is a device-aware Rust control engine for Duchamp. Its supervisor follows the foreground app, screen state, battery saver, battery temperature and sampled CPU activity. App rules choose a preset; short boost leases overlap independently and expire without a permanent clock lock. Idle workloads release performance floors, and heat takes priority over boosts.
+butter is a device-aware Rust control engine for Duchamp. Its supervisor follows the foreground app, screen state, battery saver, battery temperature and sampled CPU activity. App rules choose a preset; short boost leases overlap independently and expire without a permanent clock lock. When both CPU and GPU activity can be measured as idle, performance floors are released; heat takes priority over boosts.
 
 The engine discovers CPU policies and Mali frequency tables at runtime. Performance raises moderate frequency floors; Battery lowers ceilings; Balanced returns profile limits to the ROM. It does not assume every kernel exposes the same nodes. Display requests use Android preferences, accept only advertised internal-display modes and yield when another controller changes those preferences.
 

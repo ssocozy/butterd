@@ -1,5 +1,5 @@
 use butter::{android::{display_rates, foreground, parse_setting, valid_package}, presets::Mode, runtime::{busy, cpu_counters, decide, parse_frames, AppRule, Config, Context, Lease, RuntimeState}};
-fn context() -> Context { Context { awake:Some(true), saver:Some(false), temperature:Some(350), battery:Some(70), online:Some(false), user:Some(0), app:Some("com.example.game".into()), rates:vec![60,120], hz:Some(120.0) } }
+fn context() -> Context { Context { awake:Some(true), saver:Some(false), temperature:Some(350), battery:Some(70), soc_millic:Some(45000),gpu_busy:Some(0.0),online:Some(false), user:Some(0), app:Some("com.example.game".into()), rates:vec![60,120], hz:Some(120.0) } }
 fn state() -> RuntimeState { RuntimeState { tuning_requested:true, selected:Mode::Performance, ..Default::default() } }
 #[test]
 fn overlapping_boosts_expire_independently_and_never_survive_unknown_state() {
@@ -64,4 +64,17 @@ fn counter_wrap_and_frame_sentinels_do_not_become_performance_claims() {
 fn configuration_rejects_duplicate_packages_and_unsupported_modes() {
     let mut cfg=Config{rules:vec![AppRule{package:"com.example.game".into(),preset:Mode::Performance,hz:Some(500)}],..Default::default()}; assert!(cfg.validate().is_err());
     cfg.rules[0].hz=Some(120); cfg.rules.push(cfg.rules[0].clone()); assert!(cfg.validate().is_err());
+}
+
+#[test]
+fn gpu_busy_prevents_cpu_only_idle_decisions_and_soc_heat_cancels_boosts() {
+    let mut state=state(); let cfg=Config::default(); let mut ctx=context(); ctx.gpu_busy=Some(90.0); state.telemetry=serde_json::json!({"cpuBusyPercent":1.0});
+    for now in [100,102,104,106] { assert_eq!(decide(&cfg,&mut state,&ctx,now).0,Mode::Performance); }
+    ctx.soc_millic=Some(90000); state.leases.push(Lease{source:"manual".into(),expires:120});
+    assert_eq!(decide(&cfg,&mut state,&ctx,108).0,Mode::Balanced); assert!(state.leases.is_empty());
+}
+#[test]
+fn physical_refresh_reader_uses_active_mode_instead_of_render_rate() {
+    let dump="DisplayDeviceInfo{built-in, modeId 2, renderFrameRate 60.0, supportedModes [{id=1, width=1220, height=2712, fps=60.0}, {id=2, width=1220, height=2712, fps=120.0}], type INTERNAL}";
+    assert_eq!(butter::runtime::active_hz(dump),Some(120.0));
 }

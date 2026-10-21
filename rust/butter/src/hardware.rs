@@ -59,7 +59,10 @@ impl Hardware for SystemHardware {
         Ok(())
     }
     fn read(&self, path: &str) -> Result<String> {
-        if let Some((user, key)) = crate::android::parse_setting(path) { return crate::android::setting(user, key, None); }
+        if let Some((user, key)) = crate::android::parse_setting(path) {
+            let raw = crate::android::setting(user, key, None)?;
+            return if raw == "null" { Ok(raw) } else { let hz: f64 = raw.parse()?; if !hz.is_finite() { return Err("Invalid display preference".into()); } Ok(hz.to_string()) };
+        }
         Ok(read_bounded(Path::new(path), 4096)?.trim().to_string())
     }
     fn write(&self, path: &str, value: &str) -> Result<()> {

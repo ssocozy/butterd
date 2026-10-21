@@ -35,6 +35,16 @@ impl Hardware for FakeHardware {
         if self.fail_at.get() == Some(number) {
             return Err("Simulated write failure".into());
         }
+        if let Some((base, field)) = path.rsplit_once('/') {
+            if let Ok(value) = value.parse::<u64>() {
+                let other = match field { "scaling_min_freq" => Some(("scaling_max_freq", true)), "scaling_max_freq" => Some(("scaling_min_freq", false)), "min_freq" => Some(("max_freq", true)), "max_freq" => Some(("min_freq", false)), _ => None };
+                if let Some((other, minimum)) = other {
+                    if let Ok(bound) = self.read(&format!("{base}/{other}")).and_then(|value| value.parse::<u64>().map_err(Into::into)) {
+                        if (minimum && value > bound) || (!minimum && value < bound) { return Err("Inverted fake hardware frequency limits".into()); }
+                    }
+                }
+            }
+        }
         self.put(path, value);
         Ok(())
     }
@@ -311,4 +321,15 @@ fn refresh_journals_cannot_target_another_user_or_non_display_setting() {
         assert!(engine.apply_targets(Feature::Refresh(0), vec![(path.into(), "120".into())], false).is_err());
     }
     assert_eq!(engine.hardware.writes.get(), 0);
+}
+
+#[test]
+fn display_journal_remains_restorable_after_reboot() {
+    let mut engine = fixture();
+    let path = "android:0:peak_refresh_rate";
+    engine.hardware.put(path, "60");
+    engine.apply_targets(Feature::Refresh(0),vec![(path.into(),"120".into())],false).unwrap();
+    engine.boot="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".into();
+    engine.apply_targets(Feature::Refresh(0),Vec::new(),true).unwrap();
+    assert_eq!(engine.hardware.read(path).unwrap(),"60");
 }
