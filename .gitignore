@@ -1,0 +1,7 @@
+/build/
+/dist/
+*.[mM][dD]
+!/README.md
+
+module/bin/catalog.dex
+__pycache__/

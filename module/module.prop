@@ -1,0 +1,6 @@
+id=butterd
+name=Butterd
+version=0.1.0
+versionCode=1
+author=ssocozy
+description=Duchamp module with hardware diagnostics and scoped build compatibility.
