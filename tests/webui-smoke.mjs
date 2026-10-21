@@ -110,7 +110,9 @@ try {
   assert.equal(await evaluate(`document.querySelector('#governor-all').value`),'schedutil');
   assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('Prefer phone microphone')`),true);
   assert.equal(await evaluate(`document.querySelector('#audio-controls input[role=switch]').checked`),false);
+  await evaluate(`document.querySelector('#advanced-controls').closest('details').open=true`);
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('#advanced-controls > .control-switch')).every(row=>{const copy=row.querySelector('.control-copy').getBoundingClientRect(), control=row.querySelector('.switch').getBoundingClientRect();return copy.right+15<=control.left && row.querySelector('.caption')?.parentElement.classList.contains('control-copy');})`),true);
+  await evaluate(`document.querySelector('#advanced-controls').closest('details').open=false`);
   assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('Use previous preferences')`),false);
   assert.equal(await evaluate(`document.querySelector('#preferences-status').textContent.includes('remembered after reboot')`),true);
   assert.equal(await evaluate(`document.querySelector('#cpu-controls > details').open`),false);
