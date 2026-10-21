@@ -1,6 +1,6 @@
 id=butterd
 name=Butterd
-version=0.4.5
-versionCode=15
+version=0.4.6
+versionCode=16
 author=ssocozy
 description=Duchamp performance controls powered by the Rust butter engine.

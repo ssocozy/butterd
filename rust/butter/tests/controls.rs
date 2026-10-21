@@ -432,3 +432,24 @@ fn infinity_and_rom_display_votes_apply_and_restore_without_manufacturing_keys()
     assert!(butter::hardware::validate_path_value(&Feature::Refresh(10),"display:0:preferred","null").is_err());
     assert_eq!(butter::display::preferred_reply("User preferred display mode: null").unwrap(),"null");
 }
+
+#[test]
+fn android_unset_preferred_mode_is_captured_and_released() {
+    let engine = fixture();
+    let original = butter::display::preferred_reply("User preferred display mode: -1 -1 0.0\r\n").unwrap();
+    assert_eq!(original,"null");
+    for (path,value) in [("display:0:preferred",original.as_str()),("android:0:min_refresh_rate","0"),("android:0:peak_refresh_rate","Infinity")] { engine.hardware.put(path,value); }
+    // Stock Android 16 output includes nested refresh and HDR lists.
+    let dump = "DisplayDeviceInfo{modeId 2, supportedModes [{id=1, parentModeId=-1, sfModeId=0, flags=, width=1220, height=2712, fps=60.0, vsync=60.0, alternativeRefreshRates=[90.0, 120.00001], supportedHdrTypes=[2, 3, 4]}, {id=2, width=1220, height=2712, fps=120.00001, alternativeRefreshRates=[60.0, 90.0], supportedHdrTypes=[2, 3, 4]}], type INTERNAL}";
+    let targets = butter::display::targets(&engine.hardware,0,60,dump).unwrap();
+    assert_eq!(targets.len(),3);
+    assert!(targets.contains(&("display:0:preferred".into(),"1220 2712 60".into())));
+    engine.apply_targets(Feature::Refresh(0),targets,false).unwrap();
+    assert_eq!(engine.hardware.read("display:0:preferred").unwrap(),"1220 2712 60");
+    engine.apply_targets(Feature::Refresh(0),Vec::new(),true).unwrap();
+    assert_eq!(engine.hardware.read("display:0:preferred").unwrap(),"null");
+    assert_eq!(engine.hardware.read("android:0:peak_refresh_rate").unwrap(),"Infinity");
+    for invalid in ["-1 -1 60", "-1 2712 0", "1220 -1 0", "-1 -1 NaN"] {
+        assert!(butter::display::preferred_reply(&format!("User preferred display mode: {invalid}")).is_err());
+    }
+}

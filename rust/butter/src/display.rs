@@ -16,6 +16,9 @@ pub fn normalize(table: &str, key: &str, raw: &str) -> Result<String> {
     if table == "mode" {
         let parts: Vec<_> = raw.split_whitespace().collect();
         if parts.len() != 3 { return Err("Unsupported preferred display mode response".into()); }
+        // Android may construct an unset Mode rather than return a null object.
+        // Canonicalize that exact sentinel so release clears the preference again.
+        if parts[0] == "-1" && parts[1] == "-1" && parts[2].parse::<f64>()? == 0.0 { return Ok("null".into()); }
         let width = parts[0].parse::<u32>()?; let height = parts[1].parse::<u32>()?; let hz = parts[2].parse::<f64>()?;
         if !(1..=8192).contains(&width) || !(1..=8192).contains(&height) || !hz.is_finite() || !(1.0..=144.1).contains(&hz) { return Err("Invalid preferred display mode".into()); }
         let rate = if (hz-hz.round()).abs() < 0.1 { hz.round() } else { hz };
