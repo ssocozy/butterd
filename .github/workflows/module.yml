@@ -136,6 +136,11 @@ jobs:
           javac -source 8 -target 8 -bootclasspath "$ANDROID_HOME/platforms/android-36/android.jar" -d build/java java/dev/butterd/module/*.java
           "$ANDROID_HOME/build-tools/36.0.0/d8" --release --lib "$ANDROID_HOME/platforms/android-36/android.jar" --min-api 34 --output build/dex build/java/dev/butterd/module/*.class
           cp build/dex/classes.dex module/bin/catalog.dex
+      - name: Test ROM refresh bridge contract
+        run: |
+          mkdir -p build/java-tests
+          javac -cp "build/java:$ANDROID_HOME/platforms/android-36/android.jar" -d build/java-tests tests/RefreshRateBridgeTest.java
+          java -cp "build/java-tests:build/java:$ANDROID_HOME/platforms/android-36/android.jar" dev.butterd.module.RefreshRateBridgeTest
       - name: Refresh bundled Pixel catalog
         run: python3 tools/fetch_catalog.py
       - name: Package module

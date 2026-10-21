@@ -256,10 +256,14 @@ fn refresh(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &mut Runt
     // Save ownership before the first Android settings write.
     save("runtime.json", state)?;
     let dump = android::command("/system/bin/dumpsys", &["display"])?;
-    let targets = crate::display::targets(&e.hardware,user,hz,&dump)?;
+    let mut targets = crate::display::targets(&e.hardware,user,hz,&dump)?;
+    let adapter = crate::display::probe(user)?;
+    let app = ctx.app.as_deref().ok_or("Foreground app unavailable")?;
+    targets.extend(crate::display::app_targets(&e.hardware,user,app,hz,&adapter)?);
+    let backend = adapter.get("descriptor").and_then(Value::as_str).unwrap_or("Android display preferences");
     let controls = targets.len();
     e.apply_targets(feature, targets, false)?;
-    event(cfg,"display-request",&format!("Requested {hz} Hz for {} using {controls} display preferences",ctx.app.as_deref().unwrap_or("unknown app")));
+    event(cfg,"display-request",&format!("Requested {hz} Hz for {} using {controls} display preferences ({backend})",ctx.app.as_deref().unwrap_or("unknown app")));
     Ok(())
 }
 fn thermal_cleanup(e: &Engine<SystemHardware, DiskStore>, state: &mut RuntimeState, ctx: &Context, now: u64) -> Result<()> {
@@ -410,7 +414,7 @@ pub fn diagnostics(boot: &str) -> Result<Value> {
     let mut controls = e.controls();
     if let Some(user) = state.get("refresh_user").and_then(Value::as_u64).filter(|user| *user <= 99999) { controls.push(Feature::Refresh(user as u32)); }
     let sessions: Vec<Value> = controls.iter().map(|feature| match e.session(feature) { Ok(session) => json!({"control":feature.key(),"journal":session}), Err(error) => json!({"control":feature.key(),"error":error.to_string()}) }).collect();
-    Ok(json!({"engine":e.status(),"sessions":sessions,"config":cfg,"runtime":state,"events":events,"supervisor":supervisor_status(boot),"compatibility":compatibility_status(),"startupLog":read_bounded(&Path::new(DIRECTORY).join("boot.log"),32768).ok(),"supervisorLog":read_bounded(&Path::new(DIRECTORY).join("supervisor.log"),32768).ok(),"kernel":read_bounded(Path::new("/proc/version"),4096).ok(),"displayPreferences":android::command("/system/bin/settings", &["get","system","peak_refresh_rate"]).ok(),"preferredDisplayMode":android::command("/system/bin/cmd", &["display","get-user-preferred-display-mode","0"]).ok(),"powerhalReadback":read_bounded(Path::new(crate::vendor::POWERHAL),4096).ok()}))
+    Ok(json!({"engine":e.status(),"sessions":sessions,"config":cfg,"runtime":state,"events":events,"supervisor":supervisor_status(boot),"compatibility":compatibility_status(),"startupLog":read_bounded(&Path::new(DIRECTORY).join("boot.log"),32768).ok(),"supervisorLog":read_bounded(&Path::new(DIRECTORY).join("supervisor.log"),32768).ok(),"kernel":read_bounded(Path::new("/proc/version"),4096).ok(),"displayPreferences":android::command("/system/bin/settings", &["get","system","peak_refresh_rate"]).ok(),"romRefreshAdapter":crate::display::probe_current().unwrap_or_else(|error| json!({"error":error.to_string()})),"preferredDisplayMode":android::command("/system/bin/cmd", &["display","get-user-preferred-display-mode","0"]).ok(),"powerhalReadback":read_bounded(Path::new(crate::vendor::POWERHAL),4096).ok()}))
 }
 pub fn shutdown(boot: &str) -> Result<String> {
     let e = engine(boot)?;

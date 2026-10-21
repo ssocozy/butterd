@@ -489,3 +489,42 @@ fn unified_governor_preserves_external_changes_and_checks_original_support() {
     assert!(engine.apply(Feature::Governors,"",true,false).is_err());
     assert_eq!(engine.hardware.writes.get(),writes);
 }
+
+#[test]
+fn rom_app_refresh_restores_only_its_rule_and_keeps_other_apps() {
+    let engine = fixture();
+    let app = "com.mobile.legends";
+    let path = "rom-app:0:refresh_rate_ext:com.voltage.display.IRefreshRateManagerService:com.mobile.legends";
+    let other = "rom-app:0:refresh_rate_ext:com.voltage.display.IRefreshRateManagerService:com.other.game";
+    engine.hardware.put(path,"120"); engine.hardware.put(other,"90");
+    let adapter = serde_json::json!({"available":true,"service":"refresh_rate_ext","descriptor":"com.voltage.display.IRefreshRateManagerService"});
+    let targets = butter::display::app_targets(&engine.hardware,0,app,60,&adapter).unwrap();
+    engine.apply_targets(Feature::Refresh(0),targets,false).unwrap();
+    assert_eq!(engine.hardware.read(path).unwrap(),"60");
+    assert_eq!(engine.hardware.read(other).unwrap(),"90");
+    engine.apply_targets(Feature::Refresh(0),Vec::new(),true).unwrap();
+    assert_eq!(engine.hardware.read(path).unwrap(),"120");
+    assert_eq!(engine.hardware.read(other).unwrap(),"90");
+    assert!(butter::hardware::validate_path_value(&Feature::Refresh(10),path,"60").is_err());
+    assert!(!butter::hardware::allowed(&engine.hardware,&Feature::Profile,path));
+}
+#[test]
+fn rom_refresh_fallback_unset_rules_and_external_edits_are_preserved() {
+    let engine = fixture();
+    let path = "rom-app:0:refresh_rate_ext:com.voltage.display.IRefreshRateManagerService:com.mobile.legends";
+    let adapter = serde_json::json!({"available":true,"service":"refresh_rate_ext","descriptor":"com.voltage.display.IRefreshRateManagerService"});
+    engine.hardware.put(path,"-1");
+    assert!(butter::display::app_targets(&engine.hardware,0,"com.mobile.legends",60,&serde_json::json!({"available":false})).unwrap().is_empty());
+    let targets = butter::display::app_targets(&engine.hardware,0,"com.mobile.legends",60,&adapter).unwrap();
+    engine.apply_targets(Feature::Refresh(0),targets,false).unwrap();
+    engine.apply_targets(Feature::Refresh(0),Vec::new(),true).unwrap();
+    assert_eq!(engine.hardware.read(path).unwrap(),"-1");
+    engine.apply_targets(Feature::Refresh(0),vec![(path.into(),"60".into())],false).unwrap();
+    engine.hardware.put(path,"90");
+    engine.apply_targets(Feature::Refresh(0),Vec::new(),true).unwrap();
+    assert_eq!(engine.hardware.read(path).unwrap(),"90");
+    for value in ["null","NaN","-2","241","60.5"] { assert!(butter::display::normalize("app","com.mobile.legends",value).is_err()); }
+    assert!(butter::display::app_node(&path.replace("refresh_rate_ext","activity")).is_none());
+    assert!(butter::display::app_node(&path.replace("com.mobile.legends","../other")).is_none());
+    assert!(butter::display::app_targets(&engine.hardware,0,"com.mobile.legends",60,&serde_json::json!({"available":true,"service":"activity","descriptor":"android.app.IActivityManager"})).is_err());
+}
