@@ -45,6 +45,14 @@ These are explicit policies, not machine learning. The frequency choices are con
 
 Fresh installs randomly select a Pixel profile from 6a through 9a, with build, Play Store build and scoped property spoofing enabled. Change the model in the WebUI; updates keep your selection. Offline profiles are included. A Play Integrity verdict is not guaranteed.
 
+## Why Play Integrity Fix is included
+
+PIF is intentionally bundled alongside the performance engine for compatibility on rooted Duchamp setups. Its build, Play Store build and scoped property spoofing can complement an existing, compatible [Fenrir](https://github.com/R0rt1z2/fenrir) setup when seeking STRONG integrity.
+
+Fenrir operates in the device bootchain; it is not a PIF option or a standard ROM toggle. Butterd does not install it or patch your bootloader. Without an appropriate attestation setup, these three spoofing options alone do not provide STRONG integrity. A separate attestation solution, such as one using suitable RKP-backed keyboxes, may be needed. Butterd neither includes nor fetches keyboxes.
+
+STRONG integrity is not guaranteed by PIF, Fenrir or a keybox. The result depends on the device, ROM, attestation validity, security-update requirements and Google's checks. See [Google's verdict documentation](https://developer.android.com/google/play/integrity/verdicts).
+
 ## Diagnostics
 
 Enable logcat output in the WebUI, reproduce the issue, then export the diagnostics report. Engine messages use the `butter` tag. Reports include app package names and configuration; review them before sharing. Frame samples describe recent app-rendered durations, not game FPS.

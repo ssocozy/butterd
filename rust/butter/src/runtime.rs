@@ -105,7 +105,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
         let mut state = match state(boot) { Ok(state) => state, Err(_) if resetting => RuntimeState {boot:boot.into(), ..Default::default()}, Err(error) => return Err(error) };
         match args {
             [command] if command == "monitor" => {},
-            [command, choice] if command == "auto" && matches!(choice.as_str(), "on" | "off") => { cfg.automatic = choice == "on"; state.tuning_requested = cfg.automatic; state.blocked = false; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = Some(Mode::Balanced); }
+            [command, choice] if command == "auto" && matches!(choice.as_str(), "on" | "off") => { cfg.automatic = choice == "on"; state.tuning_requested = cfg.automatic; state.blocked = false; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = None; }
             [command, choice] if command == "logging" && matches!(choice.as_str(), "on" | "off") => cfg.logcat = choice == "on",
             [command, mode] if command == "preset" => { let mode = Mode::parse(mode)?; if mode == Mode::Boost { return Err("Use boost SECONDS".into()); } state.tuning_requested = true; cfg.preset = mode; state.selected = mode; state.pending_preset = Some(mode); state.blocked = false; state.leases.clear(); }
             [command, seconds] if command == "boost" => {
@@ -153,6 +153,7 @@ pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now:
     if warm { state.leases.clear(); return (Mode::Balanced, "Cooling down"); }
     if context.saver != Some(false) || context.battery.is_none_or(|level| level <= 20) { state.leases.clear(); return (Mode::Battery, "Battery saver or low battery"); }
     if context.app.is_none() { state.leases.clear(); return (Mode::Balanced, "Foreground app unknown or multiple resumed apps"); }
+    if state.foreground != context.app { state.leases.retain(|lease| lease.source != "launch"); }
     let rule = config.rules.iter().find(|rule| Some(&rule.package) == context.app.as_ref());
     let requested = state.pending_preset.take().unwrap_or(if config.automatic { rule.map_or(config.preset, |rule| rule.preset) } else { state.selected });
     if config.automatic && rule.is_some_and(|rule| rule.preset == Mode::Performance) && state.foreground != context.app && requested == Mode::Performance {

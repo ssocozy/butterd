@@ -4,7 +4,7 @@ fn state() -> RuntimeState { RuntimeState { tuning_requested:true, selected:Mode
 #[test]
 fn overlapping_boosts_expire_independently_and_never_survive_unknown_state() {
     let cfg = Config::default(); let mut state = state(); let mut ctx = context();
-    state.leases = vec![Lease{source:"launch".into(),expires:103},Lease{source:"manual".into(),expires:110}];
+    state.foreground=ctx.app.clone(); state.leases = vec![Lease{source:"launch".into(),expires:103},Lease{source:"manual".into(),expires:110}];
     assert_eq!(decide(&cfg,&mut state,&ctx,104).0,Mode::Boost);
     assert_eq!(state.leases.len(),1);
     assert_eq!(decide(&cfg,&mut state,&ctx,110).0,Mode::Performance);
@@ -77,4 +77,13 @@ fn gpu_busy_prevents_cpu_only_idle_decisions_and_soc_heat_cancels_boosts() {
 fn physical_refresh_reader_uses_active_mode_instead_of_render_rate() {
     let dump="DisplayDeviceInfo{built-in, modeId 2, renderFrameRate 60.0, supportedModes [{id=1, width=1220, height=2712, fps=60.0}, {id=2, width=1220, height=2712, fps=120.0}], type INTERNAL}";
     assert_eq!(butter::runtime::active_hz(dump),Some(120.0));
+}
+
+#[test]
+fn leaving_a_game_cancels_its_launch_lease() {
+    let cfg=Config{automatic:true,rules:vec![AppRule{package:"com.example.game".into(),preset:Mode::Performance,hz:None}],..Default::default()};
+    let mut state=RuntimeState::default(); let mut ctx=context();
+    assert_eq!(decide(&cfg,&mut state,&ctx,100).0,Mode::Boost);
+    state.foreground=ctx.app.clone(); ctx.app=Some("com.example.other".into());
+    assert_eq!(decide(&cfg,&mut state,&ctx,101).0,Mode::Balanced); assert!(state.leases.is_empty());
 }
