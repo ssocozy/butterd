@@ -48,3 +48,29 @@ restart_compatibility() {
   done
   [ "$restart_failed" -eq 0 ]
 }
+
+preserve_identity() {
+  existing_profile=$1
+  [ -f "$existing_profile" ] && [ ! -L "$existing_profile" ] || return 1
+  existing_size=$(wc -c < "$existing_profile") || return 2
+  [ "$existing_size" -gt 0 ] && [ "$existing_size" -le 16384 ] || return 1
+  # Validate a normalized view, then copy the original bytes unchanged.
+  existing_values=$(sed -e 's/#.*//' -e 's/\r$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*=[[:space:]]*/=/' -e 's/[[:space:]]*$//' "$existing_profile") || return 2
+  [ "$(printf '%s\n' "$existing_values" | grep -c '^FINGERPRINT=')" -eq 1 ] || return 1
+  printf '%s\n' "$existing_values" | grep -Eq '^FINGERPRINT=[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' || return 1
+  [ "$(printf '%s\n' "$existing_values" | grep -c '^MODEL=')" -eq 1 ] || return 1
+  printf '%s\n' "$existing_values" | LC_ALL=C grep -Eq '^MODEL=[ -~]{1,256}$' || return 1
+  for existing_flag in spoofBuild spoofVendingBuild spoofProps; do
+    existing_count=$(printf '%s\n' "$existing_values" | grep -c "^$existing_flag=" || true)
+    [ "$existing_count" -le 1 ] || return 1
+    if [ "$existing_count" -eq 1 ]; then
+      printf '%s\n' "$existing_values" | grep -Eq "^$existing_flag=(true|false|0|1)$" || return 1
+    fi
+  done
+  umask 077
+  preserved_temporary=$(mktemp "$MODDIR/compatibility/preserved.XXXXXX") || return 2
+  if ! cat "$existing_profile" > "$preserved_temporary" || ! mv -f "$preserved_temporary" "$MODDIR/compatibility/pif.prop"; then
+    rm -f "$preserved_temporary"; return 2
+  fi
+  return 0
+}

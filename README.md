@@ -43,7 +43,7 @@ These are explicit policies, not machine learning. The frequency choices are con
 2. Install it through your root manager and reboot.
 3. Open the WebUI to configure Butterd. Magisk users need a compatible WebUI host.
 
-Fresh installs randomly select a Pixel profile from 6a through 9a, with build, Play Store build and scoped property spoofing enabled. Change the model in the WebUI; applying it restarts only the Google integrity and Play Store target processes so no phone reboot is needed for profile changes. Updates keep your selection. Offline profiles include the model’s initial API and a matching published Pixel security patch. These identity properties are scoped to the target process; the Android SDK version is unchanged. A Play Integrity verdict is not guaranteed.
+Fresh installs randomly select a Pixel profile from 6a through 9a, with build, Play Store build and scoped property spoofing enabled. Change the model in the WebUI; applying it restarts only the Google integrity and Play Store target processes so no phone reboot is needed for profile changes. Updates preserve your complete existing PIF profile and settings. Reapplying a model in the WebUI explicitly replaces the identity with that bundled profile. Offline profiles include the model’s initial API and a matching published Pixel security patch. These identity properties are scoped to the target process; the Android SDK version is unchanged. A Play Integrity verdict is not guaranteed.
 
 ## Why Play Integrity Fix is included
 

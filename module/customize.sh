@@ -21,19 +21,33 @@ done
 # Fetch metadata during installation; an offline install keeps bundled profiles.
 MODDIR=$MODPATH
 . "$MODPATH/lib/compatibility.sh"
-selected=
-if [ -f /data/adb/modules/butterd/compatibility/pif.prop ]; then
-  previous=$(sed -n 's/^selectedModel=//p' /data/adb/modules/butterd/compatibility/pif.prop)
-  case "$previous" in bluejay|panther|cheetah|lynx|shiba|husky|akita|tokay|caiman|komodo|tegu) selected=$previous ;; esac
+existing=/data/adb/modules/butterd/compatibility/pif.prop
+preserved=0
+preserve_identity "$existing" || preserved=$?
+if [ "$preserved" -eq 2 ]; then
+  abort "Unable to preserve the existing Pixel profile; installation stopped."
 fi
-[ -n "$selected" ] || selected=$(random_identity) || abort "Unable to select a random Pixel profile."
-ui_print "- Refreshing Pixel 6a–9a profiles (offline fallback included)."
-CLASSPATH="$MODPATH/bin/catalog.dex" /system/bin/app_process /system/bin dev.butterd.module.PixelCatalog "$MODPATH/compatibility/profiles" || ui_print "- Network unavailable; keeping bundled profiles."
-select_identity "$selected" || abort "No usable Pixel identity is available."
+if [ "$preserved" -eq 0 ]; then
+  ui_print "- Keeping your existing Pixel identity and compatibility settings."
+else
+  if [ -f "$existing" ] && [ ! -L "$existing" ]; then
+    existing_size=$(wc -c < "$existing")
+    if [ "$existing_size" -le 16384 ]; then
+      cp "$existing" "$MODPATH/compatibility/pif.previous.prop" || abort "Unable to back up the previous Pixel profile."
+      ui_print "- Previous profile was invalid; backed up as compatibility/pif.previous.prop."
+    fi
+  fi
+  selected=$(random_identity) || abort "Unable to select a random Pixel profile."
+  ui_print "- Refreshing Pixel 6a–9a profiles (offline fallback included)."
+  CLASSPATH="$MODPATH/bin/catalog.dex" /system/bin/app_process /system/bin dev.butterd.module.PixelCatalog "$MODPATH/compatibility/profiles" || ui_print "- Network unavailable; keeping bundled profiles."
+  select_identity "$selected" || abort "No usable Pixel identity is available."
+fi
 # Leave webroot permissions/context to the WebUI host.
 for directory in bin lib compatibility zygisk; do
   set_perm_recursive "$MODPATH/$directory" 0 0 0755 0644
 done
+set_perm "$MODPATH/compatibility/pif.prop" 0 0 0600
+[ ! -f "$MODPATH/compatibility/pif.previous.prop" ] || set_perm "$MODPATH/compatibility/pif.previous.prop" 0 0 0600
 set_perm "$MODPATH/bin/butterctl" 0 0 0755
 set_perm "$MODPATH/bin/butter" 0 0 0755
 set_perm "$MODPATH/bin/butter-engine" 0 0 0755
