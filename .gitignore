@@ -1,15 +1,7 @@
-.gradle/
-.idea/
-local.properties
-**/build/
-*.iml
-*.jks
-*.keystore
-
-
-# Keep research and agent instructions local; publish the project README.
+/build/
+/dist/
 *.[mM][dD]
 !/README.md
 
-# Local design workflow context.
-.impeccable/
+module/bin/catalog.dex
+__pycache__/

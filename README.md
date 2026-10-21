@@ -1,110 +1,37 @@
 # Butterd
 
-A monochrome device monitor and manual controller for POCO X6 Pro / Redmi K70E (Duchamp), built with
-Java and XML. Android 14 minimum, compile/target SDK 36. Version 0.4 adds the supplied butter logo,
-short page/press/splash transitions, and separate Display and Kernel screens. Android 17 compatibility
-has not been verified. White, black and system themes are available.
+KernelSU / Magisk module for Duchamp (POCO X6 Pro / Redmi K70E), Android 14 or newer, arm64.
 
-## Screens
+The Android application has been archived separately. This repository now contains the module.
 
-- **Overview:** net battery power, temperature, voltage, thermal status and session
-  deep sleep. Shortcuts open the detail screens.
-- **CPU:** online cores, per-policy governors and ROM frequency ranges. With explicit
-  root access, choose a supported allowlisted dynamic/power-saving governor or
-  restore the original saved for this boot. There is no automatic application at
-  boot, core hotplug, voltage tuning or frequency-limit write.
-- **Battery:** Android health status/cycles, driver full/design capacity and a
-  capacity-retention estimate when provided. Signed current, USB readings, requested charging-current
-  limit, ROM charging-disable flag and driver-reported primary power path, where
-  readable. These flags do not prove physical bypass charging.
-- **GPU:** readable driver frequency and ROM GPU DVFS parameters. GPU tuning is not implemented yet.
-- **Display:** Android-reported Hz and root-controlled global refresh preferences
-  selected inside Butterd, with supported-mode validation, saved originals,
-  readback and Restore. Readable HTSR mode remains a sensor. Per-app refresh
-  overrides are not implemented.
-- **Kernel:** current/available/allowed TCP congestion algorithms and default qdisc.
-  These are capabilities, not network tuning recommendations.
-- **Device:** hardware, access information and navigation to Butterd controls.
-  Butterd does not depend on XiaomiParts or open its controls.
-- **Settings:** appearance and a permission-gated, quiet live notification with Stop.
+## Included
 
-Battery power is net power **at the battery**, not adapter wattage.
-An unplugged nonzero current sample calibrates vendor sign conventions for the
-current app process. Until then, the Android-reported sign is used. Connected
-chargers can still coincide with negative net battery power. Diagnostic logs keep
-the raw current and calibration state. Missing optional sensors are grouped behind
-an access explanation. Deep sleep estimates device suspend over the app-process
-session, not screen-off time or Doze. Polling does not hold a wake lock; notification
-values remain the latest sample while the CPU is suspended.
+- Hardware capability report: CPU policies, governors and frequency tables; GED GPU reading; TCP algorithms; HTSR flag; supported bypass capability flag.
+- Manual, verified per-cluster CPU governor changes with saved originals and conflict detection. No tuning is automatically applied at boot.
+- Reduced, process-scoped PlayIntegrityFix compatibility: `spoofBuild`, `spoofVendingBuild` and `spoofProps`, enabled by default.
 
-## Record a charging test
+There are no provider/signature hooks, SDK overrides, keyboxes, Google data clearing or global property overrides. Compatibility needs Magisk Zygisk or a compatible Zygisk provider under KernelSU. KernelSU alone does not supply Zygisk. No integrity verdict is guaranteed; the bundled upstream identity can expire or be rejected.
 
-1. Open **Battery → Record diagnostics** and review what will be recorded.
-2. Allow notifications. Optional root access on Device unlocks more sensor reads.
-3. Reproduce the charging behavior you want to diagnose. Butterd does not
-   implement charging bypass yet.
-4. Return to Battery and add a marker after each change.
-5. Stop recording, then **Share recording** to send the `.jsonl` file yourself.
+## Usage
 
-Recordings are opt-in and private until shared. They contain sensor readings,
-CPU state, model and software versions, not serial numbers, IMEI, account data,
-app lists or logcat. Maximum 30 minutes or 2 MB; the latest two sessions are kept.
-Three export snapshots are retained in app cache. Sampling is approximately every
-three seconds during recording, so short transitions may be missed. Root readings
-are cached up to fifteen seconds otherwise. Sample age is included in reports.
-Stopping the notification stops recording; stopping recording alone leaves the
-live monitor enabled until you turn it off. No recording restarts after process
-termination or reboot. There is no network permission or automatic upload.
+Install the module ZIP from a GitHub release through your root manager, then reboot. Do not install alongside active performance controllers or another PIF implementation. Installation rejects several known conflicting module IDs; it cannot identify every renamed module or ROM controller.
 
-## Control boundaries
+From a root shell:
 
-Only explicit CPU governor changes write kernel settings. Display controls write
-Android minimum/peak refresh preferences for the current user; these preferences
-can persist across closing the app or rebooting until restored. It is restricted to
-validated CPUFreq policy paths and supported allowlisted governors. Originals are
-saved before writes, readback is checked, and restoration rejects an unexpected
-external governor change instead of overwriting it. This check reduces races; it
-is not a lock shared with ROM services. No setting is repeatedly forced.
+```sh
+/data/adb/modules/butterd/bin/butterctl status
+/data/adb/modules/butterd/bin/butterctl governor policy4 schedutil
+/data/adb/modules/butterd/bin/butterctl restore policy4
+```
 
-Governor changes may persist after closing the app until restored or rebooted.
-“Stop using root” stops privileged access; it does not restore a governor. Restore
-before revoking access if desired. Reboot returns to ROM initialization. Nothing
-is applied during boot. Device/kernel bugs and competing controllers still need
-physical testing; zero-risk or guaranteed performance claims are not made.
+Only governors reported by that policy and supported by Butterd can be selected. Values are verified after writing. If another controller changes the value, Butterd refuses to overwrite it. Restore before disabling/removing the module; CPU changes remain for the current boot otherwise. Reboot returns control to the ROM. No CPU/GPU frequency presets or per-app automation are implemented yet.
 
-Charging limits, thermal protections, CPU/GPU frequency limits, core online state,
-partitions and SELinux are never written. There is no root module or boot receiver.
-Charging bypass replacement remains deferred until the recorded hardware results
-support a verified transition design owned by the ROM controller.
+Installation automatically refreshes Pixel 6a through Pixel 9a metadata using certificate-validated Google HTTPS endpoints. All eleven models have bundled offline profiles; no manual fetch is needed. Pixel 6a is the initial selection. The WebUI compatibility section only changes the selected model; the three spoofing options are enabled by default. Updates retain the selected model.
 
-## Build and install
+Compatibility settings live in `compatibility/pif.prop` inside the installed module. All three can be disabled individually; restart the affected apps or reboot for changes to take effect. Disabling/removing the module requires reboot to remove already loaded process-local changes. Kernel thermal limits, voltage, charging controls, partitions and system files are untouched.
 
-All compilation runs in [GitHub Actions](https://github.com/ssocozy/butterd/actions/workflows/android.yml).
-Builds are **manual only** while development is active. Open Actions → Android →
-Run workflow when ready. The single job runs unit tests, lint and APK assembly;
-pushes and pull requests do not start it. No emulators run.
-Download `butterd-debug.apk` directly from the latest debug [prerelease](https://github.com/ssocozy/butterd/releases).
-The Actions artifact remains available as a ZIP fallback.
-Development APKs use runner debug keys, which can change between runs and require
-uninstall/reinstall. Stable release signing must be configured before distributing
-updateable production builds.
+## Build
 
-Physical sensor accuracy, root managers, charging behavior and frame pacing need
-verification on the phone. CPU/GPU frequency presets, charging and thermal
-overrides, and independent per-app refresh/touch control are not implemented.
+The manual GitHub Actions workflow tests the configuration parser, validates module structure, cross-compiles the arm64 Zygisk library and publishes an installable ZIP. No local compilation or emulator testing. Phone validation is required before considering this stable. Automatic foreground-game profiles and the broader performance engine are still under development; the current module exposes manual governor controls and diagnostics.
 
-## Code organization
-
-`core/root` owns bounded worker-only root process transport and read inventory.
-`feature/cpu` owns validated policies and manual governor changes.
-`feature/display` owns preference validation, transition journals, application,
-restoration and the display panel. `feature/kernel` owns the fixed read inventory.
-Other legacy panels still need extraction; this is an incremental refactor.
-
-Display restoration stops when preferences no longer match the last journaled
-transition. This reduces conflicts; it is not a lock shared with ROM services.
-Readback confirms preference storage, not that Android must display the selected
-rate. No preferences are reasserted on a timer or at boot. Restore before clearing
-app data or uninstalling if you want to retain the original values.
-
-The interface uses open reading sections, expandable technical details and explicit preview-and-apply dialogs for supported CPU governors and display preferences. Root permission is checked independently from optional sensor reads.
+GPL-3.0; see LICENSE and THIRD_PARTY_NOTICES.txt. Corresponding compatibility source is included in each module ZIP.
