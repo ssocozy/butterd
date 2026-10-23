@@ -160,3 +160,12 @@ fn engine_notices_coalesce_and_omit_transient_boosts() {
     let config:Config=serde_json::from_str(r#"{"automatic":false,"preset":"balanced","logcat":false,"rules":[]}"#).unwrap();
     assert!(!config.notifications);
 }
+
+#[test]
+fn notification_confirmation_requires_a_posted_record() {
+    use butter::notifications::confirm;
+    assert!(confirm("posting:\n Notification(...)\nwaiting for notification to post...\nposted: \n NotificationRecord(...)").is_ok());
+    assert!(confirm("posting:\n Notification(...)").is_err());
+    assert!(confirm("posting:\nwarning: couldn't find notification after enqueueing").is_err());
+    assert!(confirm("Permission Denial:").is_err());
+}

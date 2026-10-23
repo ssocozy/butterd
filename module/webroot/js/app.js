@@ -27,6 +27,8 @@ function render(state) {
   if (telemetry.displayRequestSatisfied === false && telemetry.displayRequestHz != null) $('engine-reason').textContent += ' · Requested '+telemetry.displayRequestHz+' Hz; display reports '+Math.round(telemetry.screenHz)+' Hz.';
   if (running && age > 30) { $('engine-state').textContent = 'Readings are stale'; $('engine-reason').textContent = 'The supervisor has not produced a recent sample. Export diagnostics.'; }
   $('preset-label').textContent = runtime.active ? runtime.active[0].toUpperCase()+runtime.active.slice(1) : 'Balanced';
+  const delivery=supervisor.notificationDelivery;
+  $('notification-status').textContent=delivery?.error ? 'Notification delivery needs attention: '+delivery.error : delivery?.accepted ? 'Android accepted the last notification. Delivery is controlled by Shell notification settings and Do Not Disturb.' : 'Send a test to check notification delivery on this ROM.';
   $('automatic').checked = config.automatic === true; $('logging').checked = config.logcat === true; $('notifications').checked = config.notifications === true;
   $('watts').textContent = Number.isFinite(telemetry.batteryWatts) ? (telemetry.batteryWatts > 0 ? '+' : '')+telemetry.batteryWatts.toFixed(1) : '—';
   $('power-status').textContent = telemetry.batteryStatus || (sampled ? 'Sensor not exposed' : running ? 'Collecting a sample' : 'Monitoring stopped');
@@ -89,6 +91,7 @@ $('open-presets').addEventListener('click',()=>$('preset-dialog').showModal());
 document.querySelectorAll('[data-preset]').forEach(node=>node.addEventListener('click',()=>{ $('preset-dialog').close(); run('preset '+node.dataset.preset); }));
 $('release').addEventListener('click',()=>run('reset'));
 $('automatic').addEventListener('change',event=>run('auto '+(event.target.checked ? 'on' : 'off')));
+$('test-notification').addEventListener('click',()=>run('notify-test'));
 $('notifications').addEventListener('change',event=>run('notifications '+(event.target.checked ? 'on' : 'off')));
 $('logging').addEventListener('change',event=>run('logging '+(event.target.checked ? 'on' : 'off')));
 $('restart').addEventListener('click',()=>run('monitor'));

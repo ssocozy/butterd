@@ -50,11 +50,12 @@ fn run() -> Result<()> {
         };
         let mut status = engine.status();
         status["compatibility"] = butter::runtime::compatibility_status();
-        status["supervisor"] = serde_json::json!({"config": butter::runtime::config().map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "runtime": butter::runtime::state(&engine.boot).map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "uptime": butter::runtime::uptime()?, "health":butter::runtime::supervisor_status(&engine.boot)});
+        status["supervisor"] = serde_json::json!({"config": butter::runtime::config().map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "runtime": butter::runtime::state(&engine.boot).map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "uptime": butter::runtime::uptime()?, "notificationDelivery":butter::runtime::notification_status(), "health":butter::runtime::supervisor_status(&engine.boot)});
         println!("{}", serde_json::to_string(&status)?);
         return Ok(());
     }
     match args.as_slice() {
+        [command] if command == "notify-test" => { butter::notifications::post("Butterd notification test")?; println!("Android accepted the test notification. Check the notification shade."); return Ok(()); },
         [command] if command == "apps" => { println!("{}", butter::android::installed_apps()?); return Ok(()); },
         [command] if command == "daemon" => return butter::runtime::daemon(&boot),
         [command] if command == "boot" => return butter::runtime::launch_if_requested(&boot),

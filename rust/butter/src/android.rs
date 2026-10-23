@@ -1,6 +1,6 @@
 //! Bounded Android service calls. No shell, service transaction numbers or ROM patches.
 use crate::Result;
-use std::{io::Read, process::{Command, Stdio}, time::{Duration, Instant}};
+use std::{io::Read, os::unix::process::CommandExt, process::{Command, Stdio}, time::{Duration, Instant}};
 
 /// Preserve process results so narrow adapters can verify documented shell quirks.
 #[derive(Debug)]
@@ -15,7 +15,17 @@ impl std::error::Error for CommandFailure {}
 
 pub fn command(binary: &str, args: &[&str]) -> Result<String> { execute(binary, args, &[], 3) }
 pub fn execute(binary: &str, args: &[&str], environment: &[(&str, &str)], timeout: u64) -> Result<String> {
-    let mut child = Command::new(binary).args(args).envs(environment.iter().copied()).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+    execute_as(binary,args,environment,timeout,false)
+}
+/// Drop only this child to Android's shell identity; the engine retains root.
+pub fn shell_notification(args:&[&str])->Result<String> {
+    execute_as("/system/bin/cmd",args,&[],5,true)
+}
+fn execute_as(binary:&str,args:&[&str],environment:&[(&str,&str)],timeout:u64,shell_identity:bool)->Result<String> {
+    let mut command=Command::new(binary);
+    command.args(args).envs(environment.iter().copied()).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    if shell_identity { command.gid(2000).uid(2000); }
+    let mut child=command.spawn()?;
     fn drain(mut pipe: impl Read + Send + 'static) -> std::thread::JoinHandle<std::io::Result<Vec<u8>>> {
         std::thread::spawn(move || {
             let mut output = Vec::new();

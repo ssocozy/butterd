@@ -18,8 +18,13 @@ pub fn message(state:&RuntimeState)->Option<String> {
     let suffix=if state.reason=="Foreground app rule" { "app preset applied" } else if state.reason=="Monitoring only" { return Some("Monitoring active. No performance preset requested.".into()); } else { "preset active" };
     Some(format!("{mode} {suffix}."))
 }
+pub fn confirm(reply:&str)->Result<()> {
+    if !reply.lines().any(|line|line.trim()=="posted:") || reply.contains("couldn't find notification") { return Err("Android did not confirm the notification. Check Shell notification permissions and its notification channel.".into()); }
+    Ok(())
+}
 pub fn post(text:&str)->Result<()> {
     // A fixed tag updates one notification rather than accumulating game alerts.
-    android::command("/system/bin/cmd",&["notification","post","-t","Butterd","butterd-engine",text])?;
-    Ok(())
+    let result=android::shell_notification(&["notification","post","-v","-t","Butterd","butterd-engine",text]).and_then(|reply|confirm(&reply));
+    crate::runtime::record_notification(&result);
+    result
 }

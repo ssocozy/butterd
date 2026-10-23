@@ -63,6 +63,7 @@ try {
       else if(command.endsWith(' monitor')){state.supervisor.health={running:true,sampleAgeSeconds:2};state.supervisor.runtime.sampled_at=100;state.supervisor.runtime.reason='Monitoring only';state.supervisor.runtime.telemetry={batteryPercent:72,batteryWatts:-2.4,batteryTempC:34.2,socTempC:46,screenHz:120,supportedHz:[60,120],cpuBusyPercent:12,gpuBusyPercent:8,cycleCount:125,health:'Good',batteryStatus:'Discharging'};}
       else if(command.endsWith(' enable phone-mic')){state.audio.active=true;state.supervisor.config.controls={'phone-mic':{setting:'',expires_utc:null}};}
       else if(command.endsWith(' restore phone-mic')){if(globalThis.__failMic){code=1;stderr='Example routing rejection';}else{state.audio.active=false;state.supervisor.config.controls={};}}
+      else if(command.endsWith(' notify-test'))state.supervisor.notificationDelivery={accepted:true,error:null};
       else if(command.endsWith(' notifications on'))state.supervisor.config.notifications=true;
       else if(command.endsWith(' notifications off'))state.supervisor.config.notifications=false;
       else if(command.endsWith(' status'))stdout=JSON.stringify(state);
@@ -122,6 +123,9 @@ try {
   await evaluate(`document.querySelector('#notifications').click()`);
   await until(`document.querySelector('#notifications').checked && document.body.getAttribute('aria-busy')==='false'`);
   assert.equal(await evaluate(`__butterCommands.some(command=>command.endsWith(' notifications on'))`),true);
+  await evaluate(`document.querySelector('#test-notification').click()`);
+  await until(`document.querySelector('#notification-status').textContent.includes('Android accepted the last notification') && document.body.getAttribute('aria-busy')==='false'`);
+  assert.equal(await evaluate(`__butterCommands.some(command=>command.endsWith(' notify-test'))`),true);
   assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('Prefer phone microphone')`),true);
   assert.equal(await evaluate(`document.querySelector('#audio-controls input[role=switch]').checked`),false);
   await evaluate(`document.querySelector('#audio-controls input').click()`);
