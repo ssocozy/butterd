@@ -289,3 +289,36 @@ fn recording_assist_reduces_with_heat_and_never_overrides_saver_or_screen_off() 
     ctx.saver=Some(false);ctx.battery=Some(15);assert_eq!(decide(&cfg,&mut state,&ctx,103).0,Mode::Battery);
     ctx.battery=Some(70);ctx.awake=Some(false);assert_eq!(decide(&cfg,&mut state,&ctx,104).0,Mode::Balanced);
 }
+
+#[test]
+fn recording_cutoff_extends_only_eligible_capture_and_retains_step_down() {
+    let mut cfg=Config{recording_assist:true,..Default::default()}; let mut state=state(); let mut ctx=context();
+    state.foreground=ctx.app.clone();
+    state.telemetry=serde_json::json!({"recording":{"available":true,"screenCapture":true,"sampledAtUptime":100}});
+    for (now,soc,stage) in [(100,75000,1),(101,80000,2),(102,85000,2),(103,89999,2)] {
+        ctx.soc_millic=Some(soc);
+        assert_eq!(decide(&cfg,&mut state,&ctx,now).0,Mode::Performance);
+        assert_eq!(state.thermal_stage,stage);
+    }
+    ctx.soc_millic=Some(90000);
+    assert_eq!(decide(&cfg,&mut state,&ctx,104).0,Mode::Balanced);
+    ctx.soc_millic=Some(80000);
+    assert_eq!(decide(&cfg,&mut state,&ctx,105).0,Mode::Balanced);
+    ctx.soc_millic=Some(70000);
+    assert_eq!(decide(&cfg,&mut state,&ctx,106).0,Mode::Boost);
+    // Removing consent while recording returns to the ordinary cutoff.
+    cfg.recording_assist=false;ctx.soc_millic=Some(86000);
+    assert_eq!(decide(&cfg,&mut state,&ctx,107).0,Mode::Balanced);
+}
+#[test]
+fn recording_cutoff_never_relaxes_battery_or_uses_stale_capture() {
+    let cfg=Config{recording_assist:true,..Default::default()}; let mut state=state(); let mut ctx=context();
+    state.telemetry=serde_json::json!({"recording":{"available":true,"screenCapture":true,"sampledAtUptime":100}});
+    ctx.temperature=Some(420);ctx.soc_millic=Some(70000);
+    assert_eq!(decide(&cfg,&mut state,&ctx,100).0,Mode::Balanced);
+    state.thermal_stage=0;ctx.temperature=Some(350);ctx.soc_millic=Some(86000);
+    assert_eq!(decide(&cfg,&mut state,&ctx,121).0,Mode::Balanced);
+    state.thermal_stage=0;state.telemetry["recording"]["sampledAtUptime"]=serde_json::json!(122);
+    state.telemetry["recording"]["screenCapture"]=serde_json::json!(false);
+    assert_eq!(decide(&cfg,&mut state,&ctx,122).0,Mode::Balanced);
+}

@@ -173,15 +173,26 @@ pub struct Context {
 // Battery tenths of a degree; SoC millidegrees. Escalate immediately,
 // recover through lower bands with hysteresis to avoid repeated writes near boundaries.
 pub fn cooling_stage(previous: u8, context: &Context) -> u8 {
+    cooling_stage_recording(previous, context, false)
+}
+pub fn cooling_stage_recording(previous: u8, context: &Context, recording: bool) -> u8 {
     let Some(battery) = context.temperature else { return 3; };
     let soc = context.soc_millic.unwrap_or(0);
-    if battery >= 420 || soc >= 85000 { return 3; }
+    if battery >= 420 || soc >= if recording { 90000 } else { 85000 } { return 3; }
     if previous == 3 && (battery >= 390 || soc >= 75000) { return 3; }
     if battery >= 410 || soc >= 80000 { return 2; }
     if previous >= 2 && (battery >= 405 || soc >= 77000) { return 2; }
     if battery >= 400 || soc >= 75000 { return 1; }
     if previous >= 1 && (battery >= 395 || soc >= 72000) { return 1; }
     0
+}
+pub fn recording_eligible(config: &Config, state: &RuntimeState, context: &Context, now: u64) -> bool {
+    let rule = context.app.as_ref().and_then(|app| config.rules.iter().find(|rule| &rule.package == app));
+    let requested = state.pending_preset.unwrap_or(if config.automatic { rule.map_or(config.preset, |rule| rule.preset) } else { state.selected });
+    config.recording_assist && !state.blocked && requested != Mode::Battery
+        && context.awake == Some(true) && context.app.is_some()
+        && context.saver == Some(false) && context.battery.is_some_and(|level| level > 20)
+        && crate::recording::active(&state.telemetry["recording"], now)
 }
 pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now: u64) -> (Mode, &'static str) {
     state.leases.retain(|lease| lease.expires > now && lease.expires <= now.saturating_add(30));
@@ -191,7 +202,7 @@ pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now:
     if context.awake.is_none() { state.leases.clear(); return (Mode::Balanced, "Screen off or display state unknown"); }
     let rule = context.app.as_ref().and_then(|app| config.rules.iter().find(|rule| &rule.package == app));
     let requested = state.pending_preset.unwrap_or(if config.automatic { rule.map_or(config.preset, |rule| rule.preset) } else { state.selected });
-    state.thermal_stage = cooling_stage(state.thermal_stage, context);
+    state.thermal_stage = cooling_stage_recording(state.thermal_stage, context, recording_eligible(config, state, context, now));
     if context.temperature.is_none() { state.leases.clear(); return (Mode::Balanced, "Cooling down"); }
     let battery_saver = context.saver != Some(false) || context.battery.is_none_or(|level| level <= 20);
     if state.thermal_stage == 3 {
@@ -418,6 +429,7 @@ pub fn daemon(boot: &str) -> Result<()> {
             event(&cfg, "touch", "Touch returned to its original value; session released without a write");
         }
         state.telemetry["recording"] = recording_sample.clone();
+        let recording_soc_cutoff = if recording_eligible(&cfg, &state, &ctx, now) { 90 } else { 85 };
         let prior_thermal_stage = state.thermal_stage;
         let (desired, reason) = decide(&cfg, &mut state, &ctx, now);
         let result = (|| -> Result<()> {
@@ -461,6 +473,7 @@ pub fn daemon(boot: &str) -> Result<()> {
         }
         state.telemetry = sampled_telemetry;
         state.telemetry["recording"]["assistEnabled"] = json!(cfg.recording_assist);
+        state.telemetry["recording"]["socCutoffC"] = json!(recording_soc_cutoff);
         state.telemetry["recording"]["assistActive"] = json!(state.reason.starts_with("Recording assist:"));
         state.telemetry["wakeSource"] = json!(wake_events.last_wake);
         state.telemetry["eventStreamRunning"] = json!(wake_events.available());
