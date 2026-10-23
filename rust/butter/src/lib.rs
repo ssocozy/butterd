@@ -24,3 +24,5 @@ pub mod preferences;
 pub mod touch;
 
 pub mod notifications;
+
+pub mod app_controls;

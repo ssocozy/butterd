@@ -22,6 +22,8 @@ With automatic profiles enabled, the foreground app’s rule takes precedence ov
 
 Butter releases preset limits when the screen turns off or the battery reaches 42°C or sampled SoC temperature reaches 85°C. After cooling starts, it waits for battery temperature below 39°C and sampled SoC below 75°C before resuming. Android Battery Saver or a battery level of 20% or less selects **Battery** when heat checks allow tuning. Missing required readings prevent performance requests. Performance floors can also be released after three low-activity samples, but only when both CPU and GPU activity are readable.
 
+App profiles can also request high touch sampling and pause battery charging at a selected level from 40–95%. These requests run only while that app is foreground and the screen is on; manual controls take priority. Charging resumes on unplug, app exit, screen off or a battery level at least three points below the selected threshold. App charging pause is governed by that foreground rule rather than the manual 30-minute timer; it leaves kernel thermal protections unchanged.
+
 Per-app refresh rates are independent of CPU/GPU presets. Leaving an app releases its display request and restores its previous ROM refresh rule where a compatible service is available; the next app follows its own rule or the ROM defaults. A 60 Hz request remains eligible while CPU performance is paused for heat.
 
 ## Controls

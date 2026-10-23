@@ -722,3 +722,60 @@ fn touch_stop_accepts_only_the_aosp_success_exit_quirk() {
     assert!(stop_reply(failure(255,"Permission Denial:","Service stopped")).is_err());
     assert!(stop_reply(failure(1,"Stopping service:","Service stopped")).is_err());
 }
+
+fn app_rule_fixture() -> (Engine<FakeHardware,MemoryStore>,butter::runtime::Config,butter::runtime::Context) {
+    use butter::{runtime::{AppRule,Config,Context},presets::Mode};
+    let engine=fixture();engine.hardware.put(GOODIX,"0");engine.hardware.put(butter::hardware::PAUSE,"0 0");engine.hardware.put(butter::hardware::FCC,"3700000");
+    let config=Config{automatic:true,rules:vec![AppRule{package:"com.example.game".into(),preset:Mode::Balanced,hz:None,high_touch:true,charging_pause_at:Some(80)}],..Default::default()};
+    let context=Context{awake:Some(true),online:Some(true),battery:Some(79),app:Some("com.example.game".into()),..Default::default()};
+    (engine,config,context)
+}
+#[test]
+fn app_touch_and_charge_thresholds_release_without_affecting_manual_controls() {
+    use butter::app_controls::{State,reconcile};
+    let (engine,config,mut context)=app_rule_fixture();let mut state=State::default();
+    reconcile(&engine,&config,&mut state,&context);
+    assert!(state.touch_owned);assert!(!state.charging_owned);assert_eq!(engine.hardware.read(GOODIX).unwrap(),"1");
+    context.battery=Some(80);reconcile(&engine,&config,&mut state,&context);
+    assert!(state.charging_owned);assert_eq!(engine.hardware.read(butter::hardware::FCC).unwrap(),"0");
+    context.battery=Some(79);reconcile(&engine,&config,&mut state,&context);assert!(state.charging_owned);
+    context.battery=Some(77);reconcile(&engine,&config,&mut state,&context);assert!(!state.charging_owned);
+    assert_eq!(engine.hardware.read(butter::hardware::FCC).unwrap(),"3700000");
+    context.awake=Some(false);reconcile(&engine,&config,&mut state,&context);assert!(!state.touch_owned);
+    assert_eq!(engine.hardware.read(GOODIX).unwrap(),"0");
+    assert!(state.errors.is_empty());
+}
+#[test]
+fn app_control_unplug_unknown_battery_and_rule_removal_restore_owned_values() {
+    use butter::app_controls::{State,reconcile};
+    let (engine,mut config,mut context)=app_rule_fixture();let mut state=State::default();context.battery=Some(90);
+    reconcile(&engine,&config,&mut state,&context);assert!(state.charging_owned);
+    context.online=Some(false);reconcile(&engine,&config,&mut state,&context);assert!(!state.charging_owned);
+    context.online=Some(true);reconcile(&engine,&config,&mut state,&context);assert!(state.charging_owned);
+    context.battery=None;reconcile(&engine,&config,&mut state,&context);assert!(!state.charging_owned);
+    context.battery=Some(90);reconcile(&engine,&config,&mut state,&context);assert!(state.charging_owned);
+    config.rules.clear();reconcile(&engine,&config,&mut state,&context);assert!(!state.touch_owned && !state.charging_owned);
+    assert_eq!(engine.hardware.read(butter::hardware::PAUSE).unwrap(),"0 0");
+}
+#[test]
+fn manual_selection_and_manual_release_take_priority_over_app_rules() {
+    use butter::{app_controls::{State,reconcile},preferences::SavedControl};
+    let (engine,mut config,mut context)=app_rule_fixture();let mut state=State::default();
+    config.controls.insert("touch".into(),SavedControl{setting:"high".into(),expires_utc:None});
+    engine.apply(Feature::Touch,"high",false,false).unwrap();
+    reconcile(&engine,&config,&mut state,&context);assert!(!state.touch_owned);
+    context.app=Some("com.example.other".into());reconcile(&engine,&config,&mut state,&context);
+    assert!(engine.session(&Feature::Touch).unwrap().is_some());
+    engine.apply(Feature::Touch,"",true,false).unwrap();config.controls.clear();context.app=Some("com.example.game".into());
+    reconcile(&engine,&config,&mut state,&context);assert!(state.touch_owned);
+    engine.apply(Feature::Touch,"",true,false).unwrap();
+    reconcile(&engine,&config,&mut state,&context);assert!(!state.touch_owned);
+    let writes=engine.hardware.writes.get();reconcile(&engine,&config,&mut state,&context);assert_eq!(engine.hardware.writes.get(),writes);
+    assert!(!state.errors.is_empty());
+}
+#[test]
+fn old_app_profiles_default_to_no_touch_or_charging_override() {
+    let rule:butter::runtime::AppRule=serde_json::from_str(r#"{"package":"com.example.game","preset":"balanced","hz":60}"#).unwrap();
+    assert!(!rule.high_touch && rule.charging_pause_at.is_none());
+    let (_,mut config,_)=app_rule_fixture();config.rules[0].charging_pause_at=Some(10);assert!(config.validate().is_err());
+}

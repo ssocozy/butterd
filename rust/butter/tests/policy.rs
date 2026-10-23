@@ -27,7 +27,7 @@ fn heat_hysteresis_and_battery_saver_override_performance() {
 }
 #[test]
 fn automatic_launch_boost_only_follows_a_configured_performance_app() {
-    let cfg=Config{automatic:true,rules:vec![AppRule{package:"com.example.game".into(),preset:Mode::Performance,hz:Some(120)}],..Default::default()};
+    let cfg=Config{automatic:true,rules:vec![AppRule{package:"com.example.game".into(),preset:Mode::Performance,hz:Some(120),high_touch:false,charging_pause_at:None}],..Default::default()};
     let mut state=RuntimeState::default(); let mut ctx=context();
     assert_eq!(decide(&cfg,&mut state,&ctx,100).0,Mode::Boost);
     state.foreground=ctx.app.clone(); state.leases.clear();
@@ -62,7 +62,7 @@ fn counter_wrap_and_frame_sentinels_do_not_become_performance_claims() {
 }
 #[test]
 fn configuration_rejects_duplicate_packages_and_unsupported_modes() {
-    let mut cfg=Config{rules:vec![AppRule{package:"com.example.game".into(),preset:Mode::Performance,hz:Some(500)}],..Default::default()}; assert!(cfg.validate().is_err());
+    let mut cfg=Config{rules:vec![AppRule{package:"com.example.game".into(),preset:Mode::Performance,hz:Some(500),high_touch:false,charging_pause_at:None}],..Default::default()}; assert!(cfg.validate().is_err());
     cfg.rules[0].hz=Some(120); cfg.rules.push(cfg.rules[0].clone()); assert!(cfg.validate().is_err());
 }
 
@@ -81,7 +81,7 @@ fn physical_refresh_reader_uses_active_mode_instead_of_render_rate() {
 
 #[test]
 fn leaving_a_game_cancels_its_launch_lease() {
-    let cfg=Config{automatic:true,rules:vec![AppRule{package:"com.example.game".into(),preset:Mode::Performance,hz:None}],..Default::default()};
+    let cfg=Config{automatic:true,rules:vec![AppRule{package:"com.example.game".into(),preset:Mode::Performance,hz:None,high_touch:false,charging_pause_at:None}],..Default::default()};
     let mut state=RuntimeState::default(); let mut ctx=context();
     assert_eq!(decide(&cfg,&mut state,&ctx,100).0,Mode::Boost);
     state.foreground=ctx.app.clone(); ctx.app=Some("com.example.other".into());
@@ -99,7 +99,7 @@ fn display_modes_survive_nested_hdr_and_alternative_rate_arrays() {
 
 #[test]
 fn low_refresh_cap_survives_cpu_conflicts_heat_and_saver() {
-    let mut cfg = Config { automatic:true, rules:vec![AppRule { package:"com.example.game".into(), preset:Mode::Performance, hz:Some(60) }], ..Default::default() };
+    let mut cfg = Config { automatic:true, rules:vec![AppRule { package:"com.example.game".into(), preset:Mode::Performance, hz:Some(60),high_touch:false,charging_pause_at:None}], ..Default::default() };
     let mut state = state(); state.blocked = true;
     let mut ctx = context(); ctx.soc_millic = Some(90000); ctx.saver = Some(true);
     assert_eq!(butter::runtime::requested_refresh(&cfg, &state, &ctx), Some(60));
@@ -121,7 +121,7 @@ fn event_fallback_respects_boost_and_advanced_deadlines() {
 }
 #[test]
 fn repeated_foreground_events_do_not_extend_the_launch_boost() {
-    let cfg = Config { automatic:true, rules:vec![AppRule { package:"com.example.game".into(), preset:Mode::Performance, hz:None }], ..Default::default() };
+    let cfg = Config { automatic:true, rules:vec![AppRule { package:"com.example.game".into(), preset:Mode::Performance, hz:None,high_touch:false,charging_pause_at:None}], ..Default::default() };
     let mut state = RuntimeState::default(); let ctx = context();
     assert_eq!(decide(&cfg, &mut state, &ctx, 100).0, Mode::Boost);
     state.foreground = ctx.app.clone();

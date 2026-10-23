@@ -10,6 +10,7 @@ impl Notices {
 }
 pub fn message(state:&RuntimeState)->Option<String> {
     if state.error.is_some() || state.blocked { return Some("Tuning paused. Open Butterd for details.".into()); }
+    if !state.app_controls.errors.is_empty() { return Some("App controls need attention. Open Butterd for details.".into()); }
     if !state.preference_errors.is_empty() { return Some("Some saved settings need attention. Open Butterd for details.".into()); }
     if state.reason=="Cooling down" { return Some("Performance limits released while the device cools.".into()); }
     if matches!(state.reason.as_str(),"Foreground app unknown or multiple resumed apps"|"Screen off or display state unknown") || state.active==Mode::Boost { return None; }

@@ -102,11 +102,13 @@ export function renderControls(state, run, requestAdvanced) {
   if (validNumber(gpuRange.min) && validNumber(gpuRange.max)) gpu.append(paragraph('Effective limits: '+formatClock(gpuRange.min,true)+' – '+formatClock(gpuRange.max,true),'caption'));
   if (validNumber(gpuRange.requestedMin) && validNumber(gpuRange.requestedMax)) gpu.append(paragraph('Preset request: '+formatClock(gpuRange.requestedMin,true)+' – '+formatClock(gpuRange.requestedMax,true),'preset-request'));
   range(gpu,'gpu',gpuRange,run);
-  const touch = state.touch || {}; $('touch-state').textContent = touch.available ? (touch.driverHz ? 'Driver reports '+touch.driverHz+' Hz. ' : '')+(touch.state === 'Readback changed; request no longer active' ? 'The requested state did not persist. A ROM service or the driver may manage this setting.' : touch.state) : touch.reason || 'Touch control is not exposed by this driver.';
-  if (touch.available && !touch.driverHz) $('touch-state').textContent += touch.controller === 'Scoped XiaomiParts handover' ? ' Butterd pauses only the XiaomiParts touch service while this request is active, then restores its previous running state. If the ROM restarts it, the conflict is reported.' : ' HTSR is a request; ROM touch services may reapply their own state.';
-  const touchActions = $('touch-controls'); touchActions.replaceChildren();
-  for (const value of ['240','480','high']) touchActions.append(button(value === 'high' ? 'High sampling' : value+' Hz',() => run('enable touch '+value),touch.available && (value === 'high' || Number.isFinite(touch.driverHz))));
-  touchActions.append(button('Restore',()=>run('restore touch'),touch.available && touch.state !== 'Off'));
+  const touch = state.touch || {}, touchActions = $('touch-controls'); touchActions.replaceChildren();
+  const savedTouch=state.supervisor?.config?.controls?.touch;
+  let touchSummary=touch.available ? (touch.state === 'Request active' ? 'High sampling active.' : 'Use the driver’s high sampling mode.') : 'High touch sampling is not exposed by this driver.';
+  if (state.supervisor?.runtime?.app_controls?.touch_owned) touchSummary+=' Requested by the current app profile.';
+  if (touch.state === 'Readback changed; request no longer active') touchSummary='The driver or ROM changed the request. Toggle on to retry.';
+  if (touch.controller === 'Scoped XiaomiParts handover') touchSummary+=' The previous ROM touch controller resumes when released.';
+  touchActions.append(toggle('High touch sampling',touch.state === 'Request active' && savedTouch?.setting !== '240',touch.available === true || !!savedTouch,{on:'enable touch high',off:'restore touch'},run,touchSummary));
   const tcp = $('tcp-controls'); tcp.replaceChildren();
   if (state.tcp?.available) {
     const choices = state.tcp.choices.filter(v => /^[a-z][a-z0-9_-]{0,31}$/.test(v)); const selected = selection('tcp-choice','TCP congestion control',choices,state.tcp.current,tcp);
@@ -123,8 +125,8 @@ export function renderControls(state, run, requestAdvanced) {
     const notice = paragraph('Bluetooth earbuds disconnected','connection-notice'); notice.setAttribute('role','status');
     audioHost.querySelector('.control-copy').prepend(notice);
   }
-  const errors = state.supervisor?.runtime?.preference_errors || {};
-  $('preferences-status').textContent = Object.keys(errors).length ? 'Some saved options could not resume: '+Object.entries(errors).map(([name,error])=>name+': '+error).join(' · ') : 'Applied options are remembered after reboot. Temporary overrides retain their original expiry.';
+  const errors = {...(state.supervisor?.runtime?.preference_errors || {}),...(state.supervisor?.runtime?.app_controls?.errors || {})};
+  $('preferences-status').textContent = Object.keys(errors).length ? 'Some controls need attention: '+Object.entries(errors).map(([name,error])=>name+': '+error).join(' · ') : 'Applied options are remembered after reboot. Temporary overrides retain their original expiry.';
   const host = $('advanced-controls'); host.replaceChildren();
   for (const [key,[title,description]] of Object.entries(advanced)) {
     const capability = state[key] || {};

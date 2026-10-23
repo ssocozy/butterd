@@ -7,7 +7,7 @@ pub const DIRECTORY: &str = "/data/adb/butterd";
 const MODULE: &str = "/data/adb/modules/butterd";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct AppRule { pub package: String, pub preset: Mode, pub hz: Option<u32> }
+pub struct AppRule { pub package: String, pub preset: Mode, pub hz: Option<u32>, #[serde(default)] pub high_touch:bool, #[serde(default)] pub charging_pause_at:Option<u8> }
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config { pub automatic: bool, pub preset: Mode, pub logcat: bool, pub notifications: bool, pub rules: Vec<AppRule>, pub controls: BTreeMap<String,crate::preferences::SavedControl> }
@@ -17,7 +17,7 @@ impl Config {
         if self.rules.len() > 64 || self.preset == Mode::Boost { return Err("Invalid engine configuration".into()); }
         let mut seen = std::collections::HashSet::new();
         for rule in &self.rules {
-            if !android::valid_package(&rule.package) || !seen.insert(&rule.package) || rule.preset == Mode::Boost || rule.hz.is_some_and(|hz| !matches!(hz, 60 | 90 | 120)) { return Err("Invalid or duplicate app rule".into()); }
+            if !android::valid_package(&rule.package) || !seen.insert(&rule.package) || rule.preset == Mode::Boost || rule.hz.is_some_and(|hz| !matches!(hz, 60 | 90 | 120)) || rule.charging_pause_at.is_some_and(|level| !(40..=95).contains(&level)) { return Err("Invalid or duplicate app rule".into()); }
         }
         Ok(())
     }
@@ -28,6 +28,7 @@ pub struct Lease { pub source: String, pub expires: u64 }
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RuntimeState {
+    pub app_controls:crate::app_controls::State,
     pub boot: String, pub active: Mode, pub reason: String, pub foreground: Option<String>,
     pub tuning_requested: bool, pub selected: Mode, pub advanced_deadlines: BTreeMap<String, u64>, pub leases: Vec<Lease>, pub blocked: bool, pub refresh_user: Option<u32>, pub refresh_hz: Option<u32>, pub idle_samples: u8, pub sampled_at: u64,
     pub telemetry: Value, pub error: Option<String>, pub pending_preset: Option<Mode>,
@@ -67,6 +68,7 @@ pub fn config() -> Result<Config> { let value: Config = load("config.json")?; va
 pub fn state(boot: &str) -> Result<RuntimeState> {
     let value: RuntimeState = load("runtime.json")?;
     if value.boot != boot { return Ok(RuntimeState { boot: boot.into(), ..Default::default() }); }
+    if value.app_controls.key.as_ref().is_some_and(|key|key.len()>512) || value.app_controls.errors.len()>4 { return Err("Invalid app control state".into()); }
     if value.advanced_deadlines.len() > 8 || value.advanced_deadlines.keys().any(|key| !matches!(key.as_str(), "cpu-lock" | "gpu-lock" | "charging-thermal" | "gpu-thermal" | "charging-pause" | "bypass")) || value.leases.len() > 16 || value.leases.iter().any(|lease| !matches!(lease.source.as_str(), "launch" | "manual")) || value.refresh_user.is_some_and(|user| user > 99999) { return Err("Invalid runtime state".into()); }
     Ok(value)
 }
@@ -128,13 +130,18 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
                 state.tuning_requested = true; state.leases.retain(|lease| lease.source != "manual");
                 state.leases.push(Lease { source: "manual".into(), expires: uptime()? + seconds }); state.blocked = false;
             }
-            [command, package, mode, hz] if command == "app" => {
+            [command, package, mode, hz, extra @ ..] if command == "app" && matches!(extra.len(),0|2) => {
                 if !android::valid_package(package) { return Err("Invalid app package".into()); }
                 cfg.rules.retain(|rule| rule.package != *package);
                 if mode != "remove" {
                     let preset = Mode::parse(mode)?;
                     let hz = if hz == "rom" { None } else { Some(hz.parse()?) };
-                    cfg.rules.push(AppRule { package: package.clone(), preset, hz });
+                    let (high_touch,charging_pause_at)=if extra.is_empty() { (false,None) } else {
+                        let high=match extra[0].as_str() { "high"=>true,"off"=>false,_=>return Err("Invalid app touch choice".into()) };
+                        let charging=if extra[1]=="off" { None } else { Some(extra[1].parse::<u8>()?) };
+                        (high,charging)
+                    };
+                    cfg.rules.push(AppRule { package: package.clone(), preset, hz, high_touch,charging_pause_at });
                     cfg.automatic = true; state.tuning_requested = true;
                 }
                 state.profile_retries = 0; state.blocked = false; state.refresh_blocked = false; state.refresh_error = None;
@@ -271,6 +278,7 @@ fn thermal_cleanup(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &
     let unsafe_temperature = ctx.temperature.is_none_or(|temp| !(0..420).contains(&temp)) || ctx.soc_millic.is_some_and(|temp| temp >= 85000);
     let mut errors = Vec::new();
     for feature in [Feature::ChargingPause, Feature::ChargingThermal, Feature::GpuThermal, Feature::CpuLock, Feature::GpuLock, Feature::Bypass] {
+        if feature==Feature::ChargingPause && state.app_controls.charging_owned { continue; }
         let charging = matches!(feature, Feature::ChargingPause | Feature::ChargingThermal | Feature::Bypass);
         let should_restore = state.advanced_deadlines.get(&feature.key()).is_none_or(|expires| *expires <= now || *expires > now.saturating_add(1800)) || unsafe_temperature || ctx.battery.is_none_or(|level| level <= 20) || ctx.saver != Some(false) || (charging && ctx.online != Some(true)) || (!charging && (ctx.awake != Some(true) || ctx.soc_millic.is_none()));
         if should_restore {
@@ -362,6 +370,9 @@ pub fn daemon(boot: &str) -> Result<()> {
         let previous_errors=state.preference_errors.clone();
         crate::preferences::resume(&e,&cfg.controls,&mut state,&ctx,epoch(),now);
         for (key,error) in &state.preference_errors { if previous_errors.get(key)!=Some(error) { event(&cfg,"preference-error",&format!("{key}: {error}")); } }
+        let prior_app_errors=state.app_controls.errors.clone();
+        crate::app_controls::reconcile(&e,&cfg,&mut state.app_controls,&ctx);
+        for (key,error) in &state.app_controls.errors { if prior_app_errors.get(key)!=Some(error) { event(&cfg,"app-control-error",&format!("{key}: {error}")); } }
         if state.foreground != ctx.app { state.profile_retries = 0; }
         // A ROM/driver can return touch to its original state; no write is needed to release that session.
         if matches!(e.state(&Feature::Touch), Ok("Original values active; release session")) && e.apply_targets(Feature::Touch, Vec::new(), true).is_ok() {
@@ -530,7 +541,7 @@ fn cleanup_all(e: &Engine<SystemHardware, DiskStore>, state: &mut RuntimeState) 
     }
     if let Err(error) = restore_refresh(e, state) { errors.push(error.to_string()); }
     if let Err(error) = recover_refresh(e) { errors.push(error.to_string()); }
-    if errors.is_empty() { Ok(()) } else { Err(errors.join("; ").into()) }
+    if errors.is_empty() { state.app_controls=Default::default(); Ok(()) } else { Err(errors.join("; ").into()) }
 }
 
 pub fn log_control(command: &[String], error: Option<&str>) {

@@ -37,7 +37,7 @@ function render(state) {
   const metrics = $('device-metrics'); metrics.replaceChildren();
   for (const [name,value] of [['SoC temperature',telemetry.socTempC == null ? null : telemetry.socTempC.toFixed(1)+' °C'],['CPU activity',telemetry.cpuBusyPercent == null ? null : telemetry.cpuBusyPercent.toFixed(0)+'%'],['GPU activity',telemetry.gpuBusyPercent == null ? null : telemetry.gpuBusyPercent.toFixed(0)+'%'],['Charge cycles',telemetry.cycleCount],['Battery health',telemetry.healthPercent == null ? telemetry.health : telemetry.healthPercent.toFixed(0)+'% of design capacity']]) if (value != null) detailsRow(metrics,name,String(value));
   $('sensor-note').textContent = sampled ? 'Only readings exposed by your firmware are shown. Missing readings do not imply a sensor failure.' : running ? 'Monitoring is starting. Readings appear after the first sample.' : 'Sensor readings need the supervisor. Diagnostics remain accessible while it is stopped.';
-  const signature = JSON.stringify([state.audio,state.supervisor?.config?.controls,state.supervisor?.runtime?.preference_errors,state.governors,state.cpuPolicies,state.gpuRange,state.touch,state.tcp,...Object.keys(advanced).map(key=>state[key])]);
+  const signature = JSON.stringify([state.audio,state.supervisor?.runtime?.app_controls,state.supervisor?.config?.controls,state.supervisor?.runtime?.preference_errors,state.governors,state.cpuPolicies,state.gpuRange,state.touch,state.tcp,...Object.keys(advanced).map(key=>state[key])]);
   if (!busy && signature !== hardwareSignature && !$('choice-dialog')?.open) { renderControls(state,run,requestAdvanced); hardwareSignature = signature; }
   renderHardware(state);
   const compatibility = state.compatibility || {};
@@ -117,15 +117,22 @@ function renderApps() {
   }
 }
 function openApp(app) {
-  $('frame-result').hidden=true; $('frame-result').replaceChildren();
   selectedApp=app; const rule=snapshot?.supervisor?.config?.rules?.find(rule=>rule.package===app.package);
   $('app-title').textContent=app.label || app.package; $('app-package').textContent=app.package; $('app-preset').value=rule?.preset || 'balanced';
   const rate=$('app-hz'); rate.replaceChildren(); const rom=document.createElement('option'); rom.value='rom'; rom.textContent='Let the ROM decide'; rate.append(rom);
   const rates=snapshot?.supervisor?.runtime?.telemetry?.supportedHz || [];
   for (const hz of rates.filter(hz=>[60,90,120].includes(hz))) { const option=document.createElement('option'); option.value=String(hz); option.textContent=hz+' Hz'; rate.append(option); }
+  $('app-touch').checked=rule?.high_touch === true; $('app-touch').disabled=!snapshot?.touch?.available && !rule?.high_touch;
+  $('app-touch-note').textContent=snapshot?.touch?.available ? 'Use high sampling while this app is active. Manual touch settings take priority.' : 'High sampling is not exposed by this driver.';
+  $('app-charge').checked=rule?.charging_pause_at != null; $('app-charge').disabled=!snapshot?.['charging-pause']?.available && rule?.charging_pause_at == null;
+  $('app-charge-options').hidden=!$('app-charge').checked;
+  const level=$('app-charge-level'); const threshold=rule?.charging_pause_at || 80;
+  if(![...level.options].some(option=>Number(option.value)===threshold)){const option=document.createElement('option');option.value=String(threshold);option.textContent=threshold+'%';level.append(option);}
+  level.value=String(threshold);
   rate.value=rule?.hz && rates.includes(rule.hz) ? String(rule.hz) : 'rom'; $('remove-app').disabled=!rule; updateSelectors(); $('app-dialog').showModal();
 }
-$('app-form').addEventListener('submit',event=>{ event.preventDefault(); if (!selectedApp || !validPackage(selectedApp.package)) return; const preset=$('app-preset').value, hz=$('app-hz').value; if (!['balanced','performance','battery'].includes(preset) || !['rom','60','90','120'].includes(hz)) return; $('app-dialog').close(); run('app '+selectedApp.package+' '+preset+' '+hz); });
+$('app-charge').addEventListener('change',()=>{ $('app-charge-options').hidden=!$('app-charge').checked; updateSelectors(); });
+$('app-form').addEventListener('submit',event=>{ event.preventDefault(); if (!selectedApp || !validPackage(selectedApp.package)) return; const preset=$('app-preset').value, hz=$('app-hz').value; if (!['balanced','performance','battery'].includes(preset) || !['rom','60','90','120'].includes(hz)) return; $('app-dialog').close(); const high=$('app-touch').checked ? 'high' : 'off', charge=$('app-charge').checked ? $('app-charge-level').value : 'off'; if(charge !== 'off' && (!/^[0-9]{2}$/.test(charge) || Number(charge)<40 || Number(charge)>95)) return; run('app '+selectedApp.package+' '+preset+' '+hz+' '+high+' '+charge); });
 $('remove-app').addEventListener('click',()=>{ if (selectedApp && validPackage(selectedApp.package)) { $('app-dialog').close(); run('app '+selectedApp.package+' remove rom'); } });
 $('save-identity').addEventListener('click',async()=>{
   const model=$('identity').value; if (!Object.hasOwn(models,model) || busy) return;
@@ -142,17 +149,6 @@ async function report(command,download) {
   } catch (error) { notify(error.message,true); }
 }
 $('export').addEventListener('click',()=>report('diagnostics',true));
-$('measure-app').addEventListener('click',async()=>{
-  if (!selectedApp || !validPackage(selectedApp.package) || $('measure-app').disabled) return;
-  const control=$('measure-app'), result=$('frame-result'); control.disabled=true; result.hidden=false; result.textContent='Reading Android UI frame timings…';
-  try {
-    const data=JSON.parse(await exec(binary+' measure '+selectedApp.package));
-    result.replaceChildren();
-    if (!data.frames) result.append(paragraph('No usable Android UI frame timings were returned. Games may render through a separate surface, which this tool does not measure. This is not an FPS result.'));
-    else result.append(paragraph(data.frames+' UI frames sampled.'),paragraph('Median '+Number(data.p50Ms).toFixed(1)+' ms · 95th percentile '+Number(data.p95Ms).toFixed(1)+' ms.'));
-  } catch(error) { result.textContent='Frame timings could not be read: '+error.message; }
-  finally { control.disabled=false; }
-});
 try { const theme=localStorage.getItem('butter-theme'); if (['light','dark'].includes(theme)) { document.documentElement.dataset.theme=theme; $('theme').value=theme; } } catch (_) { /* Appearance remains system-controlled. */ }
 $('theme').addEventListener('change',event=>{ const theme=event.target.value; if (!['system','light','dark'].includes(theme)) return; if (theme==='system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme=theme; try { localStorage.setItem('butter-theme',theme); } catch (_) { /* Theme still applies for this session. */ } });
 setPage(); updateSelectors();
