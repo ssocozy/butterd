@@ -69,7 +69,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         }
         let targets = if restoring { Vec::new() } else { hardware::plan(&self.hardware, &feature, setting)? };
         match self.apply_targets(feature.clone(), targets, restoring) {
-            Err(error) if matches!(feature,Feature::Governors|Feature::PhoneMic) && !restoring => {
+            Err(error) if matches!(feature,Feature::Governors|Feature::PhoneMic|Feature::ChargingPause) && !restoring => {
                 let cleanup = self.apply_targets(feature, Vec::new(), true);
                 Err(format!("Control change failed: {error}; cleanup: {}",cleanup.unwrap_or_else(|error| error.to_string())).into())
             }
@@ -147,11 +147,26 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             }
             if adopted { self.store.save(&journal)?; }
         }
-        if restoring && matches!(feature,Feature::Refresh(_)|Feature::PhoneMic) {
+        if restoring && matches!(feature,Feature::Refresh(_)|Feature::PhoneMic|Feature::ChargingPause) {
             // Release remaining owned preferences while preserving externally changed values.
             for entry in &mut journal.entries {
                 let current = hardware::value(&self.hardware, &entry.path)?;
                 if !entry.owned(&current) { entry.original = current.clone(); entry.expected = current; entry.before = None; }
+            }
+            self.store.save(&journal)?;
+        }
+        if restoring && feature == Feature::Touch {
+            for entry in journal.entries.iter_mut().filter(|entry| entry.path == crate::touch::NODE) {
+                let current=hardware::value(&self.hardware,&entry.path)?;
+                if !entry.owned(&current) {
+                    let actual:crate::touch::Snapshot=serde_json::from_str(&current)?;
+                    let expected:crate::touch::Snapshot=serde_json::from_str(&entry.expected)?;
+                    let mut original:crate::touch::Snapshot=serde_json::from_str(&entry.original)?;
+                    if actual.running != expected.running { original=actual.clone(); }
+                    else if !original.running { original.value=actual.value; }
+                    entry.original=serde_json::to_string(&original)?;
+                    entry.expected=current; entry.before=None;
+                }
             }
             self.store.save(&journal)?;
         }
@@ -199,7 +214,9 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             return Err("Capabilities changed; restore first".into());
         }
         // Widen limits before narrowing them, for both application and restoration.
-        if feature != Feature::PhoneMic { journal.entries.sort_by_key(|entry| {
+        if feature == Feature::ChargingPause {
+            journal.entries.sort_by_key(|entry| u8::from(entry.path == hardware::PAUSE));
+        } else if feature != Feature::PhoneMic { journal.entries.sort_by_key(|entry| {
             let target = targets.iter().find(|(path, _)| path == &entry.path).map(|(_, value)| value.as_str()).unwrap_or("");
             let old = hardware::value(&self.hardware, &entry.path).ok().and_then(|value| value.parse::<u64>().ok());
             let new = target.parse::<u64>().ok();
@@ -220,7 +237,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             if !journal.entries[index].owned(&current) {
                 return Err("External change detected; session retained".into());
             }
-            if restoring && matches!(feature,Feature::Refresh(_)|Feature::PhoneMic) && current == target {
+            if restoring && matches!(feature,Feature::Refresh(_)|Feature::PhoneMic|Feature::ChargingPause|Feature::Touch) && current == target {
                 journal.entries[index].expected = target; journal.entries[index].before = None; self.store.save(&journal)?;
                 continue;
             }
@@ -337,7 +354,12 @@ impl<H: Hardware, S: Store> Engine<H, S> {
                     },
                 )?;
                 let mut entry = json!({"available": true, "nodes": targets.len(), "state": self.state(&feature)?});
+                if feature == Feature::ChargingPause {
+                    entry["batteryCurrentUa"] = self.hardware.read("/sys/class/power_supply/battery/current_now").ok().and_then(|value|value.parse::<i64>().ok()).map_or(Value::Null,|value|json!(value));
+                    entry["chargeCurrentLimitUa"] = self.hardware.read(hardware::FCC).ok().map_or(Value::Null,|value|json!(value));
+                }
                 if feature == Feature::Touch {
+                    entry["controller"] = if targets.iter().any(|(path,_)|path == crate::touch::NODE) { json!("Scoped XiaomiParts handover") } else { json!("Direct driver") };
                     entry["driverHz"] = match hardware::value(&self.hardware, GOODIX) {
                         Ok(value) => json!(if value == "1" { 480 } else { 240 }),
                         Err(_) => Value::Null,

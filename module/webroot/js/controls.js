@@ -6,7 +6,7 @@ export const advanced = {
   'gpu-thermal':['GPU cooling override','Requests cooling state zero for the Mali cooling device. This does not disable every thermal safeguard. Expires after 60 seconds.'],
   'charging-thermal':['Charging thermal override','Removes one exposed charging thermal vote. It does not bypass every charging safeguard or guarantee uncapped wattage. Expires after 30 minutes at most.'],
   'bypass':['Battery bypass','Requires an advertised kernel bypass control and a separate active-state readback. Unsupported stock kernels cannot enable it. Ends on unplug, low battery, heat or after 30 minutes.'],
-  'charging-pause':['Experimental charging pause','Disables the primary MediaTek charger. This is not confirmed direct-power bypass: the battery may still discharge, and charge-pump behavior depends on the ROM. No charge-current workaround is forced. Ends on unplug, low battery, heat or after 30 minutes.']
+  'charging-pause':['Stock-kernel charging pause','Requests zero battery charge current and pauses the primary charger together. This is not proof of physical battery bypass; the battery may supplement system power. Previous values are retained. Ends on unplug, low battery, heat or after 30 minutes.']
 };
 export function formatClock(value, gpu = false) {
   const hz = Number(value) * (gpu ? 1 : 1000);
@@ -103,7 +103,7 @@ export function renderControls(state, run, requestAdvanced) {
   if (validNumber(gpuRange.requestedMin) && validNumber(gpuRange.requestedMax)) gpu.append(paragraph('Preset request: '+formatClock(gpuRange.requestedMin,true)+' – '+formatClock(gpuRange.requestedMax,true),'preset-request'));
   range(gpu,'gpu',gpuRange,run);
   const touch = state.touch || {}; $('touch-state').textContent = touch.available ? (touch.driverHz ? 'Driver reports '+touch.driverHz+' Hz. ' : '')+(touch.state === 'Readback changed; request no longer active' ? 'The requested state did not persist. A ROM service or the driver may manage this setting.' : touch.state) : touch.reason || 'Touch control is not exposed by this driver.';
-  if (touch.available && !touch.driverHz) $('touch-state').textContent += ' HTSR is a request; ROM touch services may reapply their own state.';
+  if (touch.available && !touch.driverHz) $('touch-state').textContent += touch.controller === 'Scoped XiaomiParts handover' ? ' Butterd pauses only the XiaomiParts touch service while this request is active, then restores its previous running state. If the ROM restarts it, the conflict is reported.' : ' HTSR is a request; ROM touch services may reapply their own state.';
   const touchActions = $('touch-controls'); touchActions.replaceChildren();
   for (const value of ['240','480','high']) touchActions.append(button(value === 'high' ? 'High sampling' : value+' Hz',() => run('enable touch '+value),touch.available && (value === 'high' || Number.isFinite(touch.driverHz))));
   touchActions.append(button('Restore',()=>run('restore touch'),touch.available && touch.state !== 'Off'));
@@ -128,7 +128,8 @@ export function renderControls(state, run, requestAdvanced) {
   const host = $('advanced-controls'); host.replaceChildren();
   for (const [key,[title,description]] of Object.entries(advanced)) {
     const capability = state[key] || {};
-    const summary = capability.available ? capability.state : 'Not supported by this kernel';
+    let summary = capability.available ? capability.state : 'Not supported by this kernel';
+    if (key === 'charging-pause' && capability.available && Number.isFinite(capability.batteryCurrentUa)) summary += ' · Battery-current magnitude: '+Math.round(Math.abs(capability.batteryCurrentUa)/1000)+' mA (live sample, not bypass confirmation).';
     host.append(toggle(title,capability.state === 'Request active',capability.available === true,{off:'restore '+key,confirm:()=>requestAdvanced(key,title,description)},run,summary));
   }
   updateSelectors();

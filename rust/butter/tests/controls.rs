@@ -307,14 +307,17 @@ fn bypass_requires_capability_control_and_observable_state() {
     assert!(bypass_node(&engine.hardware).is_ok());
 }
 #[test]
-fn charging_pause_preserves_unlimited_flag_and_never_changes_current_limit() {
+fn charging_pause_coordinates_current_vote_and_preserves_originals() {
     let engine = fixture();
     engine.hardware.put(butter::hardware::PAUSE, "1 0");
+    engine.hardware.put(butter::hardware::FCC, "3700000");
     engine.apply(Feature::ChargingPause, "", false, true).unwrap();
     assert_eq!(engine.hardware.read(butter::hardware::PAUSE).unwrap(), "1 1");
+    assert_eq!(engine.hardware.read(butter::hardware::FCC).unwrap(), "0");
     engine.apply(Feature::ChargingPause, "", true, false).unwrap();
     assert_eq!(engine.hardware.read(butter::hardware::PAUSE).unwrap(), "1 0");
-    assert_eq!(engine.hardware.writes.get(), 2);
+    assert_eq!(engine.hardware.read(butter::hardware::FCC).unwrap(), "3700000");
+    assert_eq!(engine.hardware.writes.get(), 4);
 }
 #[test]
 fn refresh_journals_cannot_target_another_user_or_non_display_setting() {
@@ -649,4 +652,62 @@ fn interactive_lock_waits_for_holder_and_times_out_when_busy() {
     drop(store);
     drop(waiter.join().unwrap());
     std::fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
+fn touch_service_handover_is_journaled_and_restored_without_component_disable() {
+    use butter::touch::{NODE,normalize,running};
+    let engine=fixture();
+    engine.hardware.put(butter::hardware::HTSR,"0");
+    engine.hardware.put(NODE,r#"{"running":true,"value":0}"#);
+    engine.apply_targets(Feature::Touch,vec![(NODE.into(),butter::touch::target(&engine.hardware,"high").unwrap())],false).unwrap();
+    assert_eq!(engine.hardware.read(NODE).unwrap(),r#"{"running":false,"value":1}"#);
+    engine.apply(Feature::Touch,"",true,false).unwrap();
+    assert_eq!(engine.hardware.read(NODE).unwrap(),r#"{"running":true,"value":0}"#);
+    assert!(normalize(r#"{"running":false,"value":2}"#).is_err());
+    assert!(normalize(r#"{"running":true,"value":1}"#).is_err());
+    assert!(running("Permission Denial").is_err());
+    assert!(running("ACTIVITY MANAGER SERVICES
+ * ServiceRecord{abc u0 com.xiaomi.settings/.touchsampling.TouchSamplingService}
+ app=ProcessRecord{xyz}").unwrap());
+    assert!(!running("ACTIVITY MANAGER SERVICES
+ * ServiceRecord{abc u10 com.xiaomi.settings/.touchsampling.TouchSamplingService}
+ app=ProcessRecord{xyz}").unwrap());
+}
+#[test]
+fn touch_restore_preserves_a_restarted_rom_controller() {
+    use butter::touch::NODE;
+    let engine=fixture();
+    engine.hardware.put(NODE,r#"{"running":false,"value":0}"#);
+    engine.apply_targets(Feature::Touch,vec![(NODE.into(),r#"{"running":false,"value":1}"#.into())],false).unwrap();
+    engine.hardware.put(NODE,r#"{"running":true,"value":0}"#);
+    engine.apply(Feature::Touch,"",true,false).unwrap();
+    assert_eq!(engine.hardware.read(NODE).unwrap(),r#"{"running":true,"value":0}"#);
+}
+#[test]
+fn charging_pause_rolls_back_partial_apply_and_preserves_changed_current_on_restore() {
+    let engine=fixture();
+    engine.hardware.put(butter::hardware::PAUSE,"0 0");
+    engine.hardware.put(butter::hardware::FCC,"3700000");
+    engine.hardware.fail_at.set(Some(2));
+    assert!(engine.apply(Feature::ChargingPause,"",false,true).is_err());
+    assert_eq!(engine.hardware.read(butter::hardware::FCC).unwrap(),"3700000");
+    engine.hardware.fail_at.set(None);
+    engine.apply(Feature::ChargingPause,"",false,true).unwrap();
+    engine.hardware.put(butter::hardware::FCC,"2000000");
+    engine.apply(Feature::ChargingPause,"",true,false).unwrap();
+    assert_eq!(engine.hardware.read(butter::hardware::PAUSE).unwrap(),"0 0");
+    assert_eq!(engine.hardware.read(butter::hardware::FCC).unwrap(),"2000000");
+}
+
+#[test]
+fn htsr_does_not_fall_back_to_uncoordinated_writes_when_handover_unavailable() {
+    let engine=fixture();
+    engine.hardware.nodes.borrow_mut().remove(GOODIX);
+    engine.hardware.put(butter::hardware::HTSR,"0");
+    assert!(engine.apply(Feature::Touch,"high",false,false).is_err());
+    assert_eq!(engine.hardware.writes.get(),0);
+    engine.hardware.put(butter::touch::NODE,r#"{"running":true,"value":0}"#);
+    engine.apply(Feature::Touch,"high",false,false).unwrap();
+    assert!(engine.session(&Feature::Touch).unwrap().unwrap().entries.iter().all(|entry|entry.path==butter::touch::NODE));
 }

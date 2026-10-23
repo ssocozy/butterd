@@ -20,3 +20,5 @@ pub mod gpu;
 pub mod audio;
 
 pub mod preferences;
+
+pub mod touch;

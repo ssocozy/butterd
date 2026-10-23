@@ -21,6 +21,7 @@ pub const THERMAL: &str = "/sys/class/thermal";
 pub const TCP: &str = "/proc/sys/net/ipv4/tcp_congestion_control";
 pub const TCP_AVAILABLE: &str = "/proc/sys/net/ipv4/tcp_available_congestion_control";
 pub const BOOT: &str = "/proc/sys/kernel/random/boot_id";
+pub const FCC: &str = "/sys/class/power_supply/battery/constant_charge_current";
 pub const PAUSE: &str = "/proc/mtk_battery_cmd/current_cmd";
 pub const BYPASS_ACTIVE: &str = "/sys/class/power_supply/battery/bypass_charging_active";
 pub fn bypass_node(hardware: &impl Hardware) -> Result<String> {
@@ -73,17 +74,20 @@ impl Hardware for SystemHardware {
         paths.iter().map(|path| self.read(path)).collect()
     }
     fn check_write(&self, path: &str) -> Result<()> {
+        if path == crate::touch::NODE { return self.check_write(HTSR); }
         if crate::audio::preset(path).is_some() { return Ok(()); }
         if crate::display::node(path).is_some() { return Ok(()); }
         OpenOptions::new().write(true).open(path)?;
         Ok(())
     }
     fn read(&self, path: &str) -> Result<String> {
+        if path == crate::touch::NODE { return crate::touch::read(); }
         if let Some(value) = crate::audio::read(path) { return value; }
         if let Some(value) = crate::display::read(path) { return value; }
         Ok(read_bounded(Path::new(path), 4096)?.trim().to_string())
     }
     fn write(&self, path: &str, value: &str) -> Result<()> {
+        if path == crate::touch::NODE { return crate::touch::write(value); }
         if let Some(result) = crate::audio::write(path,value) { return result; }
         if let Some(result) = crate::display::write(path,value) { return result; }
         // Open an existing node only. Never create a device path or change its permissions.
@@ -144,7 +148,7 @@ pub fn allowed(hardware: &impl Hardware, feature: &Feature, path: &str) -> bool 
         Feature::GpuLock => path == GPU || path == GPU_ALT,
         Feature::ChargingThermal => path == CHARGE,
         Feature::GpuThermal => cooling(hardware).is_ok_and(|current| current == path),
-        Feature::Touch => path == GOODIX || path == HTSR,
+        Feature::Touch => path == GOODIX || path == HTSR || path == crate::touch::NODE,
         Feature::Tcp => path == TCP,
         Feature::Governors => path.strip_prefix(&format!("{CPU}/")).and_then(|tail| tail.strip_suffix("/scaling_governor")).is_some_and(valid_policy),
         Feature::Governor(policy) => {
@@ -157,11 +161,19 @@ pub fn allowed(hardware: &impl Hardware, feature: &Feature, path: &str) -> bool 
             cpu || path == crate::vendor::POWERHAL || allowed(hardware, &Feature::GpuRange, path)
         }
         Feature::Refresh(user) => crate::display::node(path).is_some_and(|(id, _, _)| id == *user),
-        Feature::ChargingPause => path == PAUSE,
+        Feature::ChargingPause => path == PAUSE || path == FCC,
         Feature::Bypass => bypass_node(hardware).is_ok_and(|node| node == path),
     }
 }
 pub fn validate_path_value(feature: &Feature, path: &str, value: &str) -> Result<()> {
+    if path == crate::touch::NODE {
+        if *feature != Feature::Touch { return Err("Touch handover belongs to touch control".into()); }
+        crate::touch::normalize(value)?; return Ok(());
+    }
+    if path == FCC {
+        if *feature != Feature::ChargingPause || number(value)? > 30_000_000 { return Err("Invalid charge current baseline".into()); }
+        return Ok(());
+    }
     if let Some((user,table,key)) = crate::display::node(path) {
         if !matches!(feature,Feature::Refresh(id) if *id == user) { return Err("Display preference belongs to another control or user".into()); }
         crate::display::normalize(table,key,value)?; return Ok(());
@@ -249,7 +261,12 @@ pub fn plan(
         Feature::ChargingThermal => targets.push((CHARGE.into(), "1".into())),
         Feature::GpuThermal => targets.push((cooling(hardware)?, "0".into())),
         Feature::Touch => match setting {
-            "high" if hardware.read(GOODIX).is_err() => targets.push((HTSR.into(), "1".into())),
+            "high" if hardware.read(GOODIX).is_err() => {
+                // A complete snapshot is mandatory; never fall back around a failed handover.
+                if hardware.read(HTSR).is_ok() {
+                    targets.push((crate::touch::NODE.into(),crate::touch::target(hardware,setting)?));
+                } else { return Err("HTSR control is not exposed".into()); }
+            },
             "high" | "240" | "480" => targets.push((
                 GOODIX.into(),
                 if setting == "240" { "0" } else { "1" }.into(),
@@ -287,6 +304,9 @@ pub fn plan(
         Feature::ChargingPause => {
             let current = hardware.read(PAUSE)?;
             validate_value(feature, &current)?;
+            let limit=hardware.read(FCC)?;
+            validate_path_value(feature,FCC,&limit)?;
+            targets.push((FCC.into(), "0".into()));
             targets.push((PAUSE.into(), format!("{} 1", current.split_whitespace().next().ok_or("Missing charging flag")?)));
         }
         Feature::Bypass => targets.push((bypass_node(hardware)?, "1".into())),

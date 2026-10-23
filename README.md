@@ -32,7 +32,8 @@ Per-app refresh rates are independent of CPU/GPU presets. Leaving an app release
 - TCP congestion-control selection from your kernel’s available algorithms.
 - Goodix 240/480 Hz touch modes and high sampling mode on supported firmware.
 - Optional, time-limited clock, GPU cooling and charging thermal-vote overrides.
-- Observable kernel battery bypass where supported; a separately labelled experimental primary-charger pause.
+- Observable kernel battery bypass where supported. The stock-kernel charging pause coordinates a zero charge-current request with primary-charger pause; it does not establish physical battery isolation. Battery current remains visible for phone testing.
+- HTSR handover stops only XiaomiParts’ touch service while Butterd owns the request and restores its previous running state when released. It does not disable the package or persistently disable the component; an unexpected service restart is a conflict.
 - Phone-microphone capture preferences with Bluetooth earbuds on ROMs exposing the privileged routing API.
 - Local diagnostic reports, optional logcat events and app frame-duration samples.
 - Pixel 6a–9a compatibility profiles, fetched automatically during installation.
