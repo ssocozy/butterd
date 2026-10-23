@@ -182,7 +182,7 @@ pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now:
     let requested = state.pending_preset.take().unwrap_or(if config.automatic { rule.map_or(config.preset, |rule| rule.preset) } else { state.selected });
     if config.automatic && rule.is_some_and(|rule| rule.preset == Mode::Performance) && state.foreground != context.app && requested == Mode::Performance {
         state.leases.retain(|lease| lease.source != "launch");
-        state.leases.push(Lease { source: "launch".into(), expires: now.saturating_add(3) });
+        state.leases.push(Lease { source: "launch".into(), expires: now.saturating_add(5) });
     }
     let idle = state.telemetry.get("cpuBusyPercent").and_then(Value::as_f64).is_some_and(|load| load < 15.0) && context.gpu_busy.is_some_and(|load| load < 15.0);
     state.idle_samples = if idle { state.idle_samples.saturating_add(1).min(3) } else { 0 };

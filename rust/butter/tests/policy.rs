@@ -126,8 +126,9 @@ fn repeated_foreground_events_do_not_extend_the_launch_boost() {
     assert_eq!(decide(&cfg, &mut state, &ctx, 100).0, Mode::Boost);
     state.foreground = ctx.app.clone();
     assert_eq!(decide(&cfg, &mut state, &ctx, 101).0, Mode::Boost);
-    assert_eq!(state.leases[0].expires, 103);
-    assert_eq!(decide(&cfg, &mut state, &ctx, 104).0, Mode::Performance);
+    assert_eq!(state.leases[0].expires, 105);
+    assert_eq!(decide(&cfg, &mut state, &ctx, 104).0, Mode::Boost);
+    assert_eq!(decide(&cfg, &mut state, &ctx, 105).0, Mode::Performance);
 }
 
 #[test]
