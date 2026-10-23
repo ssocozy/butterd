@@ -10,7 +10,7 @@ const MODULE: &str = "/data/adb/modules/butterd";
 pub struct AppRule { pub package: String, pub preset: Mode, pub hz: Option<u32>, #[serde(default)] pub high_touch:bool, #[serde(default)] pub charging_pause_at:Option<u8> }
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Config { pub automatic: bool, pub preset: Mode, pub logcat: bool, pub notifications: bool, pub rules: Vec<AppRule>, pub controls: BTreeMap<String,crate::preferences::SavedControl> }
+pub struct Config { pub recording_assist: bool, pub automatic: bool, pub preset: Mode, pub logcat: bool, pub notifications: bool, pub rules: Vec<AppRule>, pub controls: BTreeMap<String,crate::preferences::SavedControl> }
 impl Config {
     pub fn validate(&self) -> Result<()> {
         crate::preferences::validate(&self.controls)?;
@@ -123,6 +123,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
         match args {
             [command] if command == "monitor" => { state.preference_errors.clear(); state.resumed_controls.clear(); },
             [command, choice] if command == "auto" && matches!(choice.as_str(), "on" | "off") => { state.refresh_blocked = false; state.refresh_error = None; cfg.automatic = choice == "on"; state.tuning_requested = cfg.automatic || cfg.preset != Mode::Balanced; state.blocked = false; state.leases.clear(); state.selected = cfg.preset; state.pending_preset = Some(cfg.preset); }
+            [command, choice] if command == "recording" && matches!(choice.as_str(), "on" | "off") => cfg.recording_assist = choice == "on",
             [command, choice] if command == "notifications" && matches!(choice.as_str(), "on" | "off") => cfg.notifications = choice == "on",
             [command, choice] if command == "logging" && matches!(choice.as_str(), "on" | "off") => cfg.logcat = choice == "on",
             [command, mode] if command == "preset" => { let mode = Mode::parse(mode)?; if mode == Mode::Boost { return Err("Use boost SECONDS".into()); } state.tuning_requested = true; cfg.preset = mode; state.selected = mode; state.pending_preset = Some(mode); state.blocked = false; state.profile_retries = 0; state.leases.clear(); }
@@ -150,7 +151,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
             }
             [command] if command == "reset" => {
                 cfg.controls.clear(); state.resumed_controls.clear(); state.preference_errors.clear();
-                cfg.automatic = false; state.refresh_blocked = false; state.refresh_error = None; state.tuning_requested = false; cfg.preset = Mode::Balanced; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = Some(Mode::Balanced); state.blocked = false;
+                cfg.automatic = false; cfg.recording_assist = false; state.refresh_blocked = false; state.refresh_error = None; state.tuning_requested = false; cfg.preset = Mode::Balanced; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = Some(Mode::Balanced); state.blocked = false;
                 save("config.json", &cfg)?; save("runtime.json", &state)?;
                 cleanup_all(&e, &mut state)?;
             }
@@ -184,7 +185,7 @@ pub fn cooling_stage(previous: u8, context: &Context) -> u8 {
 }
 pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now: u64) -> (Mode, &'static str) {
     state.leases.retain(|lease| lease.expires > now && lease.expires <= now.saturating_add(30));
-    if !config.automatic && !state.tuning_requested { state.leases.clear(); return (Mode::Balanced, "Monitoring only"); }
+    if !config.automatic && !state.tuning_requested && !config.recording_assist { state.leases.clear(); return (Mode::Balanced, "Monitoring only"); }
     if context.awake == Some(false) { state.leases.clear(); return (Mode::Balanced, "Screen off"); }
     if state.blocked { state.leases.clear(); return (Mode::Balanced, "Paused after a conflict or failure; select a preset to retry"); }
     if context.awake.is_none() { state.leases.clear(); return (Mode::Balanced, "Screen off or display state unknown"); }
@@ -212,6 +213,10 @@ pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now:
     let idle = state.telemetry.get("cpuBusyPercent").and_then(Value::as_f64).is_some_and(|load| load < 15.0) && context.gpu_busy.is_some_and(|load| load < 15.0);
     state.idle_samples = if idle { state.idle_samples.saturating_add(1).min(3) } else { 0 };
     if !state.leases.is_empty() { (Mode::Boost, "Temporary boost lease") }
+    else if config.recording_assist && requested != Mode::Battery && crate::recording::active(&state.telemetry["recording"], now) {
+        (if requested == Mode::Performance && state.thermal_stage == 0 { Mode::Boost } else { Mode::Performance },
+         if state.thermal_stage > 0 { "Recording assist: reduced floors for heat" } else { "Recording assist: capture session active" })
+    }
     else if requested == Mode::Performance && state.idle_samples >= 3 { (Mode::Balanced, "Idle workload; frequency floors released") }
     else if requested == Mode::Performance && state.thermal_stage > 0 { (requested, if state.thermal_stage == 1 { "Cooling: reduced performance floors" } else { "Cooling: minimal performance floors" }) }
     else { (requested, if config.automatic && rule.is_some() { "Foreground app rule" } else { "Selected preset" }) }
@@ -412,6 +417,7 @@ pub fn daemon(boot: &str) -> Result<()> {
         if matches!(e.state(&Feature::Touch), Ok("Original values active; release session")) && e.apply_targets(Feature::Touch, Vec::new(), true).is_ok() {
             event(&cfg, "touch", "Touch returned to its original value; session released without a write");
         }
+        state.telemetry["recording"] = recording_sample.clone();
         let prior_thermal_stage = state.thermal_stage;
         let (desired, reason) = decide(&cfg, &mut state, &ctx, now);
         let result = (|| -> Result<()> {
@@ -454,6 +460,8 @@ pub fn daemon(boot: &str) -> Result<()> {
             }
         }
         state.telemetry = sampled_telemetry;
+        state.telemetry["recording"]["assistEnabled"] = json!(cfg.recording_assist);
+        state.telemetry["recording"]["assistActive"] = json!(state.reason.starts_with("Recording assist:"));
         state.telemetry["wakeSource"] = json!(wake_events.last_wake);
         state.telemetry["eventStreamRunning"] = json!(wake_events.available());
         state.telemetry["displayRequestHz"] = json!(state.refresh_hz);

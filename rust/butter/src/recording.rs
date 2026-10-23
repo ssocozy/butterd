@@ -36,3 +36,9 @@ pub fn sample(now: u64) -> Value {
     value["encodingVerified"] = json!(false);
     value
 }
+
+/// Assistance requires a recent, recognised screen capture; unknown never authorises it.
+pub fn active(value: &Value, now: u64) -> bool {
+    value["available"] == true && value["screenCapture"] == true
+        && value["sampledAtUptime"].as_u64().is_some_and(|sample| sample <= now && now - sample <= 20)
+}

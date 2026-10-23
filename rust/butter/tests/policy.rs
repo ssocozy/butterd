@@ -254,3 +254,38 @@ fn recording_parser_accepts_multiline_rom_sessions_and_rejects_ambiguous_fields(
         assert!(parse(&invalid).is_err());
     }
 }
+
+#[test]
+fn recording_assist_raises_floors_only_with_fresh_capture_and_explicit_opt_in() {
+    let mut cfg=Config::default(); let mut state=RuntimeState{tuning_requested:true,..Default::default()}; let ctx=context();
+    state.foreground=ctx.app.clone();
+    state.telemetry=serde_json::json!({"recording":{"available":true,"screenCapture":true,"sampledAtUptime":100}});
+    assert_eq!(decide(&cfg,&mut state,&ctx,100).0,Mode::Balanced);
+    cfg.recording_assist=true;
+    assert_eq!(decide(&cfg,&mut state,&ctx,101),(Mode::Performance,"Recording assist: capture session active"));
+    state.selected=Mode::Performance;
+    assert_eq!(decide(&cfg,&mut state,&ctx,102).0,Mode::Boost);
+    state.selected=Mode::Battery;
+    assert_eq!(decide(&cfg,&mut state,&ctx,103).0,Mode::Battery);
+    state.selected=Mode::Balanced;
+    assert_eq!(decide(&cfg,&mut state,&ctx,121).0,Mode::Balanced);
+    state.telemetry["recording"]["sampledAtUptime"]=serde_json::json!(122);
+    state.telemetry["recording"]["screenCapture"]=serde_json::json!(false);
+    assert_eq!(decide(&cfg,&mut state,&ctx,122).0,Mode::Balanced);
+    state.telemetry["recording"]["screenCapture"]=serde_json::json!(true);
+    state.telemetry["recording"]["available"]=serde_json::json!(false);
+    assert_eq!(decide(&cfg,&mut state,&ctx,122).0,Mode::Balanced);
+}
+#[test]
+fn recording_assist_reduces_with_heat_and_never_overrides_saver_or_screen_off() {
+    let cfg=Config{recording_assist:true,..Default::default()}; let mut state=state(); let mut ctx=context();
+    state.foreground=ctx.app.clone();
+    state.telemetry=serde_json::json!({"recording":{"available":true,"screenCapture":true,"sampledAtUptime":100}});
+    ctx.temperature=Some(400);
+    assert_eq!(decide(&cfg,&mut state,&ctx,100),(Mode::Performance,"Recording assist: reduced floors for heat"));
+    assert_eq!(state.thermal_stage,1);
+    ctx.temperature=Some(420); assert_eq!(decide(&cfg,&mut state,&ctx,101).0,Mode::Balanced);
+    ctx.temperature=Some(350);ctx.saver=Some(true);assert_eq!(decide(&cfg,&mut state,&ctx,102).0,Mode::Battery);
+    ctx.saver=Some(false);ctx.battery=Some(15);assert_eq!(decide(&cfg,&mut state,&ctx,103).0,Mode::Battery);
+    ctx.battery=Some(70);ctx.awake=Some(false);assert_eq!(decide(&cfg,&mut state,&ctx,104).0,Mode::Balanced);
+}

@@ -64,6 +64,8 @@ try {
       else if(command.endsWith(' enable phone-mic')){state.audio.active=true;state.supervisor.config.controls={'phone-mic':{setting:'',expires_utc:null}};}
       else if(command.endsWith(' restore phone-mic')){if(globalThis.__failMic){code=1;stderr='Example routing rejection';}else{state.audio.active=false;state.supervisor.config.controls={};}}
       else if(command.endsWith(' notify-test'))state.supervisor.notificationDelivery={accepted:true,error:null};
+      else if(command.endsWith(' recording on'))state.supervisor.config.recording_assist=true;
+      else if(command.endsWith(' recording off'))state.supervisor.config.recording_assist=false;
       else if(command.endsWith(' notifications on'))state.supervisor.config.notifications=true;
       else if(command.endsWith(' notifications off'))state.supervisor.config.notifications=false;
       else if(command.endsWith(' status'))stdout=JSON.stringify(state);
@@ -119,6 +121,10 @@ try {
   await evaluate(`document.querySelector('#cpu-controls').closest('details').open=true`); await delay(250);
   assert.equal(await evaluate(`document.querySelector('#governor-all').value`),'schedutil');
   assert.equal(await evaluate(`document.querySelectorAll('#touch-controls button').length===0 && document.querySelector('#touch-controls input[role=switch]')!==null`),true);
+  assert.equal(await evaluate(`document.querySelector('#recording-assist').checked`),false);
+  await evaluate(`document.querySelector('#recording-assist').click()`);
+  await until(`document.querySelector('#recording-assist').checked && document.body.getAttribute('aria-busy')==='false'`);
+  assert.equal(await evaluate(`__butterCommands.some(command=>command.endsWith(' recording on'))`),true);
   assert.equal(await evaluate(`document.querySelector('#notifications').checked`),false);
   await evaluate(`document.querySelector('#notifications').click()`);
   await until(`document.querySelector('#notifications').checked && document.body.getAttribute('aria-busy')==='false'`);
