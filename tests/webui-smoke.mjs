@@ -91,6 +91,12 @@ try {
   await screenshot('webui-overview.png');
   await evaluate(`document.getElementById('open-presets').click()`); await until(`document.getElementById('preset-dialog').open`);
   await evaluate(`document.querySelector('[data-preset=performance]').click()`); await until(`document.getElementById('preset-label').textContent==='Performance'`);
+  await evaluate(`document.getElementById('open-presets').click();document.querySelector('[data-preset=aggressive]').click()`);
+  await until(`document.getElementById('aggressive-dialog').open`);
+  assert.equal(await evaluate(`document.getElementById('aggressive-apply').disabled`),true);
+  assert.equal(await evaluate(`__butterCommands.some(command=>command.includes('preset aggressive'))`),false);
+  await evaluate(`document.querySelector('[data-close=aggressive-dialog]').click()`);
+  await until(`!document.getElementById('aggressive-dialog').open`);
   await evaluate(`location.hash='apps'`); await until(`document.querySelectorAll('.app-row').length===2`);
   assert.equal(await evaluate(`document.querySelectorAll('#app-list img').length`),0,'An app label was interpreted as HTML');
   await evaluate(`document.getElementById('app-search').value='pocket';document.getElementById('app-search').dispatchEvent(new Event('input'))`);
@@ -109,6 +115,13 @@ try {
   await screenshot('webui-app-profile.png');
   await evaluate(`document.getElementById('app-form').dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}))`);
   await until(`__butterCommands.some(command=>command.endsWith('app com.example.game performance 120 high 80'))`);
+  await until(`document.body.getAttribute('aria-busy')==='false'`);
+  await evaluate(`document.querySelector('.app-row').click()`); await until(`document.getElementById('app-dialog').open`);
+  await evaluate(`document.getElementById('app-preset').value='aggressive';document.getElementById('app-form').dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}))`);
+  await until(`document.getElementById('aggressive-dialog').open`);
+  assert.equal(await evaluate(`__butterCommands.some(command=>command.includes('app com.example.game aggressive'))`),false);
+  await evaluate(`document.getElementById('aggressive-ack').click();document.getElementById('aggressive-apply').click()`);
+  await until(`__butterCommands.some(command=>command.includes('app com.example.game aggressive') && command.endsWith('--accept-risk')) && document.body.getAttribute('aria-busy')==='false'`);
   assert.equal(await evaluate(`document.querySelectorAll('#hardware-details .hardware-group').length>=4 && document.querySelectorAll('#hardware-details dt').length>5 && !document.querySelector('#hardware-details').textContent.includes('cpuPolicies')`),true);
   await evaluate(`location.hash='settings'`); await until(`!document.getElementById('page-settings').hidden`);
   await evaluate(`document.querySelector('[data-select=theme]').click()`); await until(`document.getElementById('choice-dialog').open`);

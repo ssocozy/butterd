@@ -114,7 +114,21 @@ pub fn ensure_daemon() -> Result<()> {
     let _ = child.kill(); let _ = child.wait();
     Err("Supervisor startup timed out".into())
 }
+pub fn acknowledged_args(args: &[String]) -> Result<&[String]> {
+    let aggressive = match args.first().map(String::as_str) {
+        Some("preset") => args.get(1).is_some_and(|mode| mode == "aggressive"),
+        Some("app") => args.get(2).is_some_and(|mode| mode == "aggressive"),
+        _ => false,
+    };
+    if aggressive {
+        if args.last().is_none_or(|arg| arg != "--accept-risk") {
+            return Err("Aggressive holds high clock floors, increases heat and power use, and skips gradual reductions. ROM/kernel thermal protection and the final cutoff remain active. Confirm with --accept-risk.".into());
+        }
+        Ok(&args[..args.len()-1])
+    } else { Ok(args) }
+}
 pub fn configure(boot: &str, args: &[String]) -> Result<String> {
+    let args = acknowledged_args(args)?;
     {
         let e = engine(boot)?;
         let resetting = args == ["reset"];
@@ -155,7 +169,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
                 save("config.json", &cfg)?; save("runtime.json", &state)?;
                 cleanup_all(&e, &mut state)?;
             }
-            _ => return Err("Usage: preset balanced|performance|battery | auto on|off | app PACKAGE PRESET 60|90|120|rom | app PACKAGE remove rom | boost SECONDS | logging on|off | reset".into()),
+            _ => return Err("Usage: preset balanced|performance|battery|aggressive [--accept-risk] | auto on|off | app PACKAGE PRESET 60|90|120|rom | app PACKAGE remove rom | boost SECONDS | logging on|off | reset".into()),
         }
         cfg.validate()?;
         save("config.json", &cfg)?; save("runtime.json", &state)?;
@@ -216,6 +230,10 @@ pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now:
     }
     if state.foreground != context.app { state.leases.retain(|lease| lease.source != "launch"); }
     state.pending_preset = None;
+    if requested == Mode::Aggressive {
+        state.leases.clear();
+        return (Mode::Aggressive, if config.automatic && rule.is_some() { "Foreground app rule" } else { "Selected preset" });
+    }
     if state.thermal_stage > 0 { state.leases.clear(); }
     if state.thermal_stage == 0 && config.automatic && rule.is_some_and(|rule| rule.preset == Mode::Performance) && state.foreground != context.app && requested == Mode::Performance {
         state.leases.retain(|lease| lease.source != "launch");

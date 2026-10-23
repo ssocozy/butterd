@@ -91,7 +91,22 @@ async function run(command,message,quiet=false) {
 }
 $('refresh').addEventListener('click',()=>refresh(true));
 $('open-presets').addEventListener('click',()=>$('preset-dialog').showModal());
-document.querySelectorAll('[data-preset]').forEach(node=>node.addEventListener('click',()=>{ $('preset-dialog').close(); run('preset '+node.dataset.preset); }));
+let aggressiveCommand = '';
+function choosePreset(command, preset) {
+  if (preset !== 'aggressive') return run(command);
+  aggressiveCommand=command;
+  $('aggressive-ack').checked=false; $('aggressive-apply').disabled=true;
+  $('aggressive-dialog').showModal();
+}
+$('aggressive-ack').addEventListener('change',event=>{ $('aggressive-apply').disabled=!event.target.checked; });
+$('aggressive-form').addEventListener('submit',event=>{
+  event.preventDefault();
+  if (!$('aggressive-ack').checked || !aggressiveCommand) return;
+  const command=aggressiveCommand; aggressiveCommand=''; $('aggressive-dialog').close();
+  run(command+' --accept-risk');
+});
+$('aggressive-dialog').addEventListener('close',()=>{ aggressiveCommand=''; });
+document.querySelectorAll('[data-preset]').forEach(node=>node.addEventListener('click',()=>{ $('preset-dialog').close(); choosePreset('preset '+node.dataset.preset,node.dataset.preset); }));
 $('release').addEventListener('click',()=>run('reset'));
 $('automatic').addEventListener('change',event=>run('auto '+(event.target.checked ? 'on' : 'off')));
 $('test-notification').addEventListener('click',()=>run('notify-test'));
@@ -139,7 +154,7 @@ function openApp(app) {
   rate.value=rule?.hz && rates.includes(rule.hz) ? String(rule.hz) : 'rom'; $('remove-app').disabled=!rule; updateSelectors(); $('app-dialog').showModal();
 }
 $('app-charge').addEventListener('change',()=>{ $('app-charge-options').hidden=!$('app-charge').checked; updateSelectors(); });
-$('app-form').addEventListener('submit',event=>{ event.preventDefault(); if (!selectedApp || !validPackage(selectedApp.package)) return; const preset=$('app-preset').value, hz=$('app-hz').value; if (!['balanced','performance','battery'].includes(preset) || !['rom','60','90','120'].includes(hz)) return; $('app-dialog').close(); const high=$('app-touch').checked ? 'high' : 'off', charge=$('app-charge').checked ? $('app-charge-level').value : 'off'; if(charge !== 'off' && (!/^[0-9]{2}$/.test(charge) || Number(charge)<40 || Number(charge)>95)) return; run('app '+selectedApp.package+' '+preset+' '+hz+' '+high+' '+charge); });
+$('app-form').addEventListener('submit',event=>{ event.preventDefault(); if (!selectedApp || !validPackage(selectedApp.package)) return; const preset=$('app-preset').value, hz=$('app-hz').value; if (!['balanced','performance','battery','aggressive'].includes(preset) || !['rom','60','90','120'].includes(hz)) return; $('app-dialog').close(); const high=$('app-touch').checked ? 'high' : 'off', charge=$('app-charge').checked ? $('app-charge-level').value : 'off'; if(charge !== 'off' && (!/^[0-9]{2}$/.test(charge) || Number(charge)<40 || Number(charge)>95)) return; choosePreset('app '+selectedApp.package+' '+preset+' '+hz+' '+high+' '+charge,preset); });
 $('remove-app').addEventListener('click',()=>{ if (selectedApp && validPackage(selectedApp.package)) { $('app-dialog').close(); run('app '+selectedApp.package+' remove rom'); } });
 $('save-identity').addEventListener('click',async()=>{
   const model=$('identity').value; if (!Object.hasOwn(models,model) || busy) return;

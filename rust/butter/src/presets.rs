@@ -2,10 +2,10 @@ use crate::{hardware::{Hardware, CPU, GPU, GPU_ALT}, journal::Journal, model::{n
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum Mode { #[default] Balanced, Performance, Battery, Boost }
+pub enum Mode { #[default] Balanced, Performance, Battery, Aggressive, Boost }
 impl Mode {
     pub fn parse(value: &str) -> Result<Self> {
-        match value { "balanced" => Ok(Self::Balanced), "performance" => Ok(Self::Performance), "battery" => Ok(Self::Battery), "boost" => Ok(Self::Boost), _ => Err("Choose balanced, performance or battery".into()) }
+        match value { "balanced" => Ok(Self::Balanced), "performance" => Ok(Self::Performance), "battery" => Ok(Self::Battery), "aggressive" => Ok(Self::Aggressive), "boost" => Ok(Self::Boost), _ => Err("Choose balanced, performance, battery or aggressive".into()) }
     }
 }
 pub fn clocks(table: &str, min: u64, max: u64) -> Result<Vec<u64>> {
@@ -53,6 +53,7 @@ pub fn plan_cooled(hardware: &impl Hardware, mode: Mode, baseline: Option<&Journ
         let table = clocks(&table, minimum, maximum)?;
         // Conservative starting points, not benchmark-proven efficiency claims.
         let (low, high) = match mode {
+            Mode::Aggressive => (table[if stage < 3 { ((table.len() - 1) * 3).div_ceil(4) } else { 0 }], maximum),
             Mode::Battery => (minimum, table[(table.len() - 1) * 3 / 4]),
             Mode::Performance | Mode::Boost => {
                 let last = table.len() - 1;

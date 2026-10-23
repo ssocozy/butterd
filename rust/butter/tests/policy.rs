@@ -322,3 +322,35 @@ fn recording_cutoff_never_relaxes_battery_or_uses_stale_capture() {
     state.telemetry["recording"]["screenCapture"]=serde_json::json!(false);
     assert_eq!(decide(&cfg,&mut state,&ctx,122).0,Mode::Balanced);
 }
+
+#[test]
+fn aggressive_holds_floors_through_warm_bands_but_obeys_final_cutoff_and_saver() {
+    let cfg=Config{recording_assist:true,..Default::default()};
+    let mut state=RuntimeState{selected:Mode::Aggressive,tuning_requested:true,..Default::default()};let mut ctx=context();
+    state.foreground=ctx.app.clone();state.telemetry=serde_json::json!({"recording":{"available":true,"screenCapture":true,"sampledAtUptime":100}});
+    state.leases.push(Lease{source:"manual".into(),expires:120});
+    for (now,soc) in [(100,70000),(101,75000),(102,80000),(103,89000)] {
+        ctx.soc_millic=Some(soc);assert_eq!(decide(&cfg,&mut state,&ctx,now).0,Mode::Aggressive);
+        assert!(state.leases.is_empty());
+    }
+    ctx.soc_millic=Some(90000);assert_eq!(decide(&cfg,&mut state,&ctx,104).0,Mode::Balanced);
+    ctx.soc_millic=Some(60000);ctx.saver=Some(true);assert_eq!(decide(&cfg,&mut state,&ctx,105).0,Mode::Battery);
+    ctx.saver=Some(false);ctx.temperature=Some(420);assert_eq!(decide(&cfg,&mut state,&ctx,106).0,Mode::Balanced);
+    ctx.temperature=Some(350);ctx.awake=Some(false);assert_eq!(decide(&cfg,&mut state,&ctx,107).0,Mode::Balanced);
+}
+#[test]
+fn aggressive_app_rule_is_scoped_and_configuration_requires_confirmation() {
+    use butter::runtime::acknowledged_args;
+    for command in ["preset aggressive", "app com.example.game aggressive 120 high 80"] {
+        let args:Vec<String>=command.split_whitespace().map(str::to_string).collect();
+        assert!(acknowledged_args(&args).is_err());
+        let mut accepted=args.clone();accepted.push("--accept-risk".into());
+        assert_eq!(acknowledged_args(&accepted).unwrap(),args.as_slice());
+    }
+    let cfg=Config{automatic:true,rules:vec![AppRule{package:"com.example.game".into(),preset:Mode::Aggressive,hz:None,high_touch:false,charging_pause_at:None}],..Default::default()};
+    cfg.validate().unwrap();
+    let mut state=RuntimeState::default();let mut ctx=context();
+    assert_eq!(decide(&cfg,&mut state,&ctx,100).0,Mode::Aggressive);
+    state.foreground=ctx.app.clone();ctx.app=Some("com.example.other".into());
+    assert_eq!(decide(&cfg,&mut state,&ctx,101).0,Mode::Balanced);
+}
