@@ -788,3 +788,28 @@ fn old_app_profiles_default_to_no_touch_or_charging_override() {
     assert!(!rule.high_touch && rule.charging_pause_at.is_none());
     let (_,mut config,_)=app_rule_fixture();config.rules[0].charging_pause_at=Some(10);assert!(config.validate().is_err());
 }
+
+#[test]
+fn stronger_profiles_use_advertised_cpu_gpu_steps_and_keep_maxima() {
+    use butter::presets::{plan, Mode};
+    let engine = fixture();
+    let gpu = butter::hardware::GPU.trim_end_matches("/min_freq");
+    for (base, prefix) in [(format!("{CPU}/policy0"), "scaling_"), (gpu.to_string(), "")] {
+        let low = format!("{base}/{prefix}min_freq");
+        let high = format!("{base}/{prefix}max_freq");
+        let available = if prefix.is_empty() { "available_frequencies" } else { "scaling_available_frequencies" };
+        engine.hardware.put(&low, "100");
+        engine.hardware.put(&high, "700");
+        engine.hardware.put(&format!("{base}/{available}"), "700 100 600 200 500 300 400 400");
+        for (mode, floor) in [(Mode::Performance, "400"), (Mode::Boost, "500")] {
+            let targets = plan(&engine.hardware, mode, None).unwrap();
+            assert!(targets.contains(&(low.clone(), floor.into())));
+            assert!(targets.contains(&(high.clone(), "700".into())));
+        }
+        // A coarse two-step table must still produce supported, bounded targets.
+        engine.hardware.put(&format!("{base}/{available}"), "100 700");
+        let targets = plan(&engine.hardware, Mode::Performance, None).unwrap();
+        assert!(targets.contains(&(low, "700".into())));
+        assert!(targets.contains(&(high, "700".into())));
+    }
+}

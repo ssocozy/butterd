@@ -13,12 +13,12 @@ Powered by **butter**, a Rust optimization engine built for Duchamp’s Dimensit
 | Preset | What it changes |
 | --- | --- |
 | **Balanced** | Releases the CPU/GPU limits applied by the preset and returns those limits to ROM control. Separate manual governor and frequency settings stay separate. |
-| **Performance** | Raises minimum CPU/GPU clocks to about one-third through the available frequency steps, keeping the existing maximum limits. Clocks can still scale with demand. |
+| **Performance** | Raises minimum CPU/GPU clocks to the middle of the available frequency steps (rounding upward), keeping the existing maximum limits. Clocks can still scale with demand. |
 | **Battery** | Keeps the original minimum clocks and lowers maximum clocks to about three-quarters through the available frequency steps. This can reduce responsiveness under heavier loads. |
 
 Frequency steps come from the running kernel and current limits. These positions are not percentages of GHz, performance or battery savings. GPU tuning requires a readable frequency table. Presets do not change CPU governors or disable thermal protections.
 
-With automatic profiles enabled, the foreground app’s rule takes precedence over the overall preset. Entering an app assigned **Performance** requests a **3-second launch boost**, subject to the same heat and battery checks. Other apps use the overall preset. Scrolling and video playback are not detected separately yet.
+With automatic profiles enabled, the foreground app’s rule takes precedence over the overall preset. Entering an app assigned **Performance** requests a **3-second launch boost** with floors roughly two-thirds through the available steps, subject to the same heat and battery checks. Other apps use the overall preset. Scrolling and video playback are not detected separately yet.
 
 Butter releases preset limits when the screen turns off or the battery reaches 42°C or sampled SoC temperature reaches 85°C. After cooling starts, it waits for battery temperature below 39°C and sampled SoC below 75°C before resuming. Android Battery Saver or a battery level of 20% or less selects **Battery** when heat checks allow tuning. Missing required readings prevent performance requests. Performance floors can also be released after three low-activity samples, but only when both CPU and GPU activity are readable.
 

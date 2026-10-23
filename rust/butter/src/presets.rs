@@ -50,8 +50,8 @@ pub fn plan(hardware: &impl Hardware, mode: Mode, baseline: Option<&Journal>) ->
         // Conservative starting points, not benchmark-proven efficiency claims.
         let (low, high) = match mode {
             Mode::Battery => (minimum, table[(table.len() - 1) * 3 / 4]),
-            Mode::Performance => (table[(table.len() - 1) / 3], maximum),
-            Mode::Boost => (table[(table.len() - 1) / 2], maximum),
+            Mode::Performance => (table[table.len() / 2], maximum),
+            Mode::Boost => (table[((table.len() - 1) * 2).div_ceil(3)], maximum),
             Mode::Balanced => (minimum, maximum),
         };
         targets.push((min_path, low.to_string())); targets.push((max_path, high.to_string()));
