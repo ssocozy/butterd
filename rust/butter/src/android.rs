@@ -2,6 +2,17 @@
 use crate::Result;
 use std::{io::Read, process::{Command, Stdio}, time::{Duration, Instant}};
 
+/// Preserve process results so narrow adapters can verify documented shell quirks.
+#[derive(Debug)]
+pub struct CommandFailure { pub binary:String, pub code:Option<i32>, pub stdout:String, pub stderr:String }
+impl std::fmt::Display for CommandFailure {
+    fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result {
+        let detail=if self.stderr.trim().is_empty() { &self.stdout } else { &self.stderr };
+        write!(f,"{} exited {:?}: {}",self.binary,self.code,detail.chars().take(384).collect::<String>())
+    }
+}
+impl std::error::Error for CommandFailure {}
+
 pub fn command(binary: &str, args: &[&str]) -> Result<String> { execute(binary, args, &[], 3) }
 pub fn execute(binary: &str, args: &[&str], environment: &[(&str, &str)], timeout: u64) -> Result<String> {
     let mut child = Command::new(binary).args(args).envs(environment.iter().copied()).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
@@ -34,8 +45,7 @@ pub fn execute(binary: &str, args: &[&str], environment: &[(&str, &str)], timeou
     let status = result?;
     let output = String::from_utf8(output)?.trim().to_string();
     if !status.success() || output.starts_with("Permission Denial:") {
-        let detail: String = String::from_utf8_lossy(&errors).chars().take(384).collect();
-        return Err(format!("{binary} exited {status}: {}", if detail.trim().is_empty() { output.chars().take(384).collect::<String>() } else { detail }).into());
+        return Err(CommandFailure{binary:binary.into(),code:status.code(),stdout:output,stderr:String::from_utf8_lossy(&errors).into_owned()}.into());
     }
     Ok(output)
 }

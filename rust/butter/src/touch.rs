@@ -33,9 +33,23 @@ fn snapshot() -> Result<Snapshot> {
     Ok(Snapshot{running,value:if running { 0 } else { value }})
 }
 pub fn read() -> Result<String> { Ok(serde_json::to_string(&snapshot()?)?) }
+pub fn stop_reply(result:Result<String>) -> Result<String> {
+    match result {
+        Err(error) if error.downcast_ref::<android::CommandFailure>().is_some_and(|failure|
+            failure.binary == "/system/bin/am" && failure.code == Some(255)
+            && failure.stderr.trim() == "Service stopped"
+            && failure.stdout.starts_with("Stopping service:")) => {
+            // AOSP runStopService returns -1 even after a successful stop.
+            // The caller must still verify the service is actually absent.
+            Ok("Service stopped".into())
+        }
+        result=>result,
+    }
+}
 fn service(start: bool) -> Result<()> {
     let action=if start { "startservice" } else { "stopservice" };
-    let reply=android::command("/system/bin/am",&[action,"--user","0","-n",COMPONENT])?;
+    let result=android::command("/system/bin/am",&[action,"--user","0","-n",COMPONENT]);
+    let reply=if start { result? } else { stop_reply(result)? };
     if reply.contains("Error") || reply.contains("Exception") || reply.contains("not found") { return Err(format!("Touch service handover rejected: {reply}").into()); }
     for _ in 0..10 {
         if service_running()? == start { return Ok(()); }

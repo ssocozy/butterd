@@ -711,3 +711,14 @@ fn htsr_does_not_fall_back_to_uncoordinated_writes_when_handover_unavailable() {
     engine.apply(Feature::Touch,"high",false,false).unwrap();
     assert!(engine.session(&Feature::Touch).unwrap().unwrap().entries.iter().all(|entry|entry.path==butter::touch::NODE));
 }
+
+#[test]
+fn touch_stop_accepts_only_the_aosp_success_exit_quirk() {
+    use butter::{android::CommandFailure,touch::stop_reply};
+    let failure=|code,stdout:&str,stderr:&str|->Result<String>{ Err(CommandFailure{binary:"/system/bin/am".into(),code:Some(code),stdout:stdout.into(),stderr:stderr.into()}.into()) };
+    assert!(stop_reply(failure(255,"Stopping service: Intent { cmp=com.xiaomi.settings/.touchsampling.TouchSamplingService }","Service stopped\n")).is_ok());
+    assert!(stop_reply(failure(255,"Stopping service:","Error stopping service")).is_err());
+    assert!(stop_reply(failure(255,"Stopping service:","Service not stopped: was not running.")).is_err());
+    assert!(stop_reply(failure(255,"Permission Denial:","Service stopped")).is_err());
+    assert!(stop_reply(failure(1,"Stopping service:","Service stopped")).is_err());
+}
