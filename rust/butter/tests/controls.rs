@@ -877,7 +877,7 @@ fn aggressive_cpu_gpu_floors_stay_at_three_quarters_through_cooling_bands() {
         let available=if prefix.is_empty(){"available_frequencies"}else{"scaling_available_frequencies"};
         engine.hardware.put(&format!("{base}/{available}"),"100 200 300 400 500 600 700 800 900");
     }
-    for stage in 0..3 {
+    for stage in 0..=3 {
         engine.preset_cooled(Mode::Aggressive,stage).unwrap();
         assert_eq!(engine.hardware.read(&format!("{CPU}/policy0/scaling_min_freq")).unwrap(),"700");
         assert_eq!(engine.hardware.read(butter::hardware::GPU).unwrap(),"700");

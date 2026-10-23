@@ -14,10 +14,10 @@ Powered by **butter**, a Rust optimization engine built for Duchamp’s Dimensit
 | --- | --- |
 | **Balanced** | Releases the CPU/GPU limits applied by the preset and returns those limits to ROM control. Separate manual governor and frequency settings stay separate. |
 | **Performance** | Raises minimum CPU/GPU clocks to the middle of the available frequency steps (rounding upward), keeping the existing maximum limits. Clocks can still scale with demand. |
-| **Aggressive** | Holds CPU/GPU minimums at roughly three-quarters of supported steps, rounded upward, without Butter’s gradual heat reductions. Keeps existing maxima and the final heat cutoff. Available globally and per app, with confirmation before saving. |
+| **Aggressive** | Holds CPU/GPU minimums at roughly three-quarters of supported steps, rounded upward, without Butter’s gradual heat reductions. Keeps existing maxima and delegates temperature throttling to the ROM/kernel; Butter’s temperature cutoffs do not apply. Available globally and per app, with confirmation before saving. |
 | **Battery** | Keeps the original minimum clocks and lowers maximum clocks to about three-quarters through the available frequency steps. This can reduce responsiveness under heavier loads. |
 
-Aggressive is intended for use with external cooling and can substantially increase heat and power use. A fan does not guarantee safe internal temperatures. It does not disable or override ROM/kernel thermal limits. Saver/low-battery handling, screen-off release, conflict handling and the final cutoff still take priority. Recording assist does not replace Aggressive’s floors with a weaker preset.
+Aggressive is intended for use with external cooling and can substantially increase heat and power use. A fan does not guarantee safe internal temperatures. It does not disable or override ROM/kernel thermal limits. Saver/low-battery handling, screen-off release and conflict handling still take priority. Butter does not reduce or release Aggressive solely because of battery/SoC temperature, including during recording. ROM/kernel thermal or current limits can still reduce effective clocks. Recording assist does not replace Aggressive’s floors with a weaker preset.
 
 Frequency steps come from the running kernel and current limits. These positions are not percentages of GHz, performance or battery savings. GPU tuning requires a readable frequency table. Presets do not change CPU governors or disable thermal protections.
 

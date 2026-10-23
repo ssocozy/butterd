@@ -250,8 +250,10 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             self.store.save(&journal)?;
             self.hardware.write(&path, &target)?;
             let mut verified = false;
+            let mut observed = String::new();
             for attempt in 0..5 {
-                if hardware::value(&self.hardware, &path)? == target {
+                observed = hardware::value(&self.hardware, &path)?;
+                if observed == target {
                     verified = true;
                     break;
                 }
@@ -260,7 +262,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
                 }
             }
             if !verified {
-                return Err("Readback failed; session retained for restoration".into());
+                return Err(format!("Readback failed at {path}; requested {target}, observed {observed}; session retained for restoration").into());
             }
             journal.entries[index].before = None;
             self.store.save(&journal)?;
