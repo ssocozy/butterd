@@ -834,3 +834,34 @@ fn cooling_reduces_cpu_gpu_floors_without_compounding_or_releasing_battery_caps(
     engine.preset(Mode::Balanced).unwrap();
     assert_eq!(engine.hardware.read(butter::hardware::GPU).unwrap(),"100");
 }
+
+#[test]
+fn screen_off_release_preserves_rom_gpu_cap_and_restores_owned_nodes() {
+    use butter::presets::Mode;
+    let engine=fixture(); let gpu=butter::hardware::GPU.trim_end_matches("/min_freq");
+    engine.hardware.put(butter::hardware::GPU,"100");
+    engine.hardware.put(&format!("{gpu}/max_freq"),"700");
+    engine.hardware.put(&format!("{gpu}/available_frequencies"),"100 200 300 400 500 600 700");
+    engine.preset(Mode::Battery).unwrap();
+    engine.hardware.put(&format!("{gpu}/max_freq"),"400");
+    engine.preset(Mode::Balanced).unwrap();
+    assert_eq!(engine.hardware.read(&format!("{gpu}/max_freq")).unwrap(),"400");
+    assert_eq!(engine.hardware.read(&format!("{CPU}/policy0/scaling_max_freq")).unwrap(),"1600000");
+    assert!(engine.session(&Feature::Profile).unwrap().is_none());
+    // A fresh wake uses the current ROM cap as its new baseline.
+    engine.preset(Mode::Battery).unwrap(); engine.preset(Mode::Balanced).unwrap();
+    assert_eq!(engine.hardware.read(&format!("{gpu}/max_freq")).unwrap(),"400");
+}
+#[test]
+fn stricter_external_caps_are_adopted_but_higher_caps_remain_conflicts() {
+    use butter::presets::Mode;
+    let engine=fixture();
+    engine.preset(Mode::Battery).unwrap();
+    let path=format!("{CPU}/policy0/scaling_max_freq");
+    engine.hardware.put(&path,"800000");
+    assert!(engine.accept_stricter_profile_caps().unwrap());
+    assert_eq!(engine.state(&Feature::Profile).unwrap(),"Request active");
+    engine.hardware.put(&path,"1600000");
+    assert!(!engine.accept_stricter_profile_caps().unwrap());
+    assert_ne!(engine.state(&Feature::Profile).unwrap(),"Request active");
+}

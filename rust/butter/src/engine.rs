@@ -139,11 +139,15 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             return Ok("Original values are already active; session released.".into());
         }
         if restoring && feature == Feature::Profile {
-            // The shared vendor request may already belong to the ROM again. Preserve it.
+            // On release, ROM-owned clock values (including screen-off caps) win.
+            // Restore only entries that still belong to Butter.
             let mut adopted = false;
-            for entry in journal.entries.iter_mut().filter(|entry| entry.path == crate::vendor::POWERHAL) {
+            for entry in &mut journal.entries {
                 let current = hardware::value(&self.hardware, &entry.path)?;
-                if !entry.owned(&current) { entry.original = current.clone(); entry.expected = current; entry.before = None; adopted = true; }
+                if !entry.owned(&current) {
+                    hardware::validate_path_value(&feature, &entry.path, &current)?;
+                    entry.original = current.clone(); entry.expected = current; entry.before = None; adopted = true;
+                }
             }
             if adopted { self.store.save(&journal)?; }
         }
@@ -237,7 +241,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             if !journal.entries[index].owned(&current) {
                 return Err("External change detected; session retained".into());
             }
-            if restoring && matches!(feature,Feature::Refresh(_)|Feature::PhoneMic|Feature::ChargingPause|Feature::Touch) && current == target {
+            if restoring && matches!(feature,Feature::Profile|Feature::Refresh(_)|Feature::PhoneMic|Feature::ChargingPause|Feature::Touch) && current == target {
                 journal.entries[index].expected = target; journal.entries[index].before = None; self.store.save(&journal)?;
                 continue;
             }
@@ -280,6 +284,24 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             }
         }
         controls
+    }
+    /// Adopt only stricter external ceilings while active. Raising an external
+    /// cap or changing a floor still requires the normal conflict checks.
+    pub fn accept_stricter_profile_caps(&self) -> Result<bool> {
+        let Some(mut journal) = self.session(&Feature::Profile)? else { return Ok(false); };
+        let mut changed = false;
+        for entry in &mut journal.entries {
+            if !entry.path.ends_with("max_freq") { continue; }
+            let current = hardware::value(&self.hardware, &entry.path)?;
+            if entry.owned(&current) { continue; }
+            hardware::validate_path_value(&Feature::Profile, &entry.path, &current)?;
+            let cap = crate::model::number(&current)?;
+            if cap == 0 || cap >= crate::model::number(&entry.expected)? { continue; }
+            entry.original = cap.min(crate::model::number(&entry.original)?).to_string();
+            entry.expected = current; entry.before = None; changed = true;
+        }
+        if changed { self.store.save(&journal)?; }
+        Ok(changed)
     }
     pub fn preset(&self, mode: crate::presets::Mode) -> Result<String> {
         self.preset_cooled(mode, 0)

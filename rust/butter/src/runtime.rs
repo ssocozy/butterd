@@ -185,8 +185,9 @@ pub fn cooling_stage(previous: u8, context: &Context) -> u8 {
 pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now: u64) -> (Mode, &'static str) {
     state.leases.retain(|lease| lease.expires > now && lease.expires <= now.saturating_add(30));
     if !config.automatic && !state.tuning_requested { state.leases.clear(); return (Mode::Balanced, "Monitoring only"); }
+    if context.awake == Some(false) { state.leases.clear(); return (Mode::Balanced, "Screen off"); }
     if state.blocked { state.leases.clear(); return (Mode::Balanced, "Paused after a conflict or failure; select a preset to retry"); }
-    if context.awake != Some(true) { state.leases.clear(); return (Mode::Balanced, "Screen off or display state unknown"); }
+    if context.awake.is_none() { state.leases.clear(); return (Mode::Balanced, "Screen off or display state unknown"); }
     let rule = context.app.as_ref().and_then(|app| config.rules.iter().find(|rule| &rule.package == app));
     let requested = state.pending_preset.unwrap_or(if config.automatic { rule.map_or(config.preset, |rule| rule.preset) } else { state.selected });
     state.thermal_stage = cooling_stage(state.thermal_stage, context);
@@ -354,6 +355,8 @@ pub fn daemon(boot: &str) -> Result<()> {
     let Some(_daemon_lock) = crate::lock::FileLock::acquire(&lock_path)? else { return Ok(()); };
     fs::set_permissions(DIRECTORY, fs::Permissions::from_mode(0o700))?;
     let mut previous_cpu = None;
+    let mut recording_sample = Value::Null;
+    let mut recording_awake = None;
     let mut last_error = String::new();
     let mut last_sample_event = 0;
     let mut wake_events = crate::events::WakeEvents::new();
@@ -369,7 +372,13 @@ pub fn daemon(boot: &str) -> Result<()> {
         // Read-only sensor collection must not delay interactive control commands.
         let cpu = read_bounded(Path::new("/proc/stat"), 65536).ok().and_then(|text| cpu_counters(&text));
         let load = previous_cpu.zip(cpu).and_then(|(old, new)| busy(old, new)); previous_cpu = cpu;
-        let sampled_telemetry = telemetry(&ctx, load);
+        let mut sampled_telemetry = telemetry(&ctx, load);
+        // Sample outside the control lock; diagnostics never delay an interactive write.
+        if recording_awake != ctx.awake || recording_sample["sampledAtUptime"].as_u64().is_none_or(|last| now.saturating_sub(last) >= 15) {
+            recording_sample = crate::recording::sample(now);
+            recording_awake = ctx.awake;
+        }
+        sampled_telemetry["recording"] = recording_sample.clone();
         let e = match engine(boot) { Ok(e) => e, Err(_) => { std::thread::sleep(Duration::from_secs(1)); continue; } };
         let stopping = !Path::new(MODULE).is_dir() || ["disable", "remove"].iter().any(|file| Path::new(MODULE).join(file).exists()) || Path::new(DIRECTORY).join("stop").exists();
         let cfg = config();
@@ -407,6 +416,7 @@ pub fn daemon(boot: &str) -> Result<()> {
         let (desired, reason) = decide(&cfg, &mut state, &ctx, now);
         let result = (|| -> Result<()> {
             thermal_cleanup(&e, &cfg, &mut state, &ctx, now)?;
+            let stricter_caps = if desired != Mode::Balanced { e.accept_stricter_profile_caps()? } else { false };
             if e.session(&Feature::Profile)?.is_some() && !matches!(e.state(&Feature::Profile)?, "Request active" | "Off") {
                 if desired == Mode::Balanced { e.preset(Mode::Balanced)?; }
                 else if state.profile_retries < 3 {
@@ -415,13 +425,14 @@ pub fn daemon(boot: &str) -> Result<()> {
                     event(&cfg, "vendor-request", "Reapplied the selected CPU QoS request; thermal policy remains unchanged");
                 } else { return Err("Vendor CPU request changed repeatedly; profile paused after three retries".into()); }
             }
-            if desired != state.active || prior_thermal_stage != state.thermal_stage || (desired == Mode::Balanced && e.session(&Feature::Profile)?.is_some()) { e.preset_cooled(desired, state.thermal_stage)?; }
+            if stricter_caps || desired != state.active || prior_thermal_stage != state.thermal_stage || (desired == Mode::Balanced && e.session(&Feature::Profile)?.is_some()) { e.preset_cooled(desired, state.thermal_stage)?; }
             Ok(())
         })();
         match result {
             Ok(()) => {
                 if state.active != desired || state.reason != reason { event(&cfg, "decision", &format!("{:?}: {reason}", desired)); }
-                state.active = desired; state.reason = reason.into(); state.error = None; last_error.clear();
+                state.active = desired; state.reason = reason.into();
+                if !state.blocked { state.error = None; last_error.clear(); }
             }
             Err(error) => {
                 let error = error.to_string();

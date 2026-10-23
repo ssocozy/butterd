@@ -22,7 +22,7 @@ function render(state) {
   snapshot = state;
   const supervisor = state.supervisor || {}, config = supervisor.config || {}, runtime = supervisor.runtime || {}, health = supervisor.health || {}, telemetry = runtime.telemetry || {};
   const sampled = runtime.sampled_at > 0, age = health.sampleAgeSeconds ?? (sampled ? supervisor.uptime-runtime.sampled_at : null), running = health.running === true;
-  $('engine-state').textContent = health.error || config.error || runtime.error ? 'Needs attention' : running ? sampled ? 'Monitoring active' : 'Starting monitoring' : 'Monitoring stopped';
+  $('engine-state').textContent = health.error || config.error || runtime.error || runtime.blocked ? 'Needs attention' : running ? sampled ? 'Monitoring active' : 'Starting monitoring' : 'Monitoring stopped';
   $('engine-reason').textContent = health.error || config.error || runtime.error || runtime.refresh_error || runtime.reason || (running ? 'Waiting for the first sensor sample.' : 'Tap Start / retry monitoring in Settings.');
   if (telemetry.displayRequestSatisfied === false && telemetry.displayRequestHz != null) $('engine-reason').textContent += ' · Requested '+telemetry.displayRequestHz+' Hz; display reports '+Math.round(telemetry.screenHz)+' Hz.';
   if (running && age > 30) { $('engine-state').textContent = 'Readings are stale'; $('engine-reason').textContent = 'The supervisor has not produced a recent sample. Export diagnostics.'; }
@@ -38,6 +38,8 @@ function render(state) {
   $('sample-age').textContent = age == null ? '' : age < 3 ? 'Just updated' : age+'s ago';
   const metrics = $('device-metrics'); metrics.replaceChildren();
   for (const [name,value] of [['SoC temperature',telemetry.socTempC == null ? null : telemetry.socTempC.toFixed(1)+' °C'],['CPU activity',telemetry.cpuBusyPercent == null ? null : telemetry.cpuBusyPercent.toFixed(0)+'%'],['GPU activity',telemetry.gpuBusyPercent == null ? null : telemetry.gpuBusyPercent.toFixed(0)+'%'],['Charge cycles',telemetry.cycleCount],['Battery health',telemetry.healthPercent == null ? telemetry.health : telemetry.healthPercent.toFixed(0)+'% of design capacity']]) if (value != null) detailsRow(metrics,name,String(value));
+  const recording=telemetry.recording;
+  if (recording?.available) detailsRow(metrics,'Screen capture',recording.screenCapture ? 'Session active · '+recording.package : recording.active ? 'Other projection session' : 'No active session');
   $('sensor-note').textContent = sampled ? 'Only readings exposed by your firmware are shown. Missing readings do not imply a sensor failure.' : running ? 'Monitoring is starting. Readings appear after the first sample.' : 'Sensor readings need the supervisor. Diagnostics remain accessible while it is stopped.';
   const signature = JSON.stringify([state.audio,state.supervisor?.runtime?.app_controls,state.supervisor?.config?.controls,state.supervisor?.runtime?.preference_errors,state.governors,state.cpuPolicies,state.gpuRange,state.touch,state.tcp,...Object.keys(advanced).map(key=>state[key])]);
   if (!busy && signature !== hardwareSignature && !$('choice-dialog')?.open) { renderControls(state,run,requestAdvanced); hardwareSignature = signature; }

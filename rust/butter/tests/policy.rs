@@ -215,3 +215,28 @@ fn per_app_battery_retains_caps_but_performance_still_releases_at_cutoff() {
     cfg.rules[0].preset=Mode::Performance;
     assert_eq!(decide(&cfg,&mut state,&ctx,101).0,Mode::Balanced);
 }
+
+#[test]
+fn screen_off_releases_preset_without_forgetting_saved_selection() {
+    let cfg=Config{preset:Mode::Battery,..Default::default()};
+    let mut state=RuntimeState{tuning_requested:true,selected:Mode::Battery,..Default::default()};
+    let mut ctx=context(); ctx.awake=Some(false);
+    assert_eq!(decide(&cfg,&mut state,&ctx,100),(Mode::Balanced,"Screen off"));
+    assert!(!state.blocked); assert_eq!(state.selected,Mode::Battery);
+    state.reason="Screen off".into();
+    assert!(butter::notifications::message(&state).unwrap().starts_with("Idle"));
+    ctx.awake=Some(true);
+    assert_eq!(decide(&cfg,&mut state,&ctx,101).0,Mode::Battery);
+}
+#[test]
+fn recording_parser_distinguishes_capture_mirroring_and_unknown() {
+    use butter::recording::parse;
+    let header="MEDIA PROJECTION MANAGER (dumpsys media_projection)\nMedia Projection: \n";
+    let capture=parse(&format!("{header}(com.example.recorder, uid=10123): TYPE_SCREEN_CAPTURE\n")).unwrap();
+    assert_eq!(capture["screenCapture"],true); assert_eq!(capture["package"],"com.example.recorder");
+    assert_eq!(parse(&format!("{header}null\n")).unwrap()["active"],false);
+    assert_eq!(parse(&format!("{header}(com.example.recorder, uid=10123): TYPE_MIRRORING\n")).unwrap()["screenCapture"],false);
+    for text in ["Permission Denial".to_string(),format!("{header}(invalid;name, uid=1): TYPE_SCREEN_CAPTURE"),format!("{header}(com.example.recorder, uid=1): NEW_UNKNOWN_TYPE")] {
+        assert!(parse(&text).is_err());
+    }
+}
