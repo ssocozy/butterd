@@ -100,6 +100,7 @@ jobs:
         run: |
           python3 tools/validate.py
           python3 tests/catalog_test.py
+          python3 tests/update_manifest_test.py
           sh tests/compatibility_test.sh
           for script in module/webroot/js/*.js; do node --check "$script"; done
           mkdir -p build
@@ -160,7 +161,9 @@ jobs:
         run: |
           python3 tools/release_notes.py --version "$MODULE_VERSION" --channel "$RELEASE_CHANNEL" --output build/release-notes.txt
           if [ "$RELEASE_CHANNEL" = production ]; then
-            gh release create "v$MODULE_VERSION" dist/*.zip dist/SHA256SUMS --target "$GITHUB_SHA" --title "Butterd $MODULE_VERSION" --notes-file build/release-notes.txt
+            cp build/release-notes.txt dist/changelog.txt
+            python3 tools/update_manifest.py --repository "$GITHUB_REPOSITORY" --output dist/update.json
+            gh release create "v$MODULE_VERSION" dist/*.zip dist/SHA256SUMS dist/update.json dist/changelog.txt --target "$GITHUB_SHA" --title "Butterd $MODULE_VERSION" --notes-file build/release-notes.txt --latest
           else
             gh release create "module-debug-${GITHUB_RUN_NUMBER}" dist/*.zip dist/SHA256SUMS --prerelease --target "$GITHUB_SHA" --title "Butterd module #${GITHUB_RUN_NUMBER}" --notes-file build/release-notes.txt
           fi
