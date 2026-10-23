@@ -856,6 +856,7 @@ fn screen_off_release_preserves_rom_gpu_cap_and_restores_owned_nodes() {
 fn stricter_external_caps_are_adopted_but_higher_caps_remain_conflicts() {
     use butter::presets::Mode;
     let engine=fixture();
+    engine.hardware.put(&format!("{CPU}/policy0/scaling_available_frequencies"),"480000 800000 1200000 1600000");
     engine.preset(Mode::Battery).unwrap();
     let path=format!("{CPU}/policy0/scaling_max_freq");
     engine.hardware.put(&path,"800000");
