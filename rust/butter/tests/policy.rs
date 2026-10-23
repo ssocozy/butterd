@@ -240,3 +240,17 @@ fn recording_parser_distinguishes_capture_mirroring_and_unknown() {
         assert!(parse(&text).is_err());
     }
 }
+
+#[test]
+fn recording_parser_accepts_multiline_rom_sessions_and_rejects_ambiguous_fields() {
+    use butter::recording::parse;
+    let dump="MEDIA PROJECTION MANAGER (dumpsys media_projection)\r\nMedia Projection: \r\nProjection:\r\n    packageName: com.android.systemui\r\n    uid: 10169\r\n    userHandle: UserHandle{0}\r\n    type: TYPE_SCREEN_CAPTURE\r\n    privileged: true\r\n    mSession: ContentRecordingSession { virtualDisplayId = 3 }\r\n";
+    let capture=parse(dump).unwrap();
+    assert_eq!(capture["active"],true);
+    assert_eq!(capture["screenCapture"],true);
+    assert_eq!(capture["package"],"com.android.systemui");
+    assert_eq!(parse(&dump.replace("TYPE_SCREEN_CAPTURE","TYPE_MIRRORING")).unwrap()["screenCapture"],false);
+    for invalid in [format!("{dump}    type: TYPE_MIRRORING\n"),dump.replace("uid: 10169","uid: invalid"),dump.replace("    type: TYPE_SCREEN_CAPTURE\r\n","")] {
+        assert!(parse(&invalid).is_err());
+    }
+}

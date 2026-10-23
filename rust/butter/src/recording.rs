@@ -11,8 +11,19 @@ pub fn parse(text: &str) -> Result<Value> {
     let index = lines.iter().position(|line| *line == "Media Projection:").ok_or("Missing media projection state")?;
     let line = *lines.get(index + 1).ok_or("Missing media projection session")?;
     if line == "null" { return Ok(json!({"available":true,"active":false,"screenCapture":false,"package":null,"kind":null})); }
-    let (identity, kind) = line.split_once("): ").ok_or("Unsupported media projection session")?;
-    let (package, uid) = identity.strip_prefix('(').and_then(|value|value.split_once(", uid=")).ok_or("Invalid media projection identity")?;
+    let (package, uid, kind) = if line == "Projection:" {
+        let field = |name: &str| -> Result<&str> {
+            let mut values = lines[index + 2..].iter().filter_map(|line| line.strip_prefix(name));
+            let value = values.next().ok_or("Missing media projection field")?.trim();
+            if values.next().is_some() { return Err("Ambiguous media projection field".into()); }
+            Ok(value)
+        };
+        (field("packageName:")?, field("uid:")?, field("type:")?)
+    } else {
+        let (identity, kind) = line.split_once("): ").ok_or("Unsupported media projection session")?;
+        let (package, uid) = identity.strip_prefix('(').and_then(|value|value.split_once(", uid=")).ok_or("Invalid media projection identity")?;
+        (package, uid, kind)
+    };
     if !android::valid_package(package) || uid.parse::<u32>().is_err() { return Err("Invalid media projection identity".into()); }
     let screen = match kind { "TYPE_SCREEN_CAPTURE" => true, "TYPE_MIRRORING" | "TYPE_PRESENTATION" => false, _ => return Err("Unknown media projection type".into()) };
     Ok(json!({"available":true,"active":true,"screenCapture":screen,"package":package,"kind":kind}))
