@@ -327,8 +327,8 @@ pub fn plan(
             return Err("Control path is not allowed".into());
         }
         hardware.check_write(path)?;
-        validate_value(feature, &value(hardware, path)?)?;
-        validate_value(feature, target)?;
+        validate_path_value(feature, path, &value(hardware, path)?)?;
+        validate_path_value(feature, path, target)?;
     }
     Ok(targets)
 }
