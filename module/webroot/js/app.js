@@ -3,6 +3,7 @@ mountIcons();
 import {exec,binary,validPackage} from './bridge.js';
 import {$,notify,button,paragraph,setBusy,updateSelectors} from './ui.js';
 import {renderControls,advanced} from './controls.js';
+import {renderHardware} from './hardware.js';
 let snapshot = null, busy = false, polling = false, hardwareSignature = '', selectedApp = null, apps = [], appsLoaded = false, loadingApps = false, appRulesSignature = '';
 const models = {bluejay:'Pixel 6a',panther:'Pixel 7',cheetah:'Pixel 7 Pro',lynx:'Pixel 7a',shiba:'Pixel 8',husky:'Pixel 8 Pro',akita:'Pixel 8a',tokay:'Pixel 9',caiman:'Pixel 9 Pro',komodo:'Pixel 9 Pro XL',tegu:'Pixel 9a'};
 for (const [value,label] of Object.entries(models)) { const option = document.createElement('option'); option.value = value; option.textContent = label; $('identity').append(option); }
@@ -26,7 +27,7 @@ function render(state) {
   if (telemetry.displayRequestSatisfied === false && telemetry.displayRequestHz != null) $('engine-reason').textContent += ' · Requested '+telemetry.displayRequestHz+' Hz; display reports '+Math.round(telemetry.screenHz)+' Hz.';
   if (running && age > 30) { $('engine-state').textContent = 'Readings are stale'; $('engine-reason').textContent = 'The supervisor has not produced a recent sample. Export diagnostics.'; }
   $('preset-label').textContent = runtime.active ? runtime.active[0].toUpperCase()+runtime.active.slice(1) : 'Balanced';
-  $('automatic').checked = config.automatic === true; $('logging').checked = config.logcat === true;
+  $('automatic').checked = config.automatic === true; $('logging').checked = config.logcat === true; $('notifications').checked = config.notifications === true;
   $('watts').textContent = Number.isFinite(telemetry.batteryWatts) ? (telemetry.batteryWatts > 0 ? '+' : '')+telemetry.batteryWatts.toFixed(1) : '—';
   $('power-status').textContent = telemetry.batteryStatus || (sampled ? 'Sensor not exposed' : running ? 'Collecting a sample' : 'Monitoring stopped');
   $('battery').textContent = telemetry.batteryPercent == null ? '—' : telemetry.batteryPercent+'%';
@@ -38,7 +39,7 @@ function render(state) {
   $('sensor-note').textContent = sampled ? 'Only readings exposed by your firmware are shown. Missing readings do not imply a sensor failure.' : running ? 'Monitoring is starting. Readings appear after the first sample.' : 'Sensor readings need the supervisor. Diagnostics remain accessible while it is stopped.';
   const signature = JSON.stringify([state.audio,state.supervisor?.config?.controls,state.supervisor?.runtime?.preference_errors,state.governors,state.cpuPolicies,state.gpuRange,state.touch,state.tcp,...Object.keys(advanced).map(key=>state[key])]);
   if (!busy && signature !== hardwareSignature && !$('choice-dialog')?.open) { renderControls(state,run,requestAdvanced); hardwareSignature = signature; }
-  $('hardware-details').textContent = JSON.stringify({cpu:state.cpuPolicies,gpu:state.gpuRange,touch:state.touch,tcp:state.tcp},null,2);
+  renderHardware(state);
   const compatibility = state.compatibility || {};
   if (models[compatibility.selectedModel]) { if (!$('choice-dialog')?.open) $('identity').value = compatibility.selectedModel; $('identity-summary').textContent = models[compatibility.selectedModel]+' · configured'; }
   const spoofs = $('spoof-options'); spoofs.replaceChildren();
@@ -88,6 +89,7 @@ $('open-presets').addEventListener('click',()=>$('preset-dialog').showModal());
 document.querySelectorAll('[data-preset]').forEach(node=>node.addEventListener('click',()=>{ $('preset-dialog').close(); run('preset '+node.dataset.preset); }));
 $('release').addEventListener('click',()=>run('reset'));
 $('automatic').addEventListener('change',event=>run('auto '+(event.target.checked ? 'on' : 'off')));
+$('notifications').addEventListener('change',event=>run('notifications '+(event.target.checked ? 'on' : 'off')));
 $('logging').addEventListener('change',event=>run('logging '+(event.target.checked ? 'on' : 'off')));
 $('restart').addEventListener('click',()=>run('monitor'));
 let requestedAdvanced = '';

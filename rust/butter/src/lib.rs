@@ -22,3 +22,5 @@ pub mod audio;
 pub mod preferences;
 
 pub mod touch;
+
+pub mod notifications;

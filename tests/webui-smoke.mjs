@@ -63,6 +63,8 @@ try {
       else if(command.endsWith(' monitor')){state.supervisor.health={running:true,sampleAgeSeconds:2};state.supervisor.runtime.sampled_at=100;state.supervisor.runtime.reason='Monitoring only';state.supervisor.runtime.telemetry={batteryPercent:72,batteryWatts:-2.4,batteryTempC:34.2,socTempC:46,screenHz:120,supportedHz:[60,120],cpuBusyPercent:12,gpuBusyPercent:8,cycleCount:125,health:'Good',batteryStatus:'Discharging'};}
       else if(command.endsWith(' enable phone-mic')){state.audio.active=true;state.supervisor.config.controls={'phone-mic':{setting:'',expires_utc:null}};}
       else if(command.endsWith(' restore phone-mic')){if(globalThis.__failMic){code=1;stderr='Example routing rejection';}else{state.audio.active=false;state.supervisor.config.controls={};}}
+      else if(command.endsWith(' notifications on'))state.supervisor.config.notifications=true;
+      else if(command.endsWith(' notifications off'))state.supervisor.config.notifications=false;
       else if(command.endsWith(' status'))stdout=JSON.stringify(state);
       else if(command.endsWith(' apps'))stdout=JSON.stringify({apps:[{package:'com.example.game',label:'Pocket Game',game:true},{package:'com.example.notes',label:'<img src=x onerror=alert(1)>',game:false}]});
       else if(command.includes('preset performance'))state.supervisor.runtime.active='performance';
@@ -103,6 +105,7 @@ try {
   await screenshot('webui-app-profile.png');
   await evaluate(`document.getElementById('app-form').dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}))`);
   await until(`__butterCommands.some(command=>command.endsWith('app com.example.game performance 120'))`);
+  assert.equal(await evaluate(`document.querySelectorAll('#hardware-details .hardware-group').length>=4 && document.querySelectorAll('#hardware-details dt').length>5 && !document.querySelector('#hardware-details').textContent.includes('cpuPolicies')`),true);
   await evaluate(`location.hash='settings'`); await until(`!document.getElementById('page-settings').hidden`);
   await evaluate(`document.querySelector('[data-select=theme]').click()`); await until(`document.getElementById('choice-dialog').open`);
   await evaluate(`[...document.querySelectorAll('#choice-list button')].find(node=>node.textContent.includes('Dark')).click()`);
@@ -113,6 +116,10 @@ try {
   assert.equal(await evaluate(`[...document.querySelectorAll('.select-trigger')].every(node=>node.querySelector('svg.ph-icon') && !node.textContent.includes('⌄'))`),true);
   await evaluate(`document.querySelector('#cpu-controls').closest('details').open=true`); await delay(250);
   assert.equal(await evaluate(`document.querySelector('#governor-all').value`),'schedutil');
+  assert.equal(await evaluate(`document.querySelector('#notifications').checked`),false);
+  await evaluate(`document.querySelector('#notifications').click()`);
+  await until(`document.querySelector('#notifications').checked && document.body.getAttribute('aria-busy')==='false'`);
+  assert.equal(await evaluate(`__butterCommands.some(command=>command.endsWith(' notifications on'))`),true);
   assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('Prefer phone microphone')`),true);
   assert.equal(await evaluate(`document.querySelector('#audio-controls input[role=switch]').checked`),false);
   await evaluate(`document.querySelector('#audio-controls input').click()`);

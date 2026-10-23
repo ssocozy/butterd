@@ -140,3 +140,23 @@ fn old_settings_load_without_saved_controls_and_invalid_intents_are_rejected() {
     assert!(validate(&BTreeMap::from([("profile".into(),SavedControl{setting:String::new(),expires_utc:None})])).is_err());
     assert!(validate(&BTreeMap::from([("governor-../../boot".into(),SavedControl{setting:"schedutil".into(),expires_utc:None})])).is_err());
 }
+
+#[test]
+fn engine_notices_coalesce_and_omit_transient_boosts() {
+    use butter::notifications::{Notices,message};
+    let mut notices=Notices::default();
+    assert!(notices.next("Performance app preset applied.",100));
+    assert!(!notices.next("Performance app preset applied.",130));
+    assert!(!notices.next("Saver preset active.",110));
+    assert!(notices.next("Saver preset active.",116));
+    let mut runtime=RuntimeState{active:Mode::Boost,reason:"Temporary boost lease".into(),..Default::default()};
+    assert!(message(&runtime).is_none());
+    runtime.active=Mode::Performance;runtime.reason="Foreground app rule".into();
+    assert_eq!(message(&runtime).unwrap(),"Performance app preset applied.");
+    runtime.reason="Foreground app unknown or multiple resumed apps".into();
+    assert!(message(&runtime).is_none());
+    runtime.error=Some("fixture".into());
+    assert_eq!(message(&runtime).unwrap(),"Tuning paused. Open Butterd for details.");
+    let config:Config=serde_json::from_str(r#"{"automatic":false,"preset":"balanced","logcat":false,"rules":[]}"#).unwrap();
+    assert!(!config.notifications);
+}

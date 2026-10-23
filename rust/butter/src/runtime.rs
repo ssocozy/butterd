@@ -10,7 +10,7 @@ const MODULE: &str = "/data/adb/modules/butterd";
 pub struct AppRule { pub package: String, pub preset: Mode, pub hz: Option<u32> }
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Config { pub automatic: bool, pub preset: Mode, pub logcat: bool, pub rules: Vec<AppRule>, pub controls: BTreeMap<String,crate::preferences::SavedControl> }
+pub struct Config { pub automatic: bool, pub preset: Mode, pub logcat: bool, pub notifications: bool, pub rules: Vec<AppRule>, pub controls: BTreeMap<String,crate::preferences::SavedControl> }
 impl Config {
     pub fn validate(&self) -> Result<()> {
         crate::preferences::validate(&self.controls)?;
@@ -119,6 +119,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
         match args {
             [command] if command == "monitor" => { state.preference_errors.clear(); state.resumed_controls.clear(); },
             [command, choice] if command == "auto" && matches!(choice.as_str(), "on" | "off") => { state.refresh_blocked = false; state.refresh_error = None; cfg.automatic = choice == "on"; state.tuning_requested = cfg.automatic || cfg.preset != Mode::Balanced; state.blocked = false; state.leases.clear(); state.selected = cfg.preset; state.pending_preset = Some(cfg.preset); }
+            [command, choice] if command == "notifications" && matches!(choice.as_str(), "on" | "off") => cfg.notifications = choice == "on",
             [command, choice] if command == "logging" && matches!(choice.as_str(), "on" | "off") => cfg.logcat = choice == "on",
             [command, mode] if command == "preset" => { let mode = Mode::parse(mode)?; if mode == Mode::Boost { return Err("Use boost SECONDS".into()); } state.tuning_requested = true; cfg.preset = mode; state.selected = mode; state.pending_preset = Some(mode); state.blocked = false; state.profile_retries = 0; state.leases.clear(); }
             [command, seconds] if command == "boost" => {
@@ -323,6 +324,12 @@ pub fn daemon(boot: &str) -> Result<()> {
     let mut last_error = String::new();
     let mut last_sample_event = 0;
     let mut wake_events = crate::events::WakeEvents::new();
+    let mut notices=crate::notifications::Notices::default();
+    if let Ok(cfg)=config() {
+        if cfg.notifications {
+            if let Err(error)=crate::notifications::post("Starting Butterd. Checking saved settings…") { event(&cfg,"notification-error",&error.to_string()); }
+        }
+    }
     loop {
         let ctx = context();
         let now = uptime()?;
@@ -410,6 +417,13 @@ pub fn daemon(boot: &str) -> Result<()> {
         }
         save("runtime.json", &state)?;
         drop(e);
+        if cfg.notifications {
+            if let Some(message)=crate::notifications::message(&state) {
+                if notices.next(&message,now) {
+                    if let Err(error)=crate::notifications::post(&message) { event(&cfg,"notification-error",&error.to_string()); }
+                }
+            }
+        } else { notices=crate::notifications::Notices::default(); }
         wake_events.wait(next_wait(&state, ctx.awake == Some(true), now));
     }
 }

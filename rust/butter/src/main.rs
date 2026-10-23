@@ -61,7 +61,7 @@ fn run() -> Result<()> {
         [command] if command == "diagnostics" => { println!("{}", serde_json::to_string_pretty(&butter::runtime::diagnostics(&boot)?)?); return Ok(()); }
         [command] if command == "shutdown" => { println!("{}", butter::runtime::shutdown(&boot)?); return Ok(()); }
         [command, package] if command == "measure" => { println!("{}", butter::runtime::frame_sample(package)?); return Ok(()); }
-        [command, ..] if matches!(command.as_str(), "preset" | "auto" | "app" | "boost" | "logging" | "reset" | "monitor") => { println!("{}", butter::runtime::configure(&boot, &args)?); return Ok(()); }
+        [command, ..] if matches!(command.as_str(), "preset" | "auto" | "app" | "boost" | "logging" | "notifications" | "reset" | "monitor") => { println!("{}", butter::runtime::configure(&boot, &args)?); return Ok(()); }
         _ => {}
     }
     let (feature, setting, restoring, accepted) = match args.as_slice() {
