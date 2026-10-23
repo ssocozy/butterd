@@ -70,7 +70,9 @@ function toggle(title, checked, enabled, command, run, summary) {
   label.append(input,track); row.append(copy,label); return row;
 }
 export function renderControls(state, run, requestAdvanced) {
-  const cpu = $('cpu-controls'); cpu.replaceChildren();
+  const cpu = $('cpu-controls');
+  const clustersOpen = cpu.querySelector(':scope > details')?.open === true;
+  cpu.replaceChildren();
   const policies = state.cpuPolicies || [];
   const allowed = ['schedutil','ondemand','conservative','powersave','interactive'];
   const common = allowed.filter(value => policies.length && policies.every(policy => (policy.choices || []).includes(value)));
@@ -85,7 +87,7 @@ export function renderControls(state, run, requestAdvanced) {
   } else unified.append(paragraph('No selectable governor is shared by every cluster.','caption'));
   unified.append(actions(button('Restore all governors',()=>run('restore governors'),state.governors?.original === true)));
   cpu.append(unified);
-  const details = document.createElement('details'); details.className = 'disclosure';
+  const details = document.createElement('details'); details.className = 'disclosure'; details.open = clustersOpen;
   const summary = document.createElement('summary'); summary.textContent = 'Advanced cluster controls'; details.append(summary); cpu.append(details);
   const names = clusterNames(policies);
   for (const policy of state.cpuPolicies || []) {

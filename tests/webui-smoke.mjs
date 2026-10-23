@@ -174,6 +174,14 @@ try {
   await evaluate(`document.querySelector('#cpu-controls > details').open=true`);
   assert.equal(await evaluate(`document.querySelector('[data-select=maximum-policy0]').textContent.includes('GHz')`),true);
   assert.match(await evaluate(`document.querySelector('#cpu-controls .preset-request').textContent`),/Preset request: 1 GHz – 2 GHz/);
+  await evaluate(`globalThis.__butterFixture.cpuPolicies[0].requestedMin='1100000';document.querySelector('#refresh').click()`);
+  await until(`document.querySelector('#cpu-controls .preset-request').textContent.includes('1.1 GHz') && document.querySelector('#refresh').disabled===false`);
+  assert.equal(await evaluate(`document.querySelector('#cpu-controls > details').open`),true,'Live readings collapsed the expanded cluster controls');
+  await evaluate(`document.querySelector('#cpu-controls > details').open=false;globalThis.__butterFixture.cpuPolicies[0].requestedMin='1000000';document.querySelector('#refresh').click()`);
+  await until(`document.querySelector('#cpu-controls .preset-request').textContent.includes('1 GHz') && document.querySelector('#refresh').disabled===false`);
+  assert.equal(await evaluate(`document.querySelector('#cpu-controls > details').open`),false,'Live readings reopened manually collapsed cluster controls');
+  await evaluate(`document.querySelector('#cpu-controls > details').open=true`);
+
   assert.equal(await evaluate(`document.querySelector('#cpu-controls').closest('details').querySelector('summary').textContent.includes('−')`),false);
   const arrowX = await evaluate(`document.querySelector('#cpu-controls').closest('details').querySelector('summary>.ph-icon').getBoundingClientRect().right`);
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('#cpu-controls').closest('details').querySelector('summary'),'::after').content`),'none');
