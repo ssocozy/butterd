@@ -29,6 +29,7 @@ pub struct Lease { pub source: String, pub expires: u64 }
 #[serde(default, deny_unknown_fields)]
 pub struct RuntimeState {
     pub app_controls:crate::app_controls::State,
+    pub thermal_stage: u8,
     pub boot: String, pub active: Mode, pub reason: String, pub foreground: Option<String>,
     pub tuning_requested: bool, pub selected: Mode, pub advanced_deadlines: BTreeMap<String, u64>, pub leases: Vec<Lease>, pub blocked: bool, pub refresh_user: Option<u32>, pub refresh_hz: Option<u32>, pub idle_samples: u8, pub sampled_at: u64,
     pub telemetry: Value, pub error: Option<String>, pub pending_preset: Option<Mode>,
@@ -68,6 +69,7 @@ pub fn config() -> Result<Config> { let value: Config = load("config.json")?; va
 pub fn state(boot: &str) -> Result<RuntimeState> {
     let value: RuntimeState = load("runtime.json")?;
     if value.boot != boot { return Ok(RuntimeState { boot: boot.into(), ..Default::default() }); }
+    if value.thermal_stage > 3 { return Err("Invalid cooling stage".into()); }
     if value.app_controls.key.as_ref().is_some_and(|key|key.len()>512) || value.app_controls.errors.len()>4 { return Err("Invalid app control state".into()); }
     if value.advanced_deadlines.len() > 8 || value.advanced_deadlines.keys().any(|key| !matches!(key.as_str(), "cpu-lock" | "gpu-lock" | "charging-thermal" | "gpu-thermal" | "charging-pause" | "bypass")) || value.leases.len() > 16 || value.leases.iter().any(|lease| !matches!(lease.source.as_str(), "launch" | "manual")) || value.refresh_user.is_some_and(|user| user > 99999) { return Err("Invalid runtime state".into()); }
     Ok(value)
@@ -167,20 +169,42 @@ pub struct Context {
     pub awake: Option<bool>, pub saver: Option<bool>, pub temperature: Option<i64>, pub battery: Option<u64>,
     pub soc_millic: Option<i64>, pub gpu_busy: Option<f64>, pub gpu_source: Option<String>, pub online: Option<bool>, pub user: Option<u32>, pub app: Option<String>, pub rates: Vec<u32>, pub hz: Option<f64>,
 }
+// Battery tenths of a degree; SoC millidegrees. Escalate immediately,
+// recover through lower bands with hysteresis to avoid repeated writes near boundaries.
+pub fn cooling_stage(previous: u8, context: &Context) -> u8 {
+    let Some(battery) = context.temperature else { return 3; };
+    let soc = context.soc_millic.unwrap_or(0);
+    if battery >= 420 || soc >= 85000 { return 3; }
+    if previous == 3 && (battery >= 390 || soc >= 75000) { return 3; }
+    if battery >= 410 || soc >= 80000 { return 2; }
+    if previous >= 2 && (battery >= 405 || soc >= 77000) { return 2; }
+    if battery >= 400 || soc >= 75000 { return 1; }
+    if previous >= 1 && (battery >= 395 || soc >= 72000) { return 1; }
+    0
+}
 pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now: u64) -> (Mode, &'static str) {
     state.leases.retain(|lease| lease.expires > now && lease.expires <= now.saturating_add(30));
     if !config.automatic && !state.tuning_requested { state.leases.clear(); return (Mode::Balanced, "Monitoring only"); }
     if state.blocked { state.leases.clear(); return (Mode::Balanced, "Paused after a conflict or failure; select a preset to retry"); }
     if context.awake != Some(true) { state.leases.clear(); return (Mode::Balanced, "Screen off or display state unknown"); }
-    let cooling = state.reason == "Cooling down";
-    let warm = context.temperature.is_none_or(|temp| temp >= if cooling { 390 } else { 420 }) || context.soc_millic.is_some_and(|temp| temp >= if cooling { 75000 } else { 85000 });
-    if warm { state.leases.clear(); return (Mode::Balanced, "Cooling down"); }
-    if context.saver != Some(false) || context.battery.is_none_or(|level| level <= 20) { state.leases.clear(); return (Mode::Battery, "Battery saver or low battery"); }
-    if context.app.is_none() { state.leases.clear(); return (Mode::Balanced, "Foreground app unknown or multiple resumed apps"); }
+    let rule = context.app.as_ref().and_then(|app| config.rules.iter().find(|rule| &rule.package == app));
+    let requested = state.pending_preset.unwrap_or(if config.automatic { rule.map_or(config.preset, |rule| rule.preset) } else { state.selected });
+    state.thermal_stage = cooling_stage(state.thermal_stage, context);
+    if context.temperature.is_none() { state.leases.clear(); return (Mode::Balanced, "Cooling down"); }
+    let battery_saver = context.saver != Some(false) || context.battery.is_none_or(|level| level <= 20);
+    if state.thermal_stage == 3 {
+        state.leases.clear();
+        return (if requested == Mode::Battery || battery_saver { Mode::Battery } else { Mode::Balanced }, "Cooling down");
+    }
+    if battery_saver { state.leases.clear(); return (Mode::Battery, "Battery saver or low battery"); }
+    if context.app.is_none() {
+        state.leases.clear();
+        return (if config.preset == Mode::Battery { Mode::Battery } else { Mode::Balanced }, "Foreground app unknown or multiple resumed apps");
+    }
     if state.foreground != context.app { state.leases.retain(|lease| lease.source != "launch"); }
-    let rule = config.rules.iter().find(|rule| Some(&rule.package) == context.app.as_ref());
-    let requested = state.pending_preset.take().unwrap_or(if config.automatic { rule.map_or(config.preset, |rule| rule.preset) } else { state.selected });
-    if config.automatic && rule.is_some_and(|rule| rule.preset == Mode::Performance) && state.foreground != context.app && requested == Mode::Performance {
+    state.pending_preset = None;
+    if state.thermal_stage > 0 { state.leases.clear(); }
+    if state.thermal_stage == 0 && config.automatic && rule.is_some_and(|rule| rule.preset == Mode::Performance) && state.foreground != context.app && requested == Mode::Performance {
         state.leases.retain(|lease| lease.source != "launch");
         state.leases.push(Lease { source: "launch".into(), expires: now.saturating_add(5) });
     }
@@ -188,6 +212,7 @@ pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now:
     state.idle_samples = if idle { state.idle_samples.saturating_add(1).min(3) } else { 0 };
     if !state.leases.is_empty() { (Mode::Boost, "Temporary boost lease") }
     else if requested == Mode::Performance && state.idle_samples >= 3 { (Mode::Balanced, "Idle workload; frequency floors released") }
+    else if requested == Mode::Performance && state.thermal_stage > 0 { (requested, if state.thermal_stage == 1 { "Cooling: reduced performance floors" } else { "Cooling: minimal performance floors" }) }
     else { (requested, if config.automatic && rule.is_some() { "Foreground app rule" } else { "Selected preset" }) }
 }
 fn context() -> Context {
@@ -378,6 +403,7 @@ pub fn daemon(boot: &str) -> Result<()> {
         if matches!(e.state(&Feature::Touch), Ok("Original values active; release session")) && e.apply_targets(Feature::Touch, Vec::new(), true).is_ok() {
             event(&cfg, "touch", "Touch returned to its original value; session released without a write");
         }
+        let prior_thermal_stage = state.thermal_stage;
         let (desired, reason) = decide(&cfg, &mut state, &ctx, now);
         let result = (|| -> Result<()> {
             thermal_cleanup(&e, &cfg, &mut state, &ctx, now)?;
@@ -385,11 +411,11 @@ pub fn daemon(boot: &str) -> Result<()> {
                 if desired == Mode::Balanced { e.preset(Mode::Balanced)?; }
                 else if state.profile_retries < 3 {
                     state.profile_retries += 1;
-                    e.reconcile_vendor_profile(desired)?;
+                    e.reconcile_vendor_profile_cooled(desired, state.thermal_stage)?;
                     event(&cfg, "vendor-request", "Reapplied the selected CPU QoS request; thermal policy remains unchanged");
                 } else { return Err("Vendor CPU request changed repeatedly; profile paused after three retries".into()); }
             }
-            if desired != state.active || (desired == Mode::Balanced && e.session(&Feature::Profile)?.is_some()) { e.preset(desired)?; }
+            if desired != state.active || prior_thermal_stage != state.thermal_stage || (desired == Mode::Balanced && e.session(&Feature::Profile)?.is_some()) { e.preset_cooled(desired, state.thermal_stage)?; }
             Ok(())
         })();
         match result {

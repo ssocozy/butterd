@@ -813,3 +813,24 @@ fn stronger_profiles_use_advertised_cpu_gpu_steps_and_keep_maxima() {
         assert!(targets.contains(&(high, "700".into())));
     }
 }
+
+#[test]
+fn cooling_reduces_cpu_gpu_floors_without_compounding_or_releasing_battery_caps() {
+    use butter::presets::Mode;
+    let engine=fixture(); let gpu=butter::hardware::GPU.trim_end_matches("/min_freq");
+    for (base,prefix) in [(format!("{CPU}/policy0"),"scaling_"),(gpu.to_string(),"")] {
+        engine.hardware.put(&format!("{base}/{prefix}min_freq"),"100");
+        engine.hardware.put(&format!("{base}/{prefix}max_freq"),"700");
+        let available=if prefix.is_empty(){"available_frequencies"}else{"scaling_available_frequencies"};
+        engine.hardware.put(&format!("{base}/{available}"),"100 200 300 400 500 600 700");
+    }
+    for (mode,stage,floor) in [(Mode::Performance,0,"400"),(Mode::Performance,1,"300"),(Mode::Performance,2,"200"),(Mode::Battery,3,"100"),(Mode::Performance,0,"400")] {
+        engine.preset_cooled(mode,stage).unwrap();
+        assert_eq!(engine.hardware.read(&format!("{CPU}/policy0/scaling_min_freq")).unwrap(),floor);
+        assert_eq!(engine.hardware.read(butter::hardware::GPU).unwrap(),floor);
+        let expected_max=if mode==Mode::Battery{"500"}else{"700"};
+        assert_eq!(engine.hardware.read(&format!("{gpu}/max_freq")).unwrap(),expected_max);
+    }
+    engine.preset(Mode::Balanced).unwrap();
+    assert_eq!(engine.hardware.read(butter::hardware::GPU).unwrap(),"100");
+}

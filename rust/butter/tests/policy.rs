@@ -170,3 +170,48 @@ fn notification_confirmation_requires_a_posted_record() {
     assert!(confirm("posting:\nwarning: couldn't find notification after enqueueing").is_err());
     assert!(confirm("Permission Denial:").is_err());
 }
+
+#[test]
+fn cooling_steps_down_performance_and_cancels_boost_without_renewing_it() {
+    let cfg=Config::default(); let mut state=state(); let mut ctx=context();
+    state.foreground=ctx.app.clone();
+    state.leases.push(Lease{source:"manual".into(),expires:120});
+    ctx.temperature=Some(400);
+    assert_eq!(decide(&cfg,&mut state,&ctx,100),(Mode::Performance,"Cooling: reduced performance floors"));
+    assert_eq!(state.thermal_stage,1); assert!(state.leases.is_empty());
+    ctx.temperature=Some(410);
+    assert_eq!(decide(&cfg,&mut state,&ctx,101).0,Mode::Performance);
+    assert_eq!(state.thermal_stage,2);
+    ctx.temperature=Some(407); decide(&cfg,&mut state,&ctx,102); assert_eq!(state.thermal_stage,2);
+    ctx.temperature=Some(420); assert_eq!(decide(&cfg,&mut state,&ctx,103).0,Mode::Balanced);
+    ctx.temperature=Some(400); assert_eq!(decide(&cfg,&mut state,&ctx,104).0,Mode::Balanced);
+    ctx.temperature=Some(385); assert_eq!(decide(&cfg,&mut state,&ctx,105).0,Mode::Performance);
+    assert_eq!(state.thermal_stage,0);
+}
+#[test]
+fn battery_caps_survive_heat_and_foreground_detection_gaps() {
+    let cfg=Config{preset:Mode::Battery,..Default::default()};
+    let mut state=RuntimeState{tuning_requested:true,selected:Mode::Battery,pending_preset:Some(Mode::Battery),..Default::default()};
+    let mut ctx=context(); ctx.temperature=Some(425);
+    assert_eq!(decide(&cfg,&mut state,&ctx,100),(Mode::Battery,"Cooling down"));
+    ctx.temperature=Some(400); assert_eq!(decide(&cfg,&mut state,&ctx,101).0,Mode::Battery);
+    ctx.temperature=Some(350); ctx.app=None;
+    assert_eq!(decide(&cfg,&mut state,&ctx,102).0,Mode::Battery);
+    ctx.temperature=None; assert_eq!(decide(&cfg,&mut state,&ctx,103).0,Mode::Balanced);
+}
+#[test]
+fn soc_cooling_bands_and_recovery_are_independent_of_battery_heat() {
+    use butter::runtime::cooling_stage;
+    let mut ctx=context();
+    for (previous,soc,expected) in [(0,75000,1),(1,74000,1),(1,71000,0),(0,80000,2),(2,79000,2),(2,76000,1),(0,85000,3),(3,75000,3),(3,74000,1)] {
+        ctx.soc_millic=Some(soc); assert_eq!(cooling_stage(previous,&ctx),expected);
+    }
+}
+#[test]
+fn per_app_battery_retains_caps_but_performance_still_releases_at_cutoff() {
+    let mut cfg=Config{automatic:true,rules:vec![AppRule{package:"com.example.game".into(),preset:Mode::Battery,hz:None,high_touch:false,charging_pause_at:None}],..Default::default()};
+    let mut state=RuntimeState::default(); let mut ctx=context(); ctx.soc_millic=Some(86000);
+    assert_eq!(decide(&cfg,&mut state,&ctx,100).0,Mode::Battery);
+    cfg.rules[0].preset=Mode::Performance;
+    assert_eq!(decide(&cfg,&mut state,&ctx,101).0,Mode::Balanced);
+}

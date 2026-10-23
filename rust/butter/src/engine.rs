@@ -282,9 +282,12 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         controls
     }
     pub fn preset(&self, mode: crate::presets::Mode) -> Result<String> {
+        self.preset_cooled(mode, 0)
+    }
+    pub fn preset_cooled(&self, mode: crate::presets::Mode, stage: u8) -> Result<String> {
         if mode == crate::presets::Mode::Balanced { return self.apply_targets(Feature::Profile, Vec::new(), true); }
         let baseline = self.session(&Feature::Profile)?;
-        let targets = crate::presets::plan(&self.hardware, mode, baseline.as_ref())?;
+        let targets = crate::presets::plan_cooled(&self.hardware, mode, baseline.as_ref(), stage)?;
         match self.apply_targets(Feature::Profile, targets, false) {
             Ok(message) => Ok(message),
             Err(error) => {
@@ -294,6 +297,9 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         }
     }
     pub fn reconcile_vendor_profile(&self, mode: crate::presets::Mode) -> Result<String> {
+        self.reconcile_vendor_profile_cooled(mode, 0)
+    }
+    pub fn reconcile_vendor_profile_cooled(&self, mode: crate::presets::Mode, stage: u8) -> Result<String> {
         let mut journal = self.session(&Feature::Profile)?.ok_or("No vendor CPU profile to reconcile")?;
         if !journal.entries.iter().any(|entry| entry.path == crate::vendor::POWERHAL) { return Err("Profile uses the cpufreq fallback; no vendor request can be reconciled".into()); }
         for entry in &mut journal.entries {
@@ -304,7 +310,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             }
         }
         self.store.save(&journal)?;
-        self.preset(mode)
+        self.preset_cooled(mode, stage)
     }
     pub fn state(&self, feature: &Feature) -> Result<&'static str> {
         let Some(journal) = self.session(feature)? else {

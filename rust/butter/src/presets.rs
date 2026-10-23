@@ -31,6 +31,10 @@ pub fn range(hardware: &impl Hardware, base: &str, cpu: bool, setting: &str) -> 
     Ok(vec![(min_path, low.to_string()), (max_path, high.to_string())])
 }
 pub fn plan(hardware: &impl Hardware, mode: Mode, baseline: Option<&Journal>) -> Result<Vec<(String, String)>> {
+    plan_cooled(hardware, mode, baseline, 0)
+}
+pub fn plan_cooled(hardware: &impl Hardware, mode: Mode, baseline: Option<&Journal>, stage: u8) -> Result<Vec<(String, String)>> {
+    if stage > 3 { return Err("Invalid cooling stage".into()); }
     let mut targets = Vec::new();
     let mut bases: Vec<(String, bool)> = hardware.list(CPU)?.into_iter().filter(|policy| valid_policy(policy)).take(16).map(|policy| (format!("{CPU}/{policy}"), true)).collect();
     if hardware.read(GPU).is_ok() { bases.push((GPU.trim_end_matches("/min_freq").into(), false)); }
@@ -50,8 +54,17 @@ pub fn plan(hardware: &impl Hardware, mode: Mode, baseline: Option<&Journal>) ->
         // Conservative starting points, not benchmark-proven efficiency claims.
         let (low, high) = match mode {
             Mode::Battery => (minimum, table[(table.len() - 1) * 3 / 4]),
-            Mode::Performance => (table[table.len() / 2], maximum),
-            Mode::Boost => (table[((table.len() - 1) * 2).div_ceil(3)], maximum),
+            Mode::Performance | Mode::Boost => {
+                let last = table.len() - 1;
+                let index = match stage {
+                    0 if mode == Mode::Boost => (last * 2).div_ceil(3),
+                    0 => table.len() / 2,
+                    1 => last / 3,
+                    2 => last / 6,
+                    _ => 0,
+                };
+                (table[index], maximum)
+            },
             Mode::Balanced => (minimum, maximum),
         };
         targets.push((min_path, low.to_string())); targets.push((max_path, high.to_string()));
