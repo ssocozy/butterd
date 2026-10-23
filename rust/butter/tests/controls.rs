@@ -723,9 +723,18 @@ fn touch_stop_accepts_only_the_aosp_success_exit_quirk() {
     assert!(stop_reply(failure(1,"Stopping service:","Service stopped")).is_err());
 }
 
-fn app_rule_fixture() -> (Engine<FakeHardware,MemoryStore>,butter::runtime::Config,butter::runtime::Context) {
+#[derive(Default)]
+struct MultiStore { journals:RefCell<BTreeMap<String,Journal>> }
+impl Store for MultiStore {
+    fn load(&self,feature:&Feature)->Result<Option<Journal>> { Ok(self.journals.borrow().get(&feature.key()).cloned()) }
+    fn save(&self,journal:&Journal)->Result<()> { self.journals.borrow_mut().insert(journal.feature.key(),journal.clone());Ok(()) }
+    fn remove(&self,feature:&Feature)->Result<()> { self.journals.borrow_mut().remove(&feature.key());Ok(()) }
+}
+fn app_rule_fixture() -> (Engine<FakeHardware,MultiStore>,butter::runtime::Config,butter::runtime::Context) {
     use butter::{runtime::{AppRule,Config,Context},presets::Mode};
-    let engine=fixture();engine.hardware.put(GOODIX,"0");engine.hardware.put(butter::hardware::PAUSE,"0 0");engine.hardware.put(butter::hardware::FCC,"3700000");
+    let original=fixture();
+    let engine=Engine{hardware:original.hardware,store:MultiStore::default(),boot:original.boot};
+    engine.hardware.put(GOODIX,"0");engine.hardware.put(butter::hardware::PAUSE,"0 0");engine.hardware.put(butter::hardware::FCC,"3700000");
     let config=Config{automatic:true,rules:vec![AppRule{package:"com.example.game".into(),preset:Mode::Balanced,hz:None,high_touch:true,charging_pause_at:Some(80)}],..Default::default()};
     let context=Context{awake:Some(true),online:Some(true),battery:Some(79),app:Some("com.example.game".into()),..Default::default()};
     (engine,config,context)
