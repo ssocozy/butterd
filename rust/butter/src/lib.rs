@@ -28,3 +28,7 @@ pub mod notifications;
 pub mod app_controls;
 
 pub mod recording;
+
+pub mod app_activity;
+
+pub mod battery_usage;

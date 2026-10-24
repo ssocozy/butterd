@@ -455,7 +455,7 @@ pub fn daemon(boot: &str) -> Result<()> {
         let (desired, reason) = decide(&cfg, &mut state, &ctx, now);
         let result = (|| -> Result<()> {
             thermal_cleanup(&e, &cfg, &mut state, &ctx, now)?;
-            let stricter_caps = if desired != Mode::Balanced { e.accept_stricter_profile_caps()? } else { false };
+            let stricter_caps = if desired != Mode::Balanced { e.refresh_profile_caps(desired,state.thermal_stage)? } else { false };
             if e.session(&Feature::Profile)?.is_some() && !matches!(e.state(&Feature::Profile)?, "Request active" | "Off") {
                 if desired == Mode::Balanced { e.preset(Mode::Balanced)?; }
                 else if state.profile_retries < 3 {

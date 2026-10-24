@@ -140,9 +140,10 @@ jobs:
       - name: Test ROM refresh bridge contract
         run: |
           mkdir -p build/java-tests
-          javac -cp "build/java:$ANDROID_HOME/platforms/android-36/android.jar" -d build/java-tests tests/RefreshRateBridgeTest.java tests/AudioRouteBridgeTest.java
+          javac -cp "build/java:$ANDROID_HOME/platforms/android-36/android.jar" -d build/java-tests tests/RefreshRateBridgeTest.java tests/AudioRouteBridgeTest.java tests/AppActivityTest.java
           java -cp "build/java-tests:build/java:$ANDROID_HOME/platforms/android-36/android.jar" dev.butterd.module.RefreshRateBridgeTest
           java -cp "build/java-tests:build/java:$ANDROID_HOME/platforms/android-36/android.jar" dev.butterd.module.AudioRouteBridgeTest
+          java -cp "build/java-tests:build/java:$ANDROID_HOME/platforms/android-36/android.jar" dev.butterd.module.AppActivityTest
       - name: Refresh bundled Pixel catalog
         run: python3 tools/fetch_catalog.py
       - name: Package module

@@ -56,6 +56,8 @@ fn run() -> Result<()> {
     }
     match args.as_slice() {
         [command] if command == "notify-test" => { butter::notifications::post("Butterd notification test")?; println!("Android accepted the test notification. Check the notification shade."); return Ok(()); },
+        [command, rest @ ..] if command == "activity" => { println!("{}",butter::app_activity::run(rest)?); return Ok(()); },
+        [command] if command == "battery-usage" => { println!("{}",butter::battery_usage::read()?); return Ok(()); },
         [command] if command == "apps" => { println!("{}", butter::android::installed_apps()?); return Ok(()); },
         [command] if command == "daemon" => return butter::runtime::daemon(&boot),
         [command] if command == "boot" => return butter::runtime::launch_if_requested(&boot),

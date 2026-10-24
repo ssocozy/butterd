@@ -15,12 +15,16 @@ export function renderHardware(state) {
   if(!policies.length)host.append(paragraph('CPU details appear when exposed by the kernel.'));
   for(const policy of policies) {
     const cluster=names.get(policy.id),list=group(host,cluster.name);
+    row(list,'Current clock',Number(policy.current)>0?formatClock(policy.current):null);
+    if(Number(policy.requestedMin)>0)row(list,'Preset request',formatClock(policy.requestedMin)+' – '+formatClock(policy.requestedMax));
     row(list,'Cores',String(cluster.cores));row(list,'Governor',policy.governor);
     if(Number(policy.min)>0 && Number(policy.max)>0)row(list,'Effective clock range',formatClock(policy.min)+' – '+formatClock(policy.max));
     if(cluster.peak>0)row(list,'Supported maximum',formatClock(cluster.peak));
     row(list,'Available governors',(policy.choices || []).join(', '));
   }
   const gpu=state.gpuRange || {},graphics=group(host,'Graphics');row(graphics,'GPU','Mali');
+  row(graphics,'Current clock',Number(gpu.current)>0?formatClock(gpu.current,true):null);
+  if(Number(gpu.requestedMin)>0)row(graphics,'Preset request',formatClock(gpu.requestedMin,true)+' – '+formatClock(gpu.requestedMax,true));
   if(Number(gpu.min)>0 && Number(gpu.max)>0)row(graphics,'Effective clock range',formatClock(gpu.min,true)+' – '+formatClock(gpu.max,true));
   else row(graphics,'Clock range','Provided when exposed by the driver');
   const touch=state.touch || {},input=group(host,'Touch');row(input,'Control',touch.available ? 'Supported' : 'Managed by device firmware');

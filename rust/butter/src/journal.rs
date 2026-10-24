@@ -34,6 +34,8 @@ pub struct Journal {
     pub entries: Vec<Entry>,
     #[serde(default)]
     pub cpu_limits: std::collections::BTreeMap<String,String>,
+    #[serde(default)]
+    pub observed_limits: std::collections::BTreeMap<String,String>,
 }
 pub trait Store {
     fn load(&self, feature: &Feature) -> Result<Option<Journal>>;
@@ -118,6 +120,7 @@ pub fn decode_legacy(feature: &Feature, text: &str) -> Result<Journal> {
         }
         return Ok(Journal {
             cpu_limits: Default::default(),
+            observed_limits: Default::default(),
             schema: 1,
             boot: fields[0].into(),
             feature: feature.clone(),
@@ -165,6 +168,7 @@ pub fn decode_legacy(feature: &Feature, text: &str) -> Result<Journal> {
     }
     Ok(Journal {
         cpu_limits: Default::default(),
+            observed_limits: Default::default(),
         schema: 1,
         boot: get("boot")?.into(),
         feature: feature.clone(),

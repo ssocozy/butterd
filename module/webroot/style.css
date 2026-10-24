@@ -27,3 +27,17 @@
 .connection-notice{color:var(--ink);font-size:12px;font-weight:600;border-left:2px solid var(--ink);padding:6px 10px;background:var(--soft);margin-bottom:12px;border-radius:0 6px 6px 0}
 
 .hardware-details{padding:0 0 8px}.hardware-group{padding:18px 0 6px}.hardware-group+.hardware-group{margin-top:10px}.hardware-group>h3{font-size:13px;letter-spacing:.02em;margin-bottom:6px}.hardware-group .detail-list>div{padding:10px 0}.hardware-group .detail-list>div:last-child{border-bottom:0}.hardware-group .detail-list dd{max-width:62%;font-size:13px;line-height:1.5}
+
+/* Settings dividers share the same inset and never sit underneath copy. */
+#page-settings>.setting-row{padding-block:22px;gap:20px;align-items:start}
+#page-settings>.setting-row>.control-copy,#page-settings>.setting-row>div{min-width:0}
+#page-settings>.setting-row>.switch{margin-top:3px}
+#page-settings>.setting-row+ .caption{margin-top:12px}
+.running-row{display:grid;grid-template-columns:24px minmax(0,1fr);gap:12px;padding:18px 0;border-bottom:1px solid var(--line);align-items:start}
+.running-row>input{width:18px;height:18px;margin:3px 0;accent-color:var(--ink)}
+.running-row strong{display:block;overflow-wrap:anywhere;font-size:14px}
+.running-metrics{display:flex;gap:16px;flex-wrap:wrap;margin-top:7px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted)}
+#stop-apps{margin-top:18px;width:100%}
+#stop-results{margin-top:12px}#stop-results p+p{margin-top:8px}
+
+#page-settings>.setting-row>.control-copy{padding-top:0}

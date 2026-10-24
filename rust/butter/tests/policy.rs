@@ -366,3 +366,27 @@ fn aggressive_app_request_is_not_released_by_previous_cooling_state() {
     state.blocked=true;ctx.app=Some("com.example.game".into());
     assert_eq!(decide(&cfg,&mut state,&ctx,102).0,Mode::Balanced);
 }
+
+#[test]
+fn force_stop_requires_confirmation_and_bounded_valid_packages() {
+    use butter::app_activity::arguments;
+    assert_eq!(arguments(&[]).unwrap(),vec!["list"]);
+    for command in ["stop com.example.app","stop --confirm com.example.app;reboot","stop --confirm"] {
+        let args=command.split_whitespace().map(str::to_string).collect::<Vec<_>>();assert!(arguments(&args).is_err());
+    }
+    let mut args=vec!["stop".into(),"--confirm".into()];
+    args.extend((0..16).map(|n|format!("com.example.app{n}")));assert!(arguments(&args).is_ok());
+    args.push("com.example.toomany".into());assert!(arguments(&args).is_err());
+}
+#[test]
+fn battery_history_reports_window_and_rates_without_faking_short_samples() {
+    use butter::battery_usage::{parse,duration};
+    let text="Statistics since last charge:\nTime on battery: 7h 3m 35s 938ms (98%) realtime, 2h 0m 41s 175ms (28%) uptime\nTime on battery screen off: 5h 23m 51s 490ms (76%) realtime, 20m 56s 727ms (4%) uptime\nStart clock time: 2026-10-24-03-34-18\nDischarge: 1090 mAh\nScreen off discharge: 142 mAh\nScreen on discharge: 948 mAh\nAmount discharged while screen on: 26\nAmount discharged while screen off: 4\n";
+    let report=parse(text).unwrap();
+    assert!(report["sleepEstimateSeconds"].as_f64().unwrap()>18000.0);
+    assert!((report["screenOffMahPerHour"].as_f64().unwrap()-26.3).abs()<0.1);
+    assert!(report["screenOnPercentPerHour"].as_f64().unwrap()>15.0);
+    let short=text.replace("7h 3m 35s 938ms","10m 0s").replace("2h 0m 41s 175ms","5m 0s").replace("5h 23m 51s 490ms","6m 0s").replace("20m 56s 727ms","1m 0s");
+    assert!(parse(&short).unwrap()["screenOffMahPerHour"].is_null());
+    assert!(duration("-7h").is_none());assert!(parse("Permission Denial").is_err());
+}

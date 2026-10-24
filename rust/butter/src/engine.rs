@@ -21,6 +21,11 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         {
             return Err("Invalid session journal".into());
         }
+        if journal.observed_limits.len()>32 { return Err("Invalid clock baseline metadata".into()); }
+        for (path,value) in &journal.observed_limits {
+            if *feature!=Feature::Profile || !hardware::allowed(&self.hardware,feature,path) || !(path.ends_with("min_freq")||path.ends_with("max_freq")) { return Err("Invalid clock baseline path".into()); }
+            crate::model::number(value)?;
+        }
         if !journal.cpu_limits.is_empty() {
             if *feature != Feature::Profile || journal.cpu_limits.len() != 6 || !journal.entries.iter().any(|entry| entry.path == crate::vendor::POWERHAL) { return Err("Invalid CPU baseline metadata".into()); }
             for (path,value) in &journal.cpu_limits {
@@ -124,7 +129,9 @@ impl<H: Hardware, S: Store> Engine<H, S> {
                         }
                     }
                 }
+                let observed_limits = if feature == Feature::Profile { entries.iter().filter(|entry|entry.path.ends_with("min_freq")||entry.path.ends_with("max_freq")).map(|entry|(entry.path.clone(),entry.original.clone())).collect() } else { Default::default() };
                 Journal {
+                    observed_limits,
                     cpu_limits,
                     schema: 1,
                     boot: self.boot.clone(),
@@ -241,7 +248,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             if !journal.entries[index].owned(&current) {
                 return Err("External change detected; session retained".into());
             }
-            if restoring && matches!(feature,Feature::Profile|Feature::Refresh(_)|Feature::PhoneMic|Feature::ChargingPause|Feature::Touch) && current == target {
+            if (restoring && matches!(feature,Feature::Profile|Feature::Refresh(_)|Feature::PhoneMic|Feature::ChargingPause|Feature::Touch) || feature==Feature::Profile) && current == target {
                 journal.entries[index].expected = target; journal.entries[index].before = None; self.store.save(&journal)?;
                 continue;
             }
@@ -290,6 +297,9 @@ impl<H: Hardware, S: Store> Engine<H, S> {
     /// Adopt only stricter external ceilings while active. Raising an external
     /// cap or changing a floor still requires the normal conflict checks.
     pub fn accept_stricter_profile_caps(&self) -> Result<bool> {
+        self.refresh_profile_caps(crate::presets::Mode::Battery,0)
+    }
+    pub fn refresh_profile_caps(&self, mode:crate::presets::Mode, stage:u8) -> Result<bool> {
         let Some(mut journal) = self.session(&Feature::Profile)? else { return Ok(false); };
         let mut changed = false;
         for entry in &mut journal.entries {
@@ -298,9 +308,25 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             if entry.owned(&current) { continue; }
             hardware::validate_path_value(&Feature::Profile, &entry.path, &current)?;
             let cap = crate::model::number(&current)?;
-            if cap == 0 || cap >= crate::model::number(&entry.expected)? { continue; }
+            if cap == 0 { continue; }
+            let gpu = [hardware::GPU,hardware::GPU_ALT].iter().any(|node|entry.path==node.replace("min_freq","max_freq"));
+            if gpu && mode != crate::presets::Mode::Battery {
+                let baseline=journal.observed_limits.get(&entry.path).and_then(|value|value.parse::<u64>().ok()).unwrap_or(crate::model::number(&entry.original)?);
+                journal.observed_limits.insert(entry.path.clone(),baseline.max(cap).to_string());
+                entry.original=current.clone();entry.expected=current;entry.before=None;changed=true;continue;
+            }
+            if cap >= crate::model::number(&entry.expected)? { continue; }
             entry.original = cap.min(crate::model::number(&entry.original)?).to_string();
             entry.expected = current; entry.before = None; changed = true;
+        }
+        if changed && mode!=crate::presets::Mode::Battery {
+            let planned=crate::presets::plan_cooled(&self.hardware,mode,Some(&journal),stage)?;
+            for entry in journal.entries.iter_mut().filter(|entry|entry.path==hardware::GPU || entry.path==hardware::GPU_ALT) {
+                let current=hardware::value(&self.hardware,&entry.path)?;
+                if !entry.owned(&current) && planned.iter().any(|(path,value)|path==&entry.path && value==&current) {
+                    entry.expected=current;entry.before=None;
+                }
+            }
         }
         if changed { self.store.save(&journal)?; }
         Ok(changed)
@@ -429,7 +455,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
                     let request_max = vendor_request.as_ref().and_then(|values| values.get(index*2+1)).filter(|value| **value > 0).map(ToString::to_string)
                         .or_else(|| requested(&format!("{CPU}/{policy}/scaling_max_freq")));
                     Ok(
-                        json!({"requestedMin":request_min,"requestedMax":request_max,"id": policy, "governor": governor, "cores": self.hardware.read(&format!("{CPU}/{policy}/related_cpus"))?, "choices": choices,
+                        json!({"current":self.hardware.read(&format!("{CPU}/{policy}/scaling_cur_freq")).unwrap_or_default(),"requestedMin":request_min,"requestedMax":request_max,"id": policy, "governor": governor, "cores": self.hardware.read(&format!("{CPU}/{policy}/related_cpus"))?, "choices": choices,
                         "original": self.session(&Feature::Governor(policy.clone()))?.is_some(),
                         "frequencies":self.hardware.read(&format!("{CPU}/{policy}/scaling_available_frequencies")).unwrap_or_default(),
                         "hardwareMax":self.hardware.read(&format!("{CPU}/{policy}/cpuinfo_max_freq")).unwrap_or_default(),
@@ -466,7 +492,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         );
         let gpu_path = if self.hardware.read(hardware::GPU).is_ok() { hardware::GPU } else { hardware::GPU_ALT };
         let gpu_base = gpu_path.trim_end_matches("/min_freq");
-        output.insert("gpuRange".into(), json!({"frequencies":self.hardware.read(&format!("{gpu_base}/available_frequencies")).unwrap_or_default(), "min":self.hardware.read(gpu_path).unwrap_or_default(), "max":self.hardware.read(&format!("{gpu_base}/max_freq")).unwrap_or_default(), "requestedMin":requested(gpu_path),"requestedMax":requested(&format!("{gpu_base}/max_freq")), "active":self.session(&Feature::GpuRange).ok().flatten().is_some()}));
+        output.insert("gpuRange".into(), json!({"current":self.hardware.read(&format!("{gpu_base}/cur_freq")).unwrap_or_default(),"referenceMax":profile.as_ref().and_then(|journal|journal.observed_limits.get(&format!("{gpu_base}/max_freq"))).cloned(),"frequencies":self.hardware.read(&format!("{gpu_base}/available_frequencies")).unwrap_or_default(), "min":self.hardware.read(gpu_path).unwrap_or_default(), "max":self.hardware.read(&format!("{gpu_base}/max_freq")).unwrap_or_default(), "requestedMin":requested(gpu_path),"requestedMax":requested(&format!("{gpu_base}/max_freq")), "active":self.session(&Feature::GpuRange).ok().flatten().is_some()}));
         output.insert("cpuPolicies".into(), json!(policies));
         output.insert(
             "engine".into(),

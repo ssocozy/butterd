@@ -384,7 +384,7 @@ fn vendor_qos_uses_all_clusters_and_preserves_cpu_baseline() {
     engine.hardware.put(&format!("{CPU}/policy0/scaling_max_freq"),"1200000");
     let status = engine.status();
     assert_eq!(status["cpuPolicies"][0]["max"],"1200000");
-    assert_eq!(status["cpuPolicies"][0]["requestedMax"],"1600000");
+    assert_eq!(status["cpuPolicies"][0]["requestedMax"],"2200000");
     assert_eq!(butter::vendor::parse(&journal.entries[0].expected).unwrap().len(),6);
     let first = engine.hardware.read(butter::vendor::POWERHAL).unwrap();
     engine.hardware.put(&format!("{CPU}/policy0/scaling_min_freq"),"1200000");
@@ -886,4 +886,33 @@ fn aggressive_cpu_gpu_floors_stay_at_three_quarters_through_cooling_bands() {
     engine.preset(Mode::Balanced).unwrap();
     assert_eq!(engine.hardware.read(butter::hardware::GPU).unwrap(),"100");
     assert_eq!(engine.hardware.read(&format!("{CPU}/policy0/scaling_min_freq")).unwrap(),"100");
+}
+
+#[test]
+fn gpu_recovers_from_temporary_cap_without_rewriting_the_ceiling() {
+    use butter::presets::Mode;
+    let engine=fixture();let gpu=butter::hardware::GPU.trim_end_matches("/min_freq");let max=format!("{gpu}/max_freq");
+    engine.hardware.put(butter::hardware::GPU,"100");engine.hardware.put(&max,"900");
+    engine.hardware.put(&format!("{gpu}/available_frequencies"),"100 200 300 400 500 600 700 800 900");
+    engine.preset(Mode::Aggressive).unwrap();
+    engine.hardware.put(&max,"500");engine.hardware.put(butter::hardware::GPU,"500");
+    assert!(engine.refresh_profile_caps(Mode::Aggressive,0).unwrap());engine.preset(Mode::Aggressive).unwrap();
+    assert_eq!(engine.hardware.read(&max).unwrap(),"500");
+    engine.hardware.put(&max,"900");
+    assert!(engine.refresh_profile_caps(Mode::Aggressive,0).unwrap());engine.preset(Mode::Aggressive).unwrap();
+    assert_eq!(engine.hardware.read(butter::hardware::GPU).unwrap(),"700");
+    engine.preset(Mode::Balanced).unwrap();assert_eq!(engine.hardware.read(&max).unwrap(),"900");
+}
+#[test]
+fn vendor_cpu_profile_uses_saved_request_not_a_temporary_effective_cap() {
+    use butter::presets::Mode;
+    let engine=vendor_fixture();
+    engine.hardware.put(butter::vendor::POWERHAL,"0 2200000 0 2200000 0 1600000");
+    engine.hardware.put(&format!("{CPU}/policy0/scaling_max_freq"),"1200000");
+    engine.preset(Mode::Aggressive).unwrap();
+    let requested=butter::vendor::parse(&engine.hardware.read(butter::vendor::POWERHAL).unwrap()).unwrap();
+    assert_eq!(requested[1],2200000);assert_eq!(requested[0],2200000);
+    engine.hardware.put(&format!("{CPU}/policy0/scaling_max_freq"),"1600000");
+    engine.preset(Mode::Aggressive).unwrap();
+    assert_eq!(butter::vendor::parse(&engine.hardware.read(butter::vendor::POWERHAL).unwrap()).unwrap(),requested);
 }

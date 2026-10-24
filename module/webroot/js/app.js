@@ -3,6 +3,7 @@ mountIcons();
 import {exec,binary,validPackage} from './bridge.js';
 import {$,notify,button,paragraph,setBusy,updateSelectors} from './ui.js';
 import {renderControls,advanced} from './controls.js';
+import './activity.js';
 import {renderHardware} from './hardware.js';
 let snapshot = null, busy = false, polling = false, hardwareSignature = '', selectedApp = null, apps = [], appsLoaded = false, loadingApps = false, appRulesSignature = '';
 const models = {bluejay:'Pixel 6a',panther:'Pixel 7',cheetah:'Pixel 7 Pro',lynx:'Pixel 7a',shiba:'Pixel 8',husky:'Pixel 8 Pro',akita:'Pixel 8a',tokay:'Pixel 9',caiman:'Pixel 9 Pro',komodo:'Pixel 9 Pro XL',tegu:'Pixel 9a'};
