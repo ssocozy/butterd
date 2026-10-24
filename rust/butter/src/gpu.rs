@@ -27,18 +27,6 @@ pub fn activity(hardware: &impl Hardware) -> Option<(f64,&'static str)> {
     hardware.read(GED_UTILIZATION).ok().and_then(|raw| parse_ged(&raw)).map(|value| (value,"MediaTek GED"))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::parse_ged;
-    #[test]
-    fn loading_is_the_first_counter_and_invalid_samples_stay_unknown() {
-        assert_eq!(parse_ged("37 2 61\n"),Some(37.0));
-        assert_eq!(parse_ged("0 0 100"),Some(0.0));
-        assert_eq!(parse_ged("100 0 0"),Some(100.0));
-        for raw in ["", "0 0 0", "37", "37%", "1 2", "1 2 3 4", "101 0 0", "1 101 0", "1 0 101", "-1 0 100", "NaN 0 100", "3.5 0 96", "1% 0 99"] { assert_eq!(parse_ged(raw),None,"{raw}"); }
-    }
-}
-
 pub const GED_FLOOR:&str="/sys/kernel/ged/hal/custom_boost_gpu_freq";
 pub const GED_COUNT:&str="/sys/kernel/ged/hal/total_gpu_freq_level_count";
 pub const GED_CURRENT:&str="/sys/kernel/ged/hal/current_freqency";
@@ -86,4 +74,17 @@ pub fn ged_current(raw:&str)->Option<(usize,u64)> {
     let fields:Vec<_>=raw.split_whitespace().collect();if fields.len()!=2{return None;}
     let index=fields[0].parse::<usize>().ok()?;let hz=fields[1].parse::<u64>().ok()?.checked_mul(1000)?;
     if index>255||!(1..=4000000000).contains(&hz){None}else{Some((index,hz))}
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::parse_ged;
+    #[test]
+    fn loading_is_the_first_counter_and_invalid_samples_stay_unknown() {
+        assert_eq!(parse_ged("37 2 61\n"),Some(37.0));
+        assert_eq!(parse_ged("0 0 100"),Some(0.0));
+        assert_eq!(parse_ged("100 0 0"),Some(100.0));
+        for raw in ["", "0 0 0", "37", "37%", "1 2", "1 2 3 4", "101 0 0", "1 101 0", "1 0 101", "-1 0 100", "NaN 0 100", "3.5 0 96", "1% 0 99"] { assert_eq!(parse_ged(raw),None,"{raw}"); }
+    }
 }
