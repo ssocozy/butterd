@@ -29,7 +29,7 @@ function render(state) {
   if (running && age > 30) { $('engine-state').textContent = 'Readings are stale'; $('engine-reason').textContent = 'The supervisor has not produced a recent sample. Export diagnostics.'; }
   $('preset-label').textContent = runtime.reason?.startsWith('Recording assist:') ? 'Recording assist' : runtime.active ? runtime.active[0].toUpperCase()+runtime.active.slice(1) : 'Balanced';
   const delivery=supervisor.notificationDelivery;
-  $('notification-status').textContent=delivery?.error ? 'Notification delivery needs attention: '+delivery.error : delivery?.accepted ? 'Android accepted the last notification. Delivery is controlled by Shell notification settings and Do Not Disturb.' : 'Send a test to check notification delivery on this ROM.';
+  $('notification-status').textContent=delivery?.error ? 'Notification delivery needs attention: '+delivery.error : delivery?.accepted ? 'Test sent. Check Android’s notification settings if it doesn’t appear.' : '';
   $('recording-assist').checked = config.recording_assist === true;
   $('automatic').checked = config.automatic === true; $('logging').checked = config.logcat === true; $('notifications').checked = config.notifications === true;
   $('watts').textContent = Number.isFinite(telemetry.batteryWatts) ? (telemetry.batteryWatts > 0 ? '+' : '')+telemetry.batteryWatts.toFixed(1) : '—';
@@ -42,7 +42,7 @@ function render(state) {
   for (const [name,value] of [['SoC temperature',telemetry.socTempC == null ? null : telemetry.socTempC.toFixed(1)+' °C'],['CPU activity',telemetry.cpuBusyPercent == null ? null : telemetry.cpuBusyPercent.toFixed(0)+'%'],['GPU activity',telemetry.gpuBusyPercent == null ? null : telemetry.gpuBusyPercent.toFixed(0)+'%'],['Charge cycles',telemetry.cycleCount],['Battery health',telemetry.healthPercent == null ? telemetry.health : telemetry.healthPercent.toFixed(0)+'% of design capacity']]) if (value != null) detailsRow(metrics,name,String(value));
   const recording=telemetry.recording;
   if (recording?.available) detailsRow(metrics,'Screen capture',recording.screenCapture ? 'Session active · '+recording.package : recording.active ? 'Other projection session' : 'No active session');
-  $('sensor-note').textContent = sampled ? 'Only readings exposed by your firmware are shown. Missing readings do not imply a sensor failure.' : running ? 'Monitoring is starting. Readings appear after the first sample.' : 'Sensor readings need the supervisor. Diagnostics remain accessible while it is stopped.';
+  $('sensor-note').textContent = sampled ? '' : running ? 'Waiting for readings…' : 'Start monitoring to see readings.';
   const signature = JSON.stringify([state.audio,state.supervisor?.runtime?.app_controls,state.supervisor?.config?.controls,state.supervisor?.runtime?.preference_errors,state.governors,state.cpuPolicies,state.gpuRange,state.touch,state.tcp,...Object.keys(advanced).map(key=>state[key])]);
   if (!busy && signature !== hardwareSignature && !$('choice-dialog')?.open) { renderControls(state,run,requestAdvanced); hardwareSignature = signature; }
   renderHardware(state);
@@ -146,7 +146,7 @@ function openApp(app) {
   const rates=snapshot?.supervisor?.runtime?.telemetry?.supportedHz || [];
   for (const hz of rates.filter(hz=>[60,90,120].includes(hz))) { const option=document.createElement('option'); option.value=String(hz); option.textContent=hz+' Hz'; rate.append(option); }
   $('app-touch').checked=rule?.high_touch === true; $('app-touch').disabled=!snapshot?.touch?.available && !rule?.high_touch;
-  $('app-touch-note').textContent=snapshot?.touch?.available ? 'Use high sampling while this app is active. Manual touch settings take priority.' : 'High sampling is not exposed by this driver.';
+  $('app-touch-note').textContent=snapshot?.touch?.available ? 'High sampling while this app is open.' : 'High sampling is not exposed by this driver.';
   $('app-charge').checked=rule?.charging_pause_at != null; $('app-charge').disabled=!snapshot?.['charging-pause']?.available && rule?.charging_pause_at == null;
   $('app-charge-options').hidden=!$('app-charge').checked;
   const level=$('app-charge-level'); const threshold=rule?.charging_pause_at || 80;

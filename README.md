@@ -1,108 +1,74 @@
 <div align="center">
-  <img src="module/webroot/butter.png" width="128" alt="Butterd">
+  <img src="module/webroot/butter.png" width="112" alt="Butterd">
   <h1>Butterd</h1>
-  <a href="https://github.com/ssocozy/butterd/releases"><img src="https://img.shields.io/github/downloads/ssocozy/butterd/total?style=flat-square&amp;color=181818&amp;label=downloads" alt="Total release downloads"></a>
   <p>Make your device optimized, one step at a time</p>
-  <p><a href="https://github.com/ssocozy/butterd/releases">Download</a> | <a href="https://github.com/ssocozy/butterd/issues">Issues</a></p>
+  <a href="https://github.com/ssocozy/butterd/releases"><img src="https://img.shields.io/github/downloads/ssocozy/butterd/total?style=flat-square&amp;color=181818&amp;label=downloads" alt="Downloads"></a>
+  <p><a href="https://github.com/ssocozy/butterd/releases">Download</a> · <a href="https://github.com/ssocozy/butterd/issues">Report an issue</a></p>
 </div>
 
-Powered by **butter**, a Rust optimization engine built for Duchamp’s Dimensity 8300 Ultra and Mali GPU.
+A KernelSU / Magisk module for **POCO X6 Pro / Redmi K70E (Duchamp)**, powered by the **butter** Rust engine. Requires Android 14+ and arm64.
 
-## Presets
+## Install
 
-| Preset | What it changes |
+1. Download **`butterd-VERSION.zip`** from [Releases](https://github.com/ssocozy/butterd/releases). Choose the module ZIP, not the sources archive.
+2. Install through your root manager and reboot.
+3. Open the module’s **WebUI**. Magisk requires a compatible WebUI host.
+
+Settings and app profiles survive reboot. Stable updates appear through the module updater.
+
+## Choose your preset
+
+| Preset | Behavior |
 | --- | --- |
-| **Balanced** | Releases the CPU/GPU limits applied by the preset and returns those limits to ROM control. Separate manual governor and frequency settings stay separate. |
-| **Performance** | Raises minimum CPU/GPU clocks to the middle of the available frequency steps (rounding upward), keeping the existing maximum limits. Clocks can still scale with demand. |
-| **Aggressive** | Starts CPU/GPU minimums at roughly three-quarters of supported steps, rounded upward. Gradually lowers its floors during heat, releases them at the cooling cutoff or idle, and respects ROM/kernel limits. Available globally and per app, with confirmation before saving. |
-| **Battery** | Keeps the original minimum clocks and lowers maximum clocks to about three-quarters through the available frequency steps. This can reduce responsiveness under heavier loads. |
+| **Balanced** | Lets the ROM manage CPU/GPU scaling. |
+| **Battery** | Lowers maximum clocks to reduce power use. |
+| **Performance** | Raises minimum clocks, then eases them during heat or idle. A good starting point for games. |
+| **Aggressive** | Starts with higher minimum clocks and gradually eases them as heat builds. Uses more power; higher clocks don’t guarantee smoother gameplay. |
 
-Aggressive can substantially increase heat and power use; external cooling may help but does not guarantee sustained clocks. It uses the same temperature bands and recovery hysteresis as Performance. Its floors step from three-quarters to one-half, then one-quarter of supported frequency steps before being released at the final cutoff. It does not disable ROM/kernel thermal limits or change their thresholds. Recording assist preserves Aggressive’s preset while applying the normal recording temperature policy.
+Performance starts near the middle of supported frequency steps; Aggressive starts around three-quarters. These are table positions, not percentages of GHz or performance. Both reduce requests in stages and release them at **42°C battery or 85°C SoC**, recovering after cooling. ROM/kernel limits always take priority.
 
-Frequency steps come from the running kernel and current limits. These positions are not percentages of GHz, performance or battery savings. GPU tuning requires a readable frequency table. Presets do not change CPU governors or disable thermal protections.
+In **Apps**, assign a preset, refresh rate, high touch sampling, or charging-pause threshold to individual apps. Their rules take priority over the overall preset while the app is open. Performance app profiles include a five-second launch boost.
 
-With automatic profiles enabled, the foreground app’s rule takes precedence over the overall preset. Entering an app assigned **Performance** requests a **5-second launch boost** with floors roughly two-thirds through the available steps, subject to the same heat and battery checks. Other apps use the overall preset. Scrolling and video playback are not detected separately yet.
+## What else is included?
 
-Butter reduces Performance and Aggressive CPU/GPU floors as either temperature rises: at **40°C battery / 75°C SoC**, Performance floors move to the lower third of supported steps; at **41°C / 80°C**, to the lower sixth. Launch boosting is cancelled in these bands. At **42°C / 85°C**, added floors are released and Balanced returns clock control to the ROM. A sudden temperature jump can skip intermediate steps. Lower recovery thresholds prevent repeated switching; after the final cutoff, performance waits for battery below **39°C** and sampled SoC below **75°C**. Maximum clocks and stock thermal protections stay unchanged.
+- **Monitoring:** battery power, temperatures, display Hz, CPU/GPU clocks, battery drain and estimated deep sleep.
+- **Running apps:** CPU/RAM readings and confirmed batch force-stop. Protected apps are hidden by default; nothing is killed automatically.
+- **Hardware controls:** supported CPU governors, clock ranges, TCP algorithms and high touch sampling.
+- **Charging pause:** pauses battery charging at your selected level. The battery may still supply power; this is not guaranteed physical battery bypass.
+- **Phone microphone:** prefer the built-in mic with Bluetooth earbuds. App routing and ROM support can affect results.
+- **Recording assist:** optional higher clock requests during detected screen capture. Detection can take 15 seconds. Its SoC cutoff is 90°C; battery limits stay unchanged.
+- **Advanced overrides:** optional, time-limited clock and thermal controls, with confirmation before enabling.
 
-**Battery keeps its lower CPU/GPU caps during cooling**, including when selected by an app rule or Android Battery Saver. Brief foreground-detection gaps also retain an overall Battery preset. Screen-off releases preset requests while preserving ROM clock changes; waking reapplies the saved preset using current limits. Stricter external clock caps are respected. Missing required temperature readings and control failures still release preset requests. Android Battery Saver or battery level of 20% or less selects Battery when required readings are available. Performance and Aggressive floors can also be released after three low-activity samples, but only when both CPU and GPU activity are readable.
+CPU/GPU requests, effective limits and current clocks are separate readings. Features depend on what your ROM and kernel expose. Battery history comes from Android; it isn’t an instantaneous per-app power measurement.
 
-App profiles can also request high touch sampling and pause battery charging at a selected level from 40–95%. These requests run only while that app is foreground and the screen is on; manual controls take priority. Charging resumes on unplug, app exit, screen off or a battery level at least three points below the selected threshold. App charging pause is governed by that foreground rule rather than the manual 30-minute timer; it leaves kernel thermal protections unchanged.
+## Pixel compatibility
 
-Per-app refresh rates are independent of CPU/GPU presets. Leaving an app releases its display request and restores its previous ROM refresh rule where a compatible service is available; the next app follows its own rule or the ROM defaults. A 60 Hz request remains eligible while CPU performance is paused for heat.
+Play Integrity Fix is intentionally included with **build, Play Store build and scoped property spoofing** enabled. Installation selects a Pixel 6a–9a profile automatically, with offline profiles available. Updates preserve your existing profile.
 
-## Controls
+Change the model in the WebUI. Applying it restarts the affected Google processes; Play Store may close briefly. Requires Zygisk or a compatible KernelSU Zygisk provider.
 
-- Balanced, Performance and Battery CPU/GPU presets, with one governor selector for all CPU clusters and advanced per-cluster controls.
-- Opt-in foreground app profiles, temporary launch boosts and per-app display preferences.
-- Battery, temperature, workload and screen-state monitoring, with explainable profile decisions.
-- TCP congestion-control selection from your kernel’s available algorithms.
-- Goodix 240/480 Hz touch modes and high sampling mode on supported firmware.
-- Optional, time-limited clock, GPU cooling and charging thermal-vote overrides.
-- Observable kernel battery bypass where supported. The stock-kernel charging pause coordinates a zero charge-current request with primary-charger pause; it does not establish physical battery isolation. Battery current remains visible for phone testing.
-- HTSR handover stops only XiaomiParts’ touch service while Butterd owns the request and restores its previous running state when released. It does not disable the package or persistently disable the component; an unexpected service restart is a conflict.
-- Phone-microphone capture preferences with Bluetooth earbuds on ROMs exposing the privileged routing API.
-- Local diagnostic reports, optional logcat events and app frame-duration samples.
-- Pixel 6a–9a compatibility profiles, fetched automatically during installation.
+This can complement a compatible [Fenrir](https://github.com/R0rt1z2/fenrir) setup, but Butterd does not install Fenrir, modify your bootloader, or supply keyboxes. **No Play Integrity verdict is guaranteed.**
 
-Configure controls in the module WebUI. Optional engine notifications show startup progress and applied preset changes using one Android system notification; transient boosts and repeated samples do not create alerts. Delivery depends on the ROM’s notification settings. Overview holds the overall presets; Apps lists installed launchable apps with searchable profiles; Settings holds hardware controls and diagnostics. Availability depends on your kernel and touch panel. Advanced thermal controls are opt-in and can increase heat and power use. Monitoring starts at boot. Applied presets and manual controls are saved and rechecked before resuming after reboot. Unsupported controls or conflicts remain visible instead of being forced. Temporary clock and thermal overrides keep their original expiration time; a reboot does not renew them. Saving an app profile enables automatic tuning; the Apps switch can pause it. Initial frequency-table presets still need device benchmarks.
-
-## How butter works
-
-butter is a device-aware Rust control engine for Duchamp. Its supervisor wakes on Android app-lifecycle, screen and battery events, then reads authoritative state before applying a rule. A bounded polling fallback covers missing ROM events and thermal checks. It follows the foreground app, screen state, battery saver, battery temperature and sampled CPU activity. App rules choose a preset; entering a configured Performance app automatically triggers a short launch boost, which expires without a permanent clock lock. When both CPU and GPU activity can be measured as idle, performance floors are released; heat takes priority over boosts.
-
-The engine discovers CPU policies and Mali frequency tables at runtime. On kernels exposing the verified six-value MediaTek PowerHAL ABI, CPU presets use that QoS request with bounded retries; other layouts use cpufreq. Thermal policy stays unchanged, and persistent conflicts still pause tuning. Performance raises moderate frequency floors; Battery lowers ceilings; Balanced returns profile limits to the ROM. It does not assume every kernel exposes the same nodes. Display requests combine advertised preferred modes, Android refresh bounds and recognised existing ROM refresh settings. Compatible ROM refresh-manager services are detected by their live interface and method signatures; butter temporarily updates the active app’s rule through the ROM API instead of replacing the full app list. ROMs without that service use the Android display path. Original values, including an unlimited peak, are restored when the app leaves; newer ROM changes are preserved.
-
-These are explicit policies, not machine learning. The frequency choices are conservative starting points, not proven efficiency sweet spots. Diagnostics provide readings and recent app-rendered frame durations so changes can be compared on the same workload. No FPS or battery-life improvement is claimed without device measurements.
-
-> [!IMPORTANT]
-> Automated source checks, unit tests and release-build checks run before publication. On-device validation is ongoing; passing CI does not establish stability on every ROM or kernel. Keep a known-working module ZIP and know how to disable modules through your root manager's recovery procedure.
+## Before you use it
 
 > [!WARNING]
-> Root controls can increase heat, power consumption and instability. Advanced overrides are off by default and expire automatically, but they cannot make unsupported hardware behavior safe. Avoid overlapping performance controllers. Use Butterd at your own risk; the project provides no warranty and accepts no responsibility for damage, data loss or boot failures caused by misuse or incompatible modifications. See [LICENSE](LICENSE).
+> Root tuning can increase heat, battery use and instability. Avoid overlapping tuning modules. Release Butterd’s controls before disabling it, then reboot. Keep a working module ZIP and know your root manager’s recovery procedure.
 
-## Installation
+> [!IMPORTANT]
+> Releases pass automated checks before publication; device testing is ongoing. Butterd cannot guarantee better FPS or battery life on every ROM. Use at your own risk; no warranty is provided. See [LICENSE](LICENSE).
 
-**Requirements:** Duchamp, Android 14+, arm64, and KernelSU or Magisk. Pixel compatibility requires Zygisk or a compatible KernelSU Zygisk provider.
+## Troubleshooting
 
-1. Download `butterd-VERSION.zip` (the `-sources.zip` archive is for source code) from [Releases](https://github.com/ssocozy/butterd/releases).
-2. Install it through your root manager and reboot.
-3. Open the WebUI to configure Butterd. Magisk users need a compatible WebUI host.
+Open **Settings → Diagnostics → Export diagnostics** after reproducing an issue. Reports include app names; review them before sharing.
 
-KernelSU and Magisk can check for stable updates through the module’s update feed, show the release changelog and download the matching installable ZIP. Install this updater-enabled version manually once; later production releases appear through your root manager. Updates still require installation and a reboot. Development builds are excluded from the stable feed.
+For optional logcat output, enable **Logcat events**, then run:
 
-Fresh installs randomly select a Pixel profile from 6a through 9a, with build, Play Store build and scoped property spoofing enabled. Change the model in the WebUI; applying it restarts only the Google integrity and Play Store target processes so no phone reboot is needed for profile changes. Updates preserve your complete existing PIF profile and settings. Reapplying a model in the WebUI explicitly replaces the identity with that bundled profile. Offline profiles include the model’s initial API and a matching published Pixel security patch. These identity properties are scoped to the target process; the Android SDK version is unchanged. A Play Integrity verdict is not guaranteed.
-
-Screen-capture session detection is read-only and appears in sensor details and diagnostics. It checks Android’s media-projection service every 15 seconds and on screen-state changes. An active session is not proof of encoded frames or a livestream; unsupported services report unknown. Recording detection alone does not change clocks. Enable **Settings → Recording assist** to request higher CPU/GPU floors during a recognised, recent screen-capture session. With Balanced, floors use the middle of advertised steps; with Performance, they use roughly two-thirds while cool. Warm conditions reduce these requests at 75°C and 80°C SoC. While assistance is enabled and an eligible recording is detected, the SoC release cutoff rises from 85°C to **90°C**, the ROM-reported critical threshold; this is an experimental opt-in, not a recommended operating target. Battery reduction and release limits stay unchanged. The 90°C cutoff releases assistance, with recovery still requiring battery below 39°C and SoC below 75°C. Stopped, stale or unsupported capture detection immediately restores the normal 85°C policy at the next sample. Stock thermal protections remain active. Saver, Android Battery Saver and low battery take priority. Stopping capture, stale or unsupported detection, or disabling the option removes recording assistance at the next check (normally within 15 seconds plus command time) and returns to the applicable preset. Maximum clocks remain unchanged. This is experimental: higher floors can add heat without improving recording; compare device logs and recording quality before leaving it enabled.
-
-## App activity and battery history
-
-**Apps → Running apps & activity** samples CPU for one second and shows resident RAM (RSS), foreground/background state and manual multi-select force-stop. 100% CPU means one core’s worth of work. RSS includes shared pages and cached memory is not proof of drain. Readings refresh every 15 seconds only while the panel is visible. Batch force-stop requires confirmation and is limited to 16 apps; system identities, shared UIDs, the foreground app, launcher, keyboard and device administrators are checked again before each operation. Calls, downloads and unsaved work may be interrupted. Results are shown per app; nothing is killed automatically.
-
-**Overview → Battery drain & sleep** reads Android’s statistics since last charge, including screen-on/off drain rates and elapsed-minus-awake sleep estimates. This is a historical window, not a Butter session or an instantaneous per-app power reading. Rates require at least 15 minutes in the relevant state. Sleep energy is not separately attributed, and charging/bypass sessions can affect fuel-gauge accuracy.
-
-Clock panels separate reported clocks, effective limits and preset requests. With the MediaTek `dummy` governor, GPU presets use the validated GED indexed-floor interface instead of treating the devfreq thermal path as a boost controller. The working OPP table must match the advertised table before any write. Requested floors can remain above the effective ROM/kernel ceiling; thermal and current-limit votes retain priority. Manual devfreq GPU ranges are not offered on this backend. CPU presets on the verified PowerHAL interface use the saved request range instead of turning temporary effective caps into their baseline. GPU planning preserves an observed reference ceiling, follows live ceiling changes, and does not rewrite an already-correct maximum. Thermal/current restrictions still win. The shared GPU interface does not reveal who owns every limit: Butter does not blindly raise an unknown ROM cap. Reboot after updating to clear old session requests.
-
-## Phone microphone with Bluetooth earbuds
-
-In **Settings → Miscellaneous**, connect Bluetooth earbuds and select **Prefer phone microphone**. Butter requests the built-in microphone for ordinary recording, camera recording and voice communication capture presets. This is a shared preference across apps using those presets; explicit app routing, phone calls and vendor audio policies can take precedence. Bluetooth output is not selected or rewritten by Butter.
-
-The preference is saved, resumes when earbuds are connected, and restores the previous capture preferences on disconnect or when disabled. It never records audio. The WebUI shows active input devices when Android reports them; saved preference readback alone is not proof that a call or game uses the phone mic. Unsupported APIs and permission errors are shown. Device testing is required separately for recording, games and calls.
-
-## Why Play Integrity Fix is included
-
-PIF is intentionally bundled alongside the performance engine for compatibility on rooted Duchamp setups. Its build, Play Store build and scoped property spoofing can complement an existing, compatible [Fenrir](https://github.com/R0rt1z2/fenrir) setup when seeking STRONG integrity.
-
-Fenrir operates in the device bootchain; it is not a PIF option or a standard ROM toggle. Butterd does not install it or patch your bootloader. Without an appropriate attestation setup, these three spoofing options alone do not provide STRONG integrity. A separate attestation solution, such as one using suitable RKP-backed keyboxes, may be needed. Butterd neither includes nor fetches keyboxes.
-
-STRONG integrity is not guaranteed by PIF, Fenrir or a keybox. The result depends on the device, ROM, attestation validity, security-update requirements and Google's checks. See [Google's verdict documentation](https://developer.android.com/google/play/integrity/verdicts).
-
-## Diagnostics
-
-Enable logcat output in the WebUI, reproduce the issue, then export the diagnostics report. The Overview page distinguishes a stopped supervisor from sensors that firmware does not expose. Reports remain available without acquiring the control-write lock and include retained startup errors. Engine messages use the `butter` tag. Reports include app package names and configuration; review them before sharing. Frame samples describe recent app-rendered durations, not game FPS.
+```sh
+adb logcat -d -v threadtime -s butter:I > butter-logcat.txt
+```
 
 ## Credits
 
-[Encore](https://github.com/Rem01Gaming/encore), [Duchamp Essential](https://github.com/Chandan977808/Duchamp-Essential), and [PlayIntegrityFix](https://github.com/KOWX712/PlayIntegrityFix).
+[Encore](https://github.com/Rem01Gaming/encore) · [Duchamp Essential](https://github.com/Chandan977808/Duchamp-Essential) · [PlayIntegrityFix](https://github.com/KOWX712/PlayIntegrityFix)
 
-[GPL-3.0](LICENSE) | [Third-party notices](THIRD_PARTY_NOTICES.txt)
+[GPL-3.0](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.txt)

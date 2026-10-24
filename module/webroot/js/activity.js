@@ -6,14 +6,16 @@ const paint=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationF
 function visible(){return section.open && !$('page-apps').hidden && !document.hidden;}
 function render(){
   list.replaceChildren();
-  for(const app of rows){
+  const shown=rows.filter(app=>app.canStop || $('show-protected').checked);
+  if(!shown.length){const empty=document.createElement('p');empty.className='caption';empty.textContent=rows.length?'No apps available to stop. Show protected apps for details.':'No running apps.';list.append(empty);}
+  for(const app of shown){
     const row=document.createElement('label');row.className='running-row';
     const box=document.createElement('input');box.type='checkbox';box.checked=selected.has(app.package);box.disabled=busy||!app.canStop;box.setAttribute('aria-label','Select '+app.label);
     box.addEventListener('change',()=>{if(box.checked){if(selected.size>=16){box.checked=false;notify('Select up to 16 apps at a time.',true);return;}selected.add(app.package);}else selected.delete(app.package);updateButton();});
     const copy=document.createElement('div'),name=document.createElement('strong'),state=document.createElement('p');name.textContent=app.label||app.package;state.className='caption';
-    state.textContent=(app.foreground?'Foreground':'Background / cached')+(app.canStop?'':' · '+(app.protectedReason||'Protected'));
+    state.textContent=app.canStop?'':(app.protectedReason||'Protected');state.hidden=app.canStop;
     const metrics=document.createElement('div');metrics.className='running-metrics';
-    const cpu=document.createElement('span'),ram=document.createElement('span');cpu.textContent=Number.isFinite(app.cpuPercent)?app.cpuPercent.toFixed(1)+'% CPU':'CPU not reported';ram.textContent=Number.isFinite(app.rssKb)?(app.rssKb/1024).toFixed(0)+' MiB RSS':'RAM not reported';metrics.append(cpu,ram);
+    const cpu=document.createElement('span'),ram=document.createElement('span');cpu.textContent=Number.isFinite(app.cpuPercent)?app.cpuPercent.toFixed(1)+'% CPU':'CPU not reported';ram.textContent=Number.isFinite(app.rssKb)?(app.rssKb/1024).toFixed(0)+' MiB RAM':'RAM not reported';metrics.append(cpu,ram);
     copy.append(name,state,metrics);row.append(box,copy);list.append(row);
   }
   updateButton();
@@ -21,7 +23,7 @@ function render(){
 function updateButton(){$('stop-apps').disabled=busy||selected.size===0;$('stop-apps').textContent=selected.size?'Force stop '+selected.size+' selected':'Force stop selected';}
 async function load(){
   if(busy)return;busy=true;$('refresh-running').disabled=true;updateButton();
-  $('running-status').textContent='Sampling CPU and reading resident memory…';
+  $('running-status').textContent='Updating…';
   render();
   await paint();
   try{
@@ -29,14 +31,15 @@ async function load(){
     if(!Array.isArray(result.apps))throw new Error('Running app list was not returned.');
     rows=result.apps.filter(app=>validPackage(app.package));
     selected=new Set([...selected].filter(pkg=>rows.some(app=>app.package===pkg&&app.canStop)));
-    $('running-status').textContent=rows.length+' apps · '+Number(result.sampleSeconds||1).toFixed(1)+'s CPU sample. 100% CPU ≈ one core. RSS includes shared pages.';
+    $('running-status').textContent=rows.filter(app=>app.canStop).length+' apps available to stop';
   }catch(error){$('running-status').textContent='App activity could not be read: '+error.message;}
   finally{busy=false;$('refresh-running').disabled=false;render();}
 }
 $('refresh-running').addEventListener('click',load);
+$('show-protected').addEventListener('change',render);
 section.addEventListener('toggle',()=>{if(visible()&&!rows.length)load();});
 window.addEventListener('hashchange',()=>{if(visible()&&!rows.length)load();});
-setInterval(()=>{if(visible()&&!$('stop-apps-dialog').open)load();},15000);
+setInterval(()=>{if(visible()&&!$('stop-apps-dialog').open&&!$('stop-results-dialog').open)load();},15000);
 $('stop-apps').addEventListener('click',()=>{
   if(busy||!selected.size)return;pending=rows.filter(app=>selected.has(app.package)&&app.canStop).slice(0,16);
   const names=$('stop-app-names');names.replaceChildren();
@@ -51,8 +54,10 @@ $('confirm-stop-apps').addEventListener('click',async()=>{
   try{
     const response=JSON.parse(await exec(binary+' activity stop --confirm '+packages.join(' ')));
     const results=$('stop-results');results.replaceChildren();
-    for(const result of response.results||[]){const item=document.createElement('p');item.className='caption';const app=rows.find(row=>row.package===result.package);item.textContent=(app?.label||result.package)+': '+result.result+(result.detail?' · '+result.detail:'');results.append(item);}
-    selected.clear();notify('Force-stop results are shown below the app list.');
+    for(const result of response.results||[]){const item=document.createElement('p');item.className='caption';const app=rows.find(row=>row.package===result.package);const outcome={stopped:'Stopped',skipped:'Skipped',failed:'Couldn’t stop'}[result.result]||'Unknown result';item.textContent=(app?.label||result.package)+' — '+outcome+(result.result!=='stopped'&&result.detail?' · '+result.detail:'');results.append(item);}
+    selected.clear();
+    if(!response.results?.length)results.textContent='No results returned.';
+    $('stop-results-dialog').showModal();
   }catch(error){notify('Could not finish force-stop: '+error.message,true);}
   finally{busy=false;$('refresh-running').disabled=false;await load();}
 });
@@ -73,10 +78,10 @@ async function loadBattery(){
   try{
     const data=JSON.parse(await exec(binary+' battery-usage')),host=$('battery-usage-details');host.replaceChildren();
     const hours=value=>Number.isFinite(value)?(value/3600).toFixed(1)+' h':null;
-    const rate=(value,unit)=>Number.isFinite(value)?value.toFixed(1)+' '+unit:'Collecting data (15 min minimum)';
+    const rate=(value,unit)=>Number.isFinite(value)?value.toFixed(1)+' '+unit:'Collecting · 15 min needed';
     const rows=[['Screen on',hours(data.screenOnSeconds)],['Screen-on drain',rate(data.screenOnMahPerHour,'mAh/h')],['Screen-on battery',rate(data.screenOnPercentPerHour,'%/h')],['Screen off / idle',hours(data.screenOffSeconds)],['Screen-off drain',rate(data.screenOffMahPerHour,'mAh/h')],['Screen-off battery',rate(data.screenOffPercentPerHour,'%/h')],['Awake on battery',hours(data.awakeSeconds)],['Sleep estimate',hours(data.sleepEstimateSeconds)],['Time in deep sleep (estimated)',Number.isFinite(data.sleepEstimatePercent)?data.sleepEstimatePercent.toFixed(1)+'%':null]];
     for(const [title,value] of rows){if(value==null)continue;const row=document.createElement('div'),name=document.createElement('dt'),reading=document.createElement('dd');name.textContent=title;reading.textContent=value;row.append(name,reading);host.append(row);}
-    $('battery-window').textContent='Since '+batteryStartLabel(data.start);$('battery-usage-note').textContent=data.note;batteryLoaded=true;
+    $('battery-window').textContent='Since '+batteryStartLabel(data.start);$('battery-usage-note').textContent='Estimated from Android’s battery history.';batteryLoaded=true;
   }catch(error){$('battery-usage-note').textContent='Battery history could not be read: '+error.message;}
   finally{batteryBusy=false;$('refresh-battery-usage').disabled=false;}
 }

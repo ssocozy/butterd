@@ -146,7 +146,7 @@ try {
   await until(`document.querySelector('#notifications').checked && document.body.getAttribute('aria-busy')==='false'`);
   assert.equal(await evaluate(`__butterCommands.some(command=>command.endsWith(' notifications on'))`),true);
   await evaluate(`document.querySelector('#test-notification').click()`);
-  await until(`document.querySelector('#notification-status').textContent.includes('Android accepted the last notification') && document.body.getAttribute('aria-busy')==='false'`);
+  await until(`document.querySelector('#notification-status').textContent.includes('Test sent.') && document.body.getAttribute('aria-busy')==='false'`);
   assert.equal(await evaluate(`__butterCommands.some(command=>command.endsWith(' notify-test'))`),true);
   assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('Prefer phone microphone')`),true);
   assert.equal(await evaluate(`document.querySelector('#audio-controls input[role=switch]').checked`),false);
@@ -173,16 +173,21 @@ try {
   assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('automatically when Bluetooth earbuds reconnect')`),true);
 
   await evaluate(`location.hash='apps';document.querySelector('#running-panel').open=true`);
+  await until(`document.querySelectorAll('.running-row').length===1`);
+  assert.equal(await evaluate(`document.querySelectorAll('.running-row input:disabled').length`),0);
+  await evaluate(`document.querySelector('#show-protected').click()`);
   await until(`document.querySelectorAll('.running-row').length===2`);
   assert.equal(await evaluate(`document.querySelectorAll('.running-row input:disabled').length`),1);
-  assert.equal(await evaluate(`document.querySelector('#running-list').textContent.includes('12.5% CPU') && document.querySelector('#running-list').textContent.includes('512 MiB RSS')`),true);
+  await evaluate(`document.querySelector('#show-protected').click()`);
+  assert.equal(await evaluate(`document.querySelectorAll('.running-row').length`),1);
+  assert.equal(await evaluate(`document.querySelector('#running-list').textContent.includes('12.5% CPU') && document.querySelector('#running-list').textContent.includes('512 MiB RAM')`),true);
   await evaluate(`document.querySelector('.running-row input:not(:disabled)').click();document.querySelector('#stop-apps').click()`);
   await until(`document.querySelector('#stop-apps-dialog').open`);
   assert.equal(await evaluate(`__butterCommands.some(command=>command.includes(' activity stop '))`),false);
   await evaluate(`document.querySelector('#confirm-stop-apps').click()`);
-  await until(`document.querySelector('#stop-results').textContent.includes('stopped')`);
+  await until(`document.querySelector('#stop-results-dialog').open && document.querySelector('#stop-results').textContent.includes('Stopped')`);
   assert.equal(await evaluate(`__butterCommands.some(command=>command.endsWith(' activity stop --confirm com.example.game'))`),true);
-  await evaluate(`document.querySelector('#running-panel').open=false;location.hash='overview';document.querySelector('#battery-usage-panel').open=true`);
+  await evaluate(`document.querySelector('#stop-results-dialog [data-close]').click();document.querySelector('#running-panel').open=false;location.hash='overview';document.querySelector('#battery-usage-panel').open=true`);
   await until(`document.querySelector('#battery-usage-details').textContent.includes('500.0 mAh/h')`);
   assert.equal(await evaluate(`document.querySelector('#battery-window').textContent===('Since '+new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(2026,9,24,3,34,18)))`),true);
   await evaluate(`location.hash='settings'`);
