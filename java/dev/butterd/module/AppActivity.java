@@ -38,7 +38,7 @@ public final class AppActivity {
         if(end<0)throw new IllegalArgumentException("Invalid process stat");
         String[] fields=stat.substring(end+2).trim().split("\\s+");
         long ticks=Long.parseLong(fields[11])+Long.parseLong(fields[12]);
-        return new long[]{ticks,Long.parseLong(fields[19])};
+        return new long[]{ticks,Long.parseLong(fields[19]),SystemClock.elapsedRealtime()};
     }
     private static long rss(int pid) throws Exception {
         for(String line:read("/proc/"+pid+"/status").split("\\n"))
@@ -101,7 +101,7 @@ public final class AppActivity {
             try{
                 long[] old=before.get(process.pid),current=sample(process.pid);
                 if(current[1]!=old[1]||current[0]<old[0])continue;
-                row.put("cpuPercent",row.getDouble("cpuPercent")+(current[0]-old[0])*100.0/(hz*seconds));
+                row.put("cpuPercent",row.getDouble("cpuPercent")+(current[0]-old[0])*100.0/(hz*Math.max(0.001,(current[2]-old[2])/1000.0)));
                 row.put("rssKb",row.getLong("rssKb")+rss(process.pid));
                 row.put("processes",row.getInt("processes")+1);
                 row.put("foreground",row.getBoolean("foreground")||process.importance<=ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND);

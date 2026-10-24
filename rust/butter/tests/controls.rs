@@ -916,3 +916,16 @@ fn vendor_cpu_profile_uses_saved_request_not_a_temporary_effective_cap() {
     engine.preset(Mode::Aggressive).unwrap();
     assert_eq!(butter::vendor::parse(&engine.hardware.read(butter::vendor::POWERHAL).unwrap()).unwrap(),requested);
 }
+
+#[test]
+fn saver_performance_and_aggressive_round_trips_release_previous_ceiling() {
+    use butter::presets::Mode;
+    let engine=fixture();let gpu=butter::hardware::GPU.trim_end_matches("/min_freq");let max=format!("{gpu}/max_freq");
+    engine.hardware.put(butter::hardware::GPU,"100");engine.hardware.put(&max,"900");
+    engine.hardware.put(&format!("{gpu}/available_frequencies"),"100 200 300 400 500 600 700 800 900");
+    for (mode,floor,ceiling) in [(Mode::Battery,"100","700"),(Mode::Aggressive,"700","900"),(Mode::Battery,"100","700"),(Mode::Performance,"500","900"),(Mode::Battery,"100","700"),(Mode::Boost,"700","900"),(Mode::Aggressive,"700","900")] {
+        engine.preset(mode).unwrap();
+        assert_eq!(engine.hardware.read(butter::hardware::GPU).unwrap(),floor);
+        assert_eq!(engine.hardware.read(&max).unwrap(),ceiling);
+    }
+}
