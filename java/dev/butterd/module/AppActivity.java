@@ -8,7 +8,6 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.provider.Settings;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -51,7 +50,29 @@ public final class AppActivity {
         if(packages!=1)return "Shared app identity";
         return null;
     }
-    private static String protectedReason(Context ctx,PackageManager pm,ActivityManager am,String pkg,int user) throws Exception {
+    static String keyboardValue(String raw) {
+        String value=raw.trim();
+        if(value.equals("null"))return value;
+        int slash=value.indexOf('/');
+        if(slash<=0 || !validPackage(value.substring(0,slash)) || !value.substring(slash+1).matches("[A-Za-z0-9_.$]+"))throw new IllegalArgumentException("Unsupported keyboard setting response");
+        return value;
+    }
+    private static String keyboard(int user) throws Exception {
+        Process child=new ProcessBuilder("/system/bin/settings","--user",Integer.toString(user),"get","secure","default_input_method").redirectErrorStream(true).start();
+        try {
+            if(!child.waitFor(3,TimeUnit.SECONDS))throw new IllegalStateException("Keyboard query timed out");
+            if(child.exitValue()!=0)throw new IllegalStateException("Android rejected keyboard query");
+            java.io.ByteArrayOutputStream output=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[256];int count;
+            try(java.io.InputStream stream=child.getInputStream()){
+                while((count=stream.read(buffer))!=-1){if(output.size()+count>1024)throw new IllegalStateException("Keyboard response too large");output.write(buffer,0,count);}
+            }
+            return keyboardValue(new String(output.toByteArray(),StandardCharsets.UTF_8));
+        } finally {
+            child.destroyForcibly();
+        }
+    }
+
+    private static String protectedReason(Context ctx,PackageManager pm,ActivityManager am,String pkg,int user,String ime) throws Exception {
         String stage="package identity";
         try {
         if(!validPackage(pkg))return "Invalid package";
@@ -60,8 +81,8 @@ public final class AppActivity {
         String identity=identityProtection(info.uid,user,info.flags,shared==null?0:shared.length);
         if(identity!=null)return identity;
         stage="keyboard preference";
-        String ime=Settings.Secure.getString(ctx.getContentResolver(),Settings.Secure.DEFAULT_INPUT_METHOD);
-        if(ime!=null && ime.startsWith(pkg+"/"))return "Current keyboard";
+        if(ime==null)throw new IllegalStateException("Keyboard setting unavailable");
+        if(ime.startsWith(pkg+"/"))return "Current keyboard";
         stage="launcher identity";
         Intent home=new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
         android.content.pm.ResolveInfo launcher=pm.resolveActivity(home,PackageManager.MATCH_DEFAULT_ONLY);
@@ -73,7 +94,8 @@ public final class AppActivity {
         if(policy!=null && policy.getActiveAdmins()!=null)for(android.content.ComponentName admin:policy.getActiveAdmins())if(pkg.equals(admin.getPackageName()))return "Device administrator";
         stage="foreground app protection";
         List<ActivityManager.RunningAppProcessInfo> processes=am.getRunningAppProcesses();
-        if(processes!=null)for(ActivityManager.RunningAppProcessInfo process:processes)
+        if(processes==null)throw new IllegalStateException("Foreground process state unavailable");
+        for(ActivityManager.RunningAppProcessInfo process:processes)
             if(process.uid==info.uid && process.importance<=ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND)return "Foreground app";
         return null;
         } catch(Exception error) {
@@ -84,6 +106,7 @@ public final class AppActivity {
     private static JSONObject snapshot(Context ctx,PackageManager pm,ActivityManager am,int user) throws Exception {
         List<ActivityManager.RunningAppProcessInfo> processes=am.getRunningAppProcesses();
         if(processes==null)throw new IllegalStateException("Running app information unavailable");
+        String ime=null,keyboardError=null;try{ime=keyboard(user);}catch(Exception error){keyboardError=error.toString();}
         Map<Integer,long[]> before=new HashMap<>();
         long start=SystemClock.elapsedRealtime();
         for(ActivityManager.RunningAppProcessInfo process:processes)if(process.uid/100000==user && process.uid%100000>=10000)
@@ -105,7 +128,7 @@ public final class AppActivity {
                 CharSequence label=info.loadLabel(pm);String name=label==null?pkg:label.toString();
                 row=new JSONObject().put("package",pkg).put("label",name.substring(0,Math.min(120,name.length())))
                     .put("rssKb",0).put("cpuPercent",0.0).put("processes",0).put("foreground",false);
-                String reason;try{reason=protectedReason(ctx,pm,am,pkg,user);}catch(Exception unavailable){reason="Protection status unavailable";row.put("protectionError",unavailable.getMessage());}
+                String reason;try{reason=protectedReason(ctx,pm,am,pkg,user,ime);}catch(Exception unavailable){reason="Protection status unavailable";row.put("protectionError",unavailable.getMessage());}
                 row.put("canStop",reason==null).put("protectedReason",reason==null?JSONObject.NULL:reason);
                 rows.put(pkg,row);
             }
@@ -123,7 +146,7 @@ public final class AppActivity {
         });
         JSONArray apps=new JSONArray();for(JSONObject row:ordered)if(row.getInt("processes")>0)apps.put(row);
         return new JSONObject().put("apps",apps).put("user",user).put("sampleSeconds",seconds).put("sampledAtUptime",SystemClock.elapsedRealtime()/1000)
-            .put("note","CPU: 100% is one core. RSS includes shared pages. Cached memory is not proof of battery drain.");
+            .put("keyboardError",keyboardError==null?JSONObject.NULL:keyboardError).put("note","CPU: 100% is one core. RSS includes shared pages. Cached memory is not proof of battery drain.");
     }
     public static void main(String[] args) throws Exception {
         if(android.os.Process.myUid()!=0)throw new SecurityException("Root required");
@@ -142,7 +165,7 @@ public final class AppActivity {
                 String pkg=args[i];if(!seen.add(pkg))continue;
                 JSONObject result=new JSONObject().put("package",pkg);
                 try{
-                    String reason=protectedReason(ctx,pm,am,pkg,user);
+                    String reason=protectedReason(ctx,pm,am,pkg,user,keyboard(user));
                     if(reason!=null)result.put("result","skipped").put("detail",reason);
                     else{
                         Process child=new ProcessBuilder("/system/bin/am","force-stop","--user",Integer.toString(user),pkg).redirectErrorStream(true).start();
@@ -150,7 +173,7 @@ public final class AppActivity {
                         else if(child.exitValue()!=0)result.put("result","failed").put("detail","Android rejected force-stop");
                         else result.put("result","stopped").put("detail","Android accepted force-stop; apps may restart later");
                     }
-                }catch(Exception error){result.put("result","failed").put("detail",error.getClass().getSimpleName());}
+                }catch(Exception error){result.put("result","failed").put("detail",error.getMessage()==null?error.getClass().getSimpleName():error.getMessage());}
                 results.put(result);
             }
             System.out.println(new JSONObject().put("results",results).put("user",user));
