@@ -93,6 +93,7 @@ export function renderControls(state, run, requestAdvanced) {
   for (const policy of state.cpuPolicies || []) {
     if (!/^policy[0-9]{1,3}$/.test(policy.id)) continue;
     const host = document.createElement('div'); host.className = 'control'; const title = document.createElement('h3'); const cluster = names.get(policy.id); title.textContent = cluster.name; host.append(title,paragraph(cluster.cores+' '+(cluster.cores === 1 ? 'core' : 'cores')+' · supported up to '+formatClock(cluster.peak),'cluster-meta'),paragraph('Effective limits: '+formatClock(policy.min)+' – '+formatClock(policy.max),'caption'));
+    if (Number(policy.requestedMin)>Number(policy.max) && Number(policy.max)>0) host.append(paragraph('Requested floor is above the effective ceiling; a ROM/kernel limit takes priority.','caption'));
     if (validNumber(policy.current)) host.append(paragraph('Current clock: '+formatClock(policy.current),'caption'));
     if (validNumber(policy.requestedMin) && validNumber(policy.requestedMax)) host.append(paragraph('Preset request: '+formatClock(policy.requestedMin)+' – '+formatClock(policy.requestedMax),'preset-request'));
     const allowed = ['schedutil','ondemand','conservative','powersave','interactive']; const choices = [...new Set([policy.governor,...(policy.choices || [])])].filter(v => /^[a-z][a-z0-9_]{0,31}$/.test(v));
@@ -102,11 +103,15 @@ export function renderControls(state, run, requestAdvanced) {
   }
   if (!policies.length) cpu.append(paragraph('CPU controls could not be discovered. Export diagnostics for the exact failure.'));
   const gpu = $('gpu-controls'); gpu.replaceChildren(); const gpuRange = state.gpuRange || {};
+  if (gpuRange.backend) gpu.append(paragraph('Controller: '+gpuRange.backend,'caption'));
   if (validNumber(gpuRange.current)) gpu.append(paragraph('Current clock: '+formatClock(gpuRange.current,true),'caption'));
-  if (validNumber(gpuRange.referenceMax)) gpu.append(paragraph('Observed reference ceiling: '+formatClock(gpuRange.referenceMax,true),'caption'));
+  if (validNumber(gpuRange.referenceMax)) gpu.append(paragraph('Reference ceiling: '+formatClock(gpuRange.referenceMax,true),'caption'));
+  if (!validNumber(gpuRange.min) && validNumber(gpuRange.max)) gpu.append(paragraph('Effective ceiling: '+formatClock(gpuRange.max,true),'caption'));
   if (validNumber(gpuRange.min) && validNumber(gpuRange.max)) gpu.append(paragraph('Effective limits: '+formatClock(gpuRange.min,true)+' – '+formatClock(gpuRange.max,true),'caption'));
+  if (validNumber(gpuRange.requestedMin) && !validNumber(gpuRange.requestedMax)) gpu.append(paragraph('Preset minimum request: '+formatClock(gpuRange.requestedMin,true),'preset-request'));
   if (validNumber(gpuRange.requestedMin) && validNumber(gpuRange.requestedMax)) gpu.append(paragraph('Preset request: '+formatClock(gpuRange.requestedMin,true)+' – '+formatClock(gpuRange.requestedMax,true),'preset-request'));
-  range(gpu,'gpu',gpuRange,run);
+  if (gpuRange.manualRanges===false) gpu.append(paragraph('GPU presets use the MediaTek floor controller. ROM/kernel limits still take priority; manual devfreq ranges are not offered.','caption'));
+  else range(gpu,'gpu',gpuRange,run);
   const touch = state.touch || {}, touchActions = $('touch-controls'); touchActions.replaceChildren();
   const savedTouch=state.supervisor?.config?.controls?.touch;
   let touchSummary=touch.available ? (touch.state === 'Request active' ? 'High sampling active.' : 'Use the driver’s high sampling mode.') : 'High touch sampling is not exposed by this driver.';

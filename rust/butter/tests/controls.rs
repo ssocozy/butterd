@@ -929,3 +929,40 @@ fn saver_performance_and_aggressive_round_trips_release_previous_ceiling() {
         assert_eq!(engine.hardware.read(&max).unwrap(),ceiling);
     }
 }
+
+fn ged_fixture() -> Engine<FakeHardware,MemoryStore> {
+    let engine=fixture();let gpu=butter::hardware::GPU.trim_end_matches("/min_freq");
+    engine.hardware.put(butter::hardware::GPU,"100000000");
+    engine.hardware.put(&format!("{gpu}/max_freq"),"500000000");
+    engine.hardware.put(&format!("{gpu}/governor"),"dummy");
+    engine.hardware.put(&format!("{gpu}/available_frequencies"),"900000000 700000000 500000000 300000000 100000000");
+    engine.hardware.put(butter::gpu::GED_COUNT,"5");engine.hardware.put(butter::gpu::GED_FLOOR,"4");engine.hardware.put(butter::gpu::GED_CURRENT,"4 100000");
+    engine.hardware.put(butter::gpu::OPP_TABLE,"[00] freq: 900000, volt: 1\n[01] freq: 700000, volt: 1\n[02] freq: 500000, volt: 1\n[03] freq: 300000, volt: 1\n[04] freq: 100000, volt: 1\n");
+    engine
+}
+#[test]
+fn dummy_governor_profiles_use_ged_floor_without_replacing_thermal_ceiling() {
+    use butter::presets::Mode;
+    let engine=ged_fixture();let max=butter::hardware::GPU.replace("min_freq","max_freq");
+    engine.preset(Mode::Aggressive).unwrap();
+    assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"1");
+    assert_eq!(engine.hardware.read(&max).unwrap(),"500000000");
+    let status=engine.status();assert_eq!(status["gpuRange"]["backend"],"MediaTek GED");
+    assert_eq!(status["gpuRange"]["requestedMin"],"700000000");
+    assert!(status["gpuRange"]["requestedMax"].is_null());
+    assert!(status["gpuRange"]["min"].is_null());
+    assert!(!engine.session(&Feature::Profile).unwrap().unwrap().entries.iter().any(|entry|entry.path==max));
+    engine.preset(Mode::Battery).unwrap();assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"4");
+    engine.preset(Mode::Aggressive).unwrap();assert_eq!(engine.hardware.read(&max).unwrap(),"500000000");
+    engine.preset(Mode::Balanced).unwrap();assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"4");
+}
+#[test]
+fn mismatched_gpu_index_tables_fail_before_any_writes_and_manual_ranges_are_rejected() {
+    let engine=ged_fixture();
+    assert!(engine.apply(Feature::GpuRange,"100000000:500000000",false,false).is_err());
+    engine.hardware.put(butter::gpu::GED_COUNT,"6");
+    assert!(engine.preset(butter::presets::Mode::Aggressive).is_err());
+    assert_eq!(engine.hardware.writes.get(),0);
+    assert!(butter::hardware::validate_path_value(&Feature::Profile,butter::gpu::GED_FLOOR,"256").is_err());
+    assert!(butter::hardware::validate_path_value(&Feature::GpuThermal,butter::gpu::GED_FLOOR,"0").is_err());
+}

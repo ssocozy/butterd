@@ -20,6 +20,7 @@ pub fn clocks(table: &str, min: u64, max: u64) -> Result<Vec<u64>> {
     Ok(values)
 }
 pub fn range(hardware: &impl Hardware, base: &str, cpu: bool, setting: &str) -> Result<Vec<(String, String)>> {
+    if !cpu && crate::gpu::dummy(hardware) { return Err("This MediaTek GPU uses GED floor requests; use a preset instead of manual devfreq ranges".into()); }
     let (low, high) = setting.split_once(':').ok_or("Use MIN:MAX in the kernel's native units")?;
     let low = number(low)?; let high = number(high)?;
     let prefix = if cpu { "scaling_" } else { "" };
@@ -51,6 +52,12 @@ pub fn plan_cooled(hardware: &impl Hardware, mode: Mode, baseline: Option<&Journ
             .or_else(||crate::vendor::read(hardware).ok().and_then(|value|crate::vendor::parse(&value).ok()))
     } else { None };
     for (base, cpu) in bases {
+        if !cpu && crate::gpu::dummy(hardware) {
+            let table=crate::gpu::ged_table(hardware)?;
+            let index=crate::gpu::floor_index(mode,stage,table.len())?;
+            targets.push((crate::gpu::GED_FLOOR.into(),index.to_string()));
+            if mode!=Mode::Battery {continue;}
+        }
         let prefix = if cpu { "scaling_" } else { "" };
         let min_path = format!("{base}/{prefix}min_freq"); let max_path = format!("{base}/{prefix}max_freq");
         let mut minimum = number(&original(&min_path)?)?; let mut maximum = number(&original(&max_path)?)?;

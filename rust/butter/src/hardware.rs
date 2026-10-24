@@ -84,7 +84,7 @@ impl Hardware for SystemHardware {
         if path == crate::touch::NODE { return crate::touch::read(); }
         if let Some(value) = crate::audio::read(path) { return value; }
         if let Some(value) = crate::display::read(path) { return value; }
-        Ok(read_bounded(Path::new(path), 4096)?.trim().to_string())
+        Ok(read_bounded(Path::new(path), if path==crate::gpu::OPP_TABLE {32768}else{4096})?.trim().to_string())
     }
     fn write(&self, path: &str, value: &str) -> Result<()> {
         if path == crate::touch::NODE { return crate::touch::write(value); }
@@ -145,7 +145,7 @@ pub fn allowed(hardware: &impl Hardware, feature: &Feature, path: &str) -> bool 
             .strip_prefix(&format!("{CPU}/"))
             .and_then(|v| v.strip_suffix("/scaling_min_freq"))
             .is_some_and(valid_policy),
-        Feature::GpuLock => path == GPU || path == GPU_ALT,
+        Feature::GpuLock => path == GPU || path == GPU_ALT || (path==crate::gpu::GED_FLOOR && crate::gpu::ged_table(hardware).is_ok()),
         Feature::ChargingThermal => path == CHARGE,
         Feature::GpuThermal => cooling(hardware).is_ok_and(|current| current == path),
         Feature::Touch => path == GOODIX || path == HTSR || path == crate::touch::NODE,
@@ -158,7 +158,7 @@ pub fn allowed(hardware: &impl Hardware, feature: &Feature, path: &str) -> bool 
         Feature::GpuRange => [GPU, GPU_ALT].iter().any(|node| path == *node || path == node.replace("min_freq", "max_freq")),
         Feature::Profile => {
             let cpu = path.strip_prefix(&format!("{CPU}/")).and_then(|tail| tail.split_once('/')).is_some_and(|(policy, field)| valid_policy(policy) && matches!(field, "scaling_min_freq" | "scaling_max_freq"));
-            cpu || path == crate::vendor::POWERHAL || allowed(hardware, &Feature::GpuRange, path)
+            cpu || path == crate::vendor::POWERHAL || (path==crate::gpu::GED_FLOOR && crate::gpu::ged_table(hardware).is_ok()) || allowed(hardware, &Feature::GpuRange, path)
         }
         Feature::Refresh(user) => crate::display::node(path).is_some_and(|(id, _, _)| id == *user),
         Feature::ChargingPause => path == PAUSE || path == FCC,
@@ -166,6 +166,10 @@ pub fn allowed(hardware: &impl Hardware, feature: &Feature, path: &str) -> bool 
     }
 }
 pub fn validate_path_value(feature: &Feature, path: &str, value: &str) -> Result<()> {
+    if path==crate::gpu::GED_FLOOR {
+        if !matches!(feature,Feature::Profile|Feature::GpuLock)||number(value)?>255 { return Err("Invalid MediaTek GPU floor request".into()); }
+        return Ok(());
+    }
     if path == crate::touch::NODE {
         if *feature != Feature::Touch { return Err("Touch handover belongs to touch control".into()); }
         crate::touch::normalize(value)?; return Ok(());
@@ -240,6 +244,9 @@ pub fn plan(
                 )?;
                 targets.push((format!("{base}/scaling_min_freq"), clock.to_string()));
             }
+        }
+        Feature::GpuLock if crate::gpu::dummy(hardware) => {
+            crate::gpu::ged_table(hardware)?;targets.push((crate::gpu::GED_FLOOR.into(),"0".into()));
         }
         Feature::GpuLock => {
             let path = if hardware.read(GPU).is_ok() {

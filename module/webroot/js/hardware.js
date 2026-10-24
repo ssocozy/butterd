@@ -24,8 +24,9 @@ export function renderHardware(state) {
   }
   const gpu=state.gpuRange || {},graphics=group(host,'Graphics');row(graphics,'GPU','Mali');
   row(graphics,'Current clock',Number(gpu.current)>0?formatClock(gpu.current,true):null);
-  if(Number(gpu.requestedMin)>0)row(graphics,'Preset request',formatClock(gpu.requestedMin,true)+' – '+formatClock(gpu.requestedMax,true));
+  if(Number(gpu.requestedMin)>0)row(graphics,'Preset request',formatClock(gpu.requestedMin,true)+(Number(gpu.requestedMax)>0?' – '+formatClock(gpu.requestedMax,true):' minimum'));
   if(Number(gpu.min)>0 && Number(gpu.max)>0)row(graphics,'Effective clock range',formatClock(gpu.min,true)+' – '+formatClock(gpu.max,true));
+  else if(Number(gpu.max)>0)row(graphics,'Effective ceiling',formatClock(gpu.max,true));
   else row(graphics,'Clock range','Provided when exposed by the driver');
   const touch=state.touch || {},input=group(host,'Touch');row(input,'Control',touch.available ? 'Supported' : 'Managed by device firmware');
   row(input,'Sampling rate',touch.driverHz ? touch.driverHz+' Hz' : 'Driver does not report an exact rate');

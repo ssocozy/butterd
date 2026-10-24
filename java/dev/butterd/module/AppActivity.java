@@ -52,23 +52,34 @@ public final class AppActivity {
         return null;
     }
     private static String protectedReason(Context ctx,PackageManager pm,ActivityManager am,String pkg,int user) throws Exception {
+        String stage="package identity";
+        try {
         if(!validPackage(pkg))return "Invalid package";
         ApplicationInfo info=pm.getApplicationInfo(pkg,0);
         String[] shared=pm.getPackagesForUid(info.uid);
         String identity=identityProtection(info.uid,user,info.flags,shared==null?0:shared.length);
         if(identity!=null)return identity;
+        stage="keyboard preference";
         String ime=Settings.Secure.getString(ctx.getContentResolver(),Settings.Secure.DEFAULT_INPUT_METHOD);
         if(ime!=null && ime.startsWith(pkg+"/"))return "Current keyboard";
+        stage="launcher identity";
         Intent home=new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
         android.content.pm.ResolveInfo launcher=pm.resolveActivity(home,PackageManager.MATCH_DEFAULT_ONLY);
         if(launcher!=null && launcher.activityInfo!=null && pkg.equals(launcher.activityInfo.packageName))return "Current launcher";
+        stage="device-owner policy";
         DevicePolicyManager policy=(DevicePolicyManager)ctx.getSystemService(Context.DEVICE_POLICY_SERVICE);
         if(policy!=null && (policy.isDeviceOwnerApp(pkg)||policy.isProfileOwnerApp(pkg)))return "Device management app";
+        stage="active administrator policy";
         if(policy!=null && policy.getActiveAdmins()!=null)for(android.content.ComponentName admin:policy.getActiveAdmins())if(pkg.equals(admin.getPackageName()))return "Device administrator";
+        stage="foreground app protection";
         List<ActivityManager.RunningAppProcessInfo> processes=am.getRunningAppProcesses();
         if(processes!=null)for(ActivityManager.RunningAppProcessInfo process:processes)
             if(process.uid==info.uid && process.importance<=ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND)return "Foreground app";
         return null;
+        } catch(Exception error) {
+            String detail=error.getMessage()==null?"":error.getMessage();
+            throw new IllegalStateException(stage+": "+error.getClass().getSimpleName()+": "+detail.substring(0,Math.min(384,detail.length())),error);
+        }
     }
     private static JSONObject snapshot(Context ctx,PackageManager pm,ActivityManager am,int user) throws Exception {
         List<ActivityManager.RunningAppProcessInfo> processes=am.getRunningAppProcesses();
@@ -94,7 +105,7 @@ public final class AppActivity {
                 CharSequence label=info.loadLabel(pm);String name=label==null?pkg:label.toString();
                 row=new JSONObject().put("package",pkg).put("label",name.substring(0,Math.min(120,name.length())))
                     .put("rssKb",0).put("cpuPercent",0.0).put("processes",0).put("foreground",false);
-                String reason;try{reason=protectedReason(ctx,pm,am,pkg,user);}catch(Exception unavailable){reason="Protection status unavailable";}
+                String reason;try{reason=protectedReason(ctx,pm,am,pkg,user);}catch(Exception unavailable){reason="Protection status unavailable";row.put("protectionError",unavailable.getMessage());}
                 row.put("canStop",reason==null).put("protectedReason",reason==null?JSONObject.NULL:reason);
                 rows.put(pkg,row);
             }

@@ -349,7 +349,13 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             [hardware::GPU,hardware::GPU_ALT].iter().any(|node|entry.path==node.replace("min_freq","max_freq"))
             && entry.expected!=entry.original && hardware::value(&self.hardware,&entry.path).is_ok_and(|actual|entry.owned(&actual))));
         if owned_gpu_ceiling { self.apply_targets(Feature::Profile,Vec::new(),true)?;baseline=None; }
-        let targets = crate::presets::plan_cooled(&self.hardware, mode, baseline.as_ref(), stage)?;
+        let mut targets = crate::presets::plan_cooled(&self.hardware, mode, baseline.as_ref(), stage)?;
+        if baseline.as_ref().is_some_and(|journal|journal.entries.len()!=targets.len() || journal.entries.iter().any(|entry|!targets.iter().any(|(path,_)|path==&entry.path))) {
+            // Changing GPU backend or moving between floor-only and Saver ceiling
+            // plans must release the old owned request before starting a new one.
+            self.apply_targets(Feature::Profile,Vec::new(),true)?;
+            targets=crate::presets::plan_cooled(&self.hardware,mode,None,stage)?;
+        }
         match self.apply_targets(Feature::Profile, targets, false) {
             Ok(message) => Ok(message),
             Err(error) => {
@@ -504,7 +510,10 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         );
         let gpu_path = if self.hardware.read(hardware::GPU).is_ok() { hardware::GPU } else { hardware::GPU_ALT };
         let gpu_base = gpu_path.trim_end_matches("/min_freq");
-        output.insert("gpuRange".into(), json!({"current":self.hardware.read(&format!("{gpu_base}/cur_freq")).unwrap_or_default(),"referenceMax":profile.as_ref().and_then(|journal|journal.observed_limits.get(&format!("{gpu_base}/max_freq"))).cloned(),"frequencies":self.hardware.read(&format!("{gpu_base}/available_frequencies")).unwrap_or_default(), "min":self.hardware.read(gpu_path).unwrap_or_default(), "max":self.hardware.read(&format!("{gpu_base}/max_freq")).unwrap_or_default(), "requestedMin":requested(gpu_path),"requestedMax":requested(&format!("{gpu_base}/max_freq")), "active":self.session(&Feature::GpuRange).ok().flatten().is_some()}));
+        let ged = if crate::gpu::dummy(&self.hardware) {crate::gpu::ged_table(&self.hardware).ok()}else{None};
+        let ged_request=requested(crate::gpu::GED_FLOOR).and_then(|index|index.parse::<usize>().ok()).and_then(|index|ged.as_ref()?.get(index).copied());
+        let ged_current=self.hardware.read(crate::gpu::GED_CURRENT).ok().and_then(|raw|crate::gpu::ged_current(&raw));
+        output.insert("gpuRange".into(), json!({"backend":if crate::gpu::dummy(&self.hardware){"MediaTek GED"}else{"devfreq"},"manualRanges":!crate::gpu::dummy(&self.hardware),"currentSource":if ged_current.is_some(){"MediaTek GED"}else{"devfreq"},"gedFloorIndex":self.hardware.read(crate::gpu::GED_FLOOR).ok(),"limitTable":self.hardware.read(crate::gpu::LIMIT_TABLE).ok(),"current":ged_current.map(|(_,hz)|hz.to_string()).unwrap_or_else(||self.hardware.read(&format!("{gpu_base}/cur_freq")).unwrap_or_default()),"referenceMax":ged.as_ref().and_then(|table|table.first()).map(ToString::to_string).or_else(||profile.as_ref().and_then(|journal|journal.observed_limits.get(&format!("{gpu_base}/max_freq"))).cloned()),"frequencies":self.hardware.read(&format!("{gpu_base}/available_frequencies")).unwrap_or_default(), "devfreqMin":self.hardware.read(gpu_path).ok(),"min":if ged.is_some(){None}else{self.hardware.read(gpu_path).ok()}, "max":self.hardware.read(&format!("{gpu_base}/max_freq")).unwrap_or_default(), "requestedMin":ged_request.map(|hz|hz.to_string()).or_else(||requested(gpu_path)),"requestedMax":requested(&format!("{gpu_base}/max_freq")), "active":self.session(&Feature::GpuRange).ok().flatten().is_some()}));
         output.insert("cpuPolicies".into(), json!(policies));
         output.insert(
             "engine".into(),

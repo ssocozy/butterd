@@ -71,7 +71,7 @@ try {
       else if(command.endsWith(' status'))stdout=JSON.stringify(state);
       else if(command.endsWith(' activity'))stdout=JSON.stringify({sampleSeconds:1,apps:[{package:'com.example.game',label:'Pocket Game',rssKb:524288,cpuPercent:12.5,foreground:false,canStop:true},{package:'com.android.systemui',label:'System UI',rssKb:262144,cpuPercent:2,foreground:true,canStop:false,protectedReason:'Protected system app'}]});
       else if(command.includes(' activity stop --confirm '))stdout=JSON.stringify({results:[{package:'com.example.game',result:'stopped',detail:'Android accepted force-stop'}]});
-      else if(command.endsWith(' battery-usage'))stdout=JSON.stringify({start:'2026-10-24-03:34',screenOnSeconds:6000,screenOffSeconds:18000,awakeSeconds:7200,sleepEstimateSeconds:16800,sleepEstimatePercent:70,screenOnMahPerHour:500,screenOffMahPerHour:26,screenOnPercentPerHour:13,screenOffPercentPerHour:0.7,note:'Historical estimates; sleep energy is not separately measured.'});
+      else if(command.endsWith(' battery-usage'))stdout=JSON.stringify({start:'2026-10-24-03-34-18',screenOnSeconds:6000,screenOffSeconds:18000,awakeSeconds:7200,sleepEstimateSeconds:16800,sleepEstimatePercent:70,screenOnMahPerHour:500,screenOffMahPerHour:26,screenOnPercentPerHour:13,screenOffPercentPerHour:0.7,note:'Historical estimates; sleep energy is not separately measured.'});
       else if(command.endsWith(' apps'))stdout=JSON.stringify({apps:[{package:'com.example.game',label:'Pocket Game',game:true},{package:'com.example.notes',label:'<img src=x onerror=alert(1)>',game:false}]});
       else if(command.includes('preset performance'))state.supervisor.runtime.active='performance';
       else if(command.includes(' app com.example.game '))state.supervisor.config.rules=[{package:'com.example.game',preset:'performance',hz:120,high_touch:true,charging_pause_at:80}];
@@ -184,7 +184,7 @@ try {
   assert.equal(await evaluate(`__butterCommands.some(command=>command.endsWith(' activity stop --confirm com.example.game'))`),true);
   await evaluate(`document.querySelector('#running-panel').open=false;location.hash='overview';document.querySelector('#battery-usage-panel').open=true`);
   await until(`document.querySelector('#battery-usage-details').textContent.includes('500.0 mAh/h')`);
-  assert.equal(await evaluate(`document.querySelector('#battery-window').textContent.includes('2026-10-24')`),true);
+  assert.equal(await evaluate(`document.querySelector('#battery-window').textContent===('Since '+new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(2026,9,24,3,34,18)))`),true);
   await evaluate(`location.hash='settings'`);
   for(const theme of ['light','dark']){
     await evaluate(`document.documentElement.dataset.theme='${theme}'`);

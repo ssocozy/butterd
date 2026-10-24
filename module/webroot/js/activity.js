@@ -57,6 +57,14 @@ $('confirm-stop-apps').addEventListener('click',async()=>{
   finally{busy=false;$('refresh-running').disabled=false;await load();}
 });
 
+function batteryStartLabel(value){
+  const match=typeof value==='string' && value.match(/^(\d{4})-(\d{2})-(\d{2})[ T-](\d{2})[:-](\d{2})(?:[:-](\d{2}))?$/);
+  if(!match)return 'Android’s last charge statistics reset';
+  const [,year,month,day,hour,minute,second='0']=match;
+  const date=new Date(Number(year),Number(month)-1,Number(day),Number(hour),Number(minute),Number(second));
+  if(date.getFullYear()!==Number(year)||date.getMonth()!==Number(month)-1||date.getDate()!==Number(day)||date.getHours()!==Number(hour)||date.getMinutes()!==Number(minute)||date.getSeconds()!==Number(second))return 'Android’s last charge statistics reset';
+  return new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'}).format(date);
+}
 let batteryBusy=false,batteryLoaded=false;
 async function loadBattery(){
   if(batteryBusy)return;batteryBusy=true;$('refresh-battery-usage').disabled=true;
@@ -66,9 +74,9 @@ async function loadBattery(){
     const data=JSON.parse(await exec(binary+' battery-usage')),host=$('battery-usage-details');host.replaceChildren();
     const hours=value=>Number.isFinite(value)?(value/3600).toFixed(1)+' h':null;
     const rate=(value,unit)=>Number.isFinite(value)?value.toFixed(1)+' '+unit:'Collecting data (15 min minimum)';
-    const rows=[['Screen on',hours(data.screenOnSeconds)],['Screen-on drain',rate(data.screenOnMahPerHour,'mAh/h')],['Screen-on battery',rate(data.screenOnPercentPerHour,'%/h')],['Screen off / idle',hours(data.screenOffSeconds)],['Screen-off drain',rate(data.screenOffMahPerHour,'mAh/h')],['Screen-off battery',rate(data.screenOffPercentPerHour,'%/h')],['Awake on battery',hours(data.awakeSeconds)],['Sleep estimate',hours(data.sleepEstimateSeconds)],['Sleep share',Number.isFinite(data.sleepEstimatePercent)?data.sleepEstimatePercent.toFixed(1)+'%':null]];
+    const rows=[['Screen on',hours(data.screenOnSeconds)],['Screen-on drain',rate(data.screenOnMahPerHour,'mAh/h')],['Screen-on battery',rate(data.screenOnPercentPerHour,'%/h')],['Screen off / idle',hours(data.screenOffSeconds)],['Screen-off drain',rate(data.screenOffMahPerHour,'mAh/h')],['Screen-off battery',rate(data.screenOffPercentPerHour,'%/h')],['Awake on battery',hours(data.awakeSeconds)],['Sleep estimate',hours(data.sleepEstimateSeconds)],['Time in deep sleep (estimated)',Number.isFinite(data.sleepEstimatePercent)?data.sleepEstimatePercent.toFixed(1)+'%':null]];
     for(const [title,value] of rows){if(value==null)continue;const row=document.createElement('div'),name=document.createElement('dt'),reading=document.createElement('dd');name.textContent=title;reading.textContent=value;row.append(name,reading);host.append(row);}
-    $('battery-window').textContent='Since '+(data.start||'Android’s last charge statistics reset');$('battery-usage-note').textContent=data.note;batteryLoaded=true;
+    $('battery-window').textContent='Since '+batteryStartLabel(data.start);$('battery-usage-note').textContent=data.note;batteryLoaded=true;
   }catch(error){$('battery-usage-note').textContent='Battery history could not be read: '+error.message;}
   finally{batteryBusy=false;$('refresh-battery-usage').disabled=false;}
 }

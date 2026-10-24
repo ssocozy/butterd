@@ -390,3 +390,18 @@ fn battery_history_reports_window_and_rates_without_faking_short_samples() {
     assert!(parse(&short).unwrap()["screenOffMahPerHour"].is_null());
     assert!(duration("-7h").is_none());assert!(parse("Permission Denial").is_err());
 }
+
+#[test]
+fn mediatek_gpu_floor_indices_use_descending_full_hardware_steps() {
+    use butter::gpu::{floor_index,opp_table,ged_current};
+    assert_eq!(floor_index(Mode::Aggressive,0,65).unwrap(),16);
+    assert_eq!(floor_index(Mode::Aggressive,2,65).unwrap(),16);
+    assert_eq!(floor_index(Mode::Performance,0,65).unwrap(),32);
+    assert_eq!(floor_index(Mode::Performance,1,65).unwrap(),43);
+    assert_eq!(floor_index(Mode::Performance,2,65).unwrap(),54);
+    assert_eq!(floor_index(Mode::Battery,0,65).unwrap(),64);
+    assert_eq!(ged_current("64 265000"),Some((64,265000000)));
+    assert!(ged_current("64 -1").is_none());
+    assert!(opp_table("[00] freq: 900000, volt: 1\n[02] freq: 100000, volt: 1","900000000 100000000",2).is_err());
+    assert!(opp_table("[00] freq: 100000, volt: 1\n[01] freq: 900000, volt: 1","900000000 100000000",2).is_err());
+}
