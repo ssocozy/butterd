@@ -268,6 +268,12 @@ impl<H: Hardware, S: Store> Engine<H, S> {
                     std::thread::sleep(std::time::Duration::from_millis(20));
                 }
             }
+            // devfreq reports the aggregate ceiling, not the user QoS vote. Restoring
+            // our old ceiling can succeed while a separate thermal vote stays lower.
+            if !verified && restoring && feature==Feature::Profile && path.ends_with("max_freq")
+                && observed.parse::<u64>().ok().zip(target.parse::<u64>().ok()).is_some_and(|(actual,wanted)|actual>0 && actual<=wanted) {
+                journal.entries[index].expected=observed.clone();verified=true;
+            }
             if !verified {
                 return Err(format!("Readback failed at {path}; requested {target}, observed {observed}; session retained for restoration").into());
             }
@@ -336,7 +342,13 @@ impl<H: Hardware, S: Store> Engine<H, S> {
     }
     pub fn preset_cooled(&self, mode: crate::presets::Mode, stage: u8) -> Result<String> {
         if mode == crate::presets::Mode::Balanced { return self.apply_targets(Feature::Profile, Vec::new(), true); }
-        let baseline = self.session(&Feature::Profile)?;
+        let mut baseline = self.session(&Feature::Profile)?;
+        // Saver is the only current profile that writes a GPU maximum. Release
+        // that owned request before moving to floor-only performance planning.
+        let owned_gpu_ceiling = mode!=crate::presets::Mode::Battery && baseline.as_ref().is_some_and(|journal|journal.entries.iter().any(|entry|
+            [hardware::GPU,hardware::GPU_ALT].iter().any(|node|entry.path==node.replace("min_freq","max_freq"))
+            && entry.expected!=entry.original && hardware::value(&self.hardware,&entry.path).is_ok_and(|actual|entry.owned(&actual))));
+        if owned_gpu_ceiling { self.apply_targets(Feature::Profile,Vec::new(),true)?;baseline=None; }
         let targets = crate::presets::plan_cooled(&self.hardware, mode, baseline.as_ref(), stage)?;
         match self.apply_targets(Feature::Profile, targets, false) {
             Ok(message) => Ok(message),
