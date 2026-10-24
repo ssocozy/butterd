@@ -107,7 +107,9 @@ public final class AppActivity {
                 row.put("foreground",row.getBoolean("foreground")||process.importance<=ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND);
             }catch(Exception ignored){ /* Exited or inaccessible process is not a zero-memory reading. */ }
         }
-        List<JSONObject> ordered=new ArrayList<>(rows.values());ordered.sort((a,b)->Double.compare(b.optDouble("cpuPercent"),a.optDouble("cpuPercent")));
+        List<JSONObject> ordered=new ArrayList<>(rows.values());ordered.sort(new java.util.Comparator<JSONObject>() {
+            @Override public int compare(JSONObject a,JSONObject b) { return Double.compare(b.optDouble("cpuPercent"),a.optDouble("cpuPercent")); }
+        });
         JSONArray apps=new JSONArray();for(JSONObject row:ordered)if(row.getInt("processes")>0)apps.put(row);
         return new JSONObject().put("apps",apps).put("user",user).put("sampleSeconds",seconds).put("sampledAtUptime",SystemClock.elapsedRealtime()/1000)
             .put("note","CPU: 100% is one core. RSS includes shared pages. Cached memory is not proof of battery drain.");
