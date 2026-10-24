@@ -868,7 +868,7 @@ fn stricter_external_caps_are_adopted_but_higher_caps_remain_conflicts() {
 }
 
 #[test]
-fn aggressive_cpu_gpu_floors_stay_at_three_quarters_through_cooling_bands() {
+fn aggressive_cpu_gpu_floors_reduce_and_recover_through_cooling_bands() {
     use butter::presets::Mode;
     let engine=fixture();let gpu=butter::hardware::GPU.trim_end_matches("/min_freq");
     for (base,prefix) in [(format!("{CPU}/policy0"),"scaling_"),(gpu.to_string(),"")] {
@@ -877,10 +877,10 @@ fn aggressive_cpu_gpu_floors_stay_at_three_quarters_through_cooling_bands() {
         let available=if prefix.is_empty(){"available_frequencies"}else{"scaling_available_frequencies"};
         engine.hardware.put(&format!("{base}/{available}"),"100 200 300 400 500 600 700 800 900");
     }
-    for stage in 0..=3 {
+    for (stage,floor) in [(0,"700"),(1,"500"),(2,"300"),(3,"100"),(2,"300"),(1,"500"),(0,"700")] {
         engine.preset_cooled(Mode::Aggressive,stage).unwrap();
-        assert_eq!(engine.hardware.read(&format!("{CPU}/policy0/scaling_min_freq")).unwrap(),"700");
-        assert_eq!(engine.hardware.read(butter::hardware::GPU).unwrap(),"700");
+        assert_eq!(engine.hardware.read(&format!("{CPU}/policy0/scaling_min_freq")).unwrap(),floor);
+        assert_eq!(engine.hardware.read(butter::hardware::GPU).unwrap(),floor);
         assert_eq!(engine.hardware.read(&format!("{gpu}/max_freq")).unwrap(),"900");
     }
     engine.preset(Mode::Balanced).unwrap();

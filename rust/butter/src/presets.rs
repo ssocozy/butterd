@@ -81,7 +81,11 @@ pub fn plan_cooled(hardware: &impl Hardware, mode: Mode, baseline: Option<&Journ
         let table = clocks(&table, minimum, maximum)?;
         // Conservative starting points, not benchmark-proven efficiency claims.
         let (low, high) = match mode {
-            Mode::Aggressive => (table[((table.len() - 1) * 3).div_ceil(4)], maximum),
+            Mode::Aggressive => {
+                let last=table.len()-1;
+                let index=match stage {0=>(last*3).div_ceil(4),1=>last/2,2=>last/4,_=>0};
+                (table[index],maximum)
+            },
             Mode::Battery => (minimum, table[(table.len() - 1) * 3 / 4]),
             Mode::Performance | Mode::Boost => {
                 let last = table.len() - 1;

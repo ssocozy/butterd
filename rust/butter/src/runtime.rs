@@ -122,7 +122,7 @@ pub fn acknowledged_args(args: &[String]) -> Result<&[String]> {
     };
     if aggressive {
         if args.last().is_none_or(|arg| arg != "--accept-risk") {
-            return Err("Aggressive holds high clock floors, increases heat and power use, and skips gradual reductions. ROM/kernel thermal protection stays active; Butter temperature cutoffs do not apply. Confirm with --accept-risk.".into());
+            return Err("Aggressive starts with high clock floors and increases heat and power use. Butter gradually reduces its requests during heat; ROM/kernel protection stays active. Confirm with --accept-risk.".into());
         }
         Ok(&args[..args.len()-1])
     } else { Ok(args) }
@@ -216,14 +216,7 @@ pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now:
     if context.awake.is_none() { state.leases.clear(); return (Mode::Balanced, "Screen off or display state unknown"); }
     let rule = context.app.as_ref().and_then(|app| config.rules.iter().find(|rule| &rule.package == app));
     let requested = state.pending_preset.unwrap_or(if config.automatic { rule.map_or(config.preset, |rule| rule.preset) } else { state.selected });
-    // Aggressive delegates temperature-based clock throttling to the ROM/kernel.
-    // Keep lifecycle, fault and battery-saver checks independent of thermal policy.
     let battery_saver = context.saver != Some(false) || context.battery.is_none_or(|level| level <= 20);
-    if requested == Mode::Aggressive && context.app.is_some() {
-        state.leases.clear(); state.pending_preset = None; state.thermal_stage = 0;
-        return if battery_saver { (Mode::Battery, "Battery saver or low battery") }
-            else { (Mode::Aggressive, if config.automatic && rule.is_some() { "Foreground app rule" } else { "Selected preset" }) };
-    }
     state.thermal_stage = cooling_stage_recording(state.thermal_stage, context, recording_eligible(config, state, context, now));
     if context.temperature.is_none() { state.leases.clear(); return (Mode::Balanced, "Cooling down"); }
     if state.thermal_stage == 3 {
@@ -244,13 +237,14 @@ pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now:
     }
     let idle = state.telemetry.get("cpuBusyPercent").and_then(Value::as_f64).is_some_and(|load| load < 15.0) && context.gpu_busy.is_some_and(|load| load < 15.0);
     state.idle_samples = if idle { state.idle_samples.saturating_add(1).min(3) } else { 0 };
+    if requested == Mode::Aggressive { state.leases.clear(); }
     if !state.leases.is_empty() { (Mode::Boost, "Temporary boost lease") }
-    else if config.recording_assist && requested != Mode::Battery && crate::recording::active(&state.telemetry["recording"], now) {
+    else if config.recording_assist && !matches!(requested, Mode::Battery | Mode::Aggressive) && crate::recording::active(&state.telemetry["recording"], now) {
         (if requested == Mode::Performance && state.thermal_stage == 0 { Mode::Boost } else { Mode::Performance },
          if state.thermal_stage > 0 { "Recording assist: reduced floors for heat" } else { "Recording assist: capture session active" })
     }
-    else if requested == Mode::Performance && state.idle_samples >= 3 { (Mode::Balanced, "Idle workload; frequency floors released") }
-    else if requested == Mode::Performance && state.thermal_stage > 0 { (requested, if state.thermal_stage == 1 { "Cooling: reduced performance floors" } else { "Cooling: minimal performance floors" }) }
+    else if matches!(requested, Mode::Performance | Mode::Aggressive) && state.idle_samples >= 3 { (Mode::Balanced, "Idle workload; frequency floors released") }
+    else if matches!(requested, Mode::Performance | Mode::Aggressive) && state.thermal_stage > 0 { (requested, if state.thermal_stage == 1 { "Cooling: reduced performance floors" } else { "Cooling: minimal performance floors" }) }
     else { (requested, if config.automatic && rule.is_some() { "Foreground app rule" } else { "Selected preset" }) }
 }
 fn context() -> Context {
@@ -494,8 +488,8 @@ pub fn daemon(boot: &str) -> Result<()> {
         }
         state.telemetry = sampled_telemetry;
         state.telemetry["recording"]["assistEnabled"] = json!(cfg.recording_assist);
-        state.telemetry["recording"]["socCutoffC"] = if state.active == Mode::Aggressive { Value::Null } else { json!(recording_soc_cutoff) };
-        state.telemetry["presetThermalPolicy"] = json!(if state.active == Mode::Aggressive { "ROM/kernel; Butter temperature cutoffs do not apply" } else { "Butter cooling bands and ROM/kernel protection" });
+        state.telemetry["recording"]["socCutoffC"] = json!(recording_soc_cutoff);
+        state.telemetry["presetThermalPolicy"] = json!("Butter cooling bands and ROM/kernel protection");
         state.telemetry["recording"]["assistActive"] = json!(state.reason.starts_with("Recording assist:"));
         state.telemetry["wakeSource"] = json!(wake_events.last_wake);
         state.telemetry["eventStreamRunning"] = json!(wake_events.available());

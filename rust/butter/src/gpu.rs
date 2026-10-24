@@ -64,7 +64,7 @@ pub fn floor_index(mode:crate::presets::Mode,stage:u8,count:usize)->crate::Resul
     if !(2..=256).contains(&count)||stage>3{return Err("Invalid GPU profile table or cooling stage".into());}
     let last=count-1;
     let ascending=match mode {
-        Mode::Aggressive=>(last*3).div_ceil(4),
+        Mode::Aggressive=>match stage {0=>(last*3).div_ceil(4),1=>last/2,2=>last/4,_=>0},
         Mode::Battery|Mode::Balanced=>0,
         Mode::Performance|Mode::Boost=>match stage {0 if mode==Mode::Boost=>(last*2).div_ceil(3),0=>count/2,1=>last/3,2=>last/6,_=>0},
     };
