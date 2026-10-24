@@ -2,6 +2,7 @@ import {exec,binary,validPackage} from './bridge.js';
 import {$,notify} from './ui.js';
 let rows=[],selected=new Set(),busy=false,pending=[];
 const section=$('running-panel'), list=$('running-list');
+const paint=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
 function visible(){return section.open && !$('page-apps').hidden && !document.hidden;}
 function render(){
   list.replaceChildren();
@@ -21,6 +22,8 @@ function updateButton(){$('stop-apps').disabled=busy||selected.size===0;$('stop-
 async function load(){
   if(busy)return;busy=true;$('refresh-running').disabled=true;updateButton();
   $('running-status').textContent='Sampling CPU and reading resident memory…';
+  render();
+  await paint();
   try{
     const result=JSON.parse(await exec(binary+' activity'));
     if(!Array.isArray(result.apps))throw new Error('Running app list was not returned.');
@@ -44,6 +47,7 @@ $('confirm-stop-apps').addEventListener('click',async()=>{
   if(busy||!pending.length)return;
   const packages=pending.map(app=>app.package).filter(validPackage);pending=[];$('stop-apps-dialog').close();
   busy=true;render();$('refresh-running').disabled=true;$('running-status').textContent='Stopping selected apps…';
+  await paint();
   try{
     const response=JSON.parse(await exec(binary+' activity stop --confirm '+packages.join(' ')));
     const results=$('stop-results');results.replaceChildren();
@@ -57,6 +61,7 @@ let batteryBusy=false,batteryLoaded=false;
 async function loadBattery(){
   if(batteryBusy)return;batteryBusy=true;$('refresh-battery-usage').disabled=true;
   $('battery-usage-note').textContent='Reading Android battery statistics…';
+  await paint();
   try{
     const data=JSON.parse(await exec(binary+' battery-usage')),host=$('battery-usage-details');host.replaceChildren();
     const hours=value=>Number.isFinite(value)?(value/3600).toFixed(1)+' h':null;
