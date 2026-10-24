@@ -8,6 +8,14 @@
 
 A KernelSU / Magisk module for **POCO X6 Pro / Redmi K70E (Duchamp)**, powered by the **butter** Rust engine. Requires Android 14+ and arm64.
 
+## Meet butter
+
+**butter is the Rust engine behind Butterd.** It follows the foreground app, screen state, workload and temperatures to apply your presets and app rules.
+
+It discovers your kernel’s CPU/GPU controls, raises clock floors for demanding profiles, eases requests as heat builds, and releases them during idle or screen off. Android events drive updates, with periodic checks when events are unavailable. ROM/kernel limits remain in control.
+
+Your settings resume after reboot. Diagnostics show what butter requested and what the hardware actually allows. It uses explicit rules, not machine learning.
+
 ## Install
 
 1. Download **`butterd-VERSION.zip`** from [Releases](https://github.com/ssocozy/butterd/releases). Choose the module ZIP, not the sources archive.
