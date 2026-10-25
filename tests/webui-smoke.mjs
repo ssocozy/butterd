@@ -195,7 +195,7 @@ try {
     await evaluate(`document.documentElement.dataset.theme='${theme}'`);
     assert.equal(await evaluate(`[...document.querySelectorAll('#page-settings>.control-switch')].every(row=>{const copy=row.querySelector('.control-copy').getBoundingClientRect(),rect=row.getBoundingClientRect(),toggle=row.querySelector('.switch').getBoundingClientRect();return copy.bottom+16<=rect.bottom && copy.right+15<=toggle.left;})`),true,'Setting dividers overlap copy in '+theme);
   }
-  assert.equal(await evaluate(`document.querySelector('#preferences-status').textContent.includes('remembered after reboot')`),true);
+  assert.equal(await evaluate(`document.querySelector('#preferences-status').textContent`),'Settings are saved after reboot.');
   assert.equal(await evaluate(`document.querySelector('#cpu-controls > details').open`),false);
   await evaluate(`document.querySelector('#cpu-controls > details').open=true`);
   assert.equal(await evaluate(`document.querySelector('[data-select=maximum-policy0]').textContent.includes('GHz')`),true);
