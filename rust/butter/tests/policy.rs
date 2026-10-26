@@ -224,7 +224,7 @@ fn screen_off_releases_preset_without_forgetting_saved_selection() {
     assert_eq!(decide(&cfg,&mut state,&ctx,100),(Mode::Balanced,"Screen off"));
     assert!(!state.blocked); assert_eq!(state.selected,Mode::Battery);
     state.reason="Screen off".into();
-    assert!(butter::notifications::message(&state).unwrap().starts_with("Idle"));
+    assert!(butter::notifications::message(&state).is_none());
     ctx.awake=Some(true);
     assert_eq!(decide(&cfg,&mut state,&ctx,101).0,Mode::Battery);
 }
