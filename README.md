@@ -45,7 +45,6 @@ In **Apps**, assign a preset, refresh rate, high touch sampling, or charging-pau
 - **Bypass charging:** pauses battery charging while plugged in. The battery may still supply power. Manual use expires after 30 minutes; kernel protections stay active.
 - **Phone microphone:** prefer the built-in mic with Bluetooth earbuds. App routing and ROM support can affect results.
 - **Recording assist:** optional higher clock requests during detected screen capture. Detection can take 15 seconds. Its SoC cutoff is 90°C; battery limits stay unchanged.
-- **Advanced overrides:** optional, time-limited clock and thermal controls, with confirmation before enabling.
 
 CPU/GPU requests, effective limits and current clocks are separate readings. Features depend on what your ROM and kernel expose. Battery history comes from Android; it isn’t an instantaneous per-app power measurement.
 

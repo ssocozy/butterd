@@ -1,10 +1,6 @@
 import {$,button,paragraph,actions,updateSelectors} from './ui.js';
 const validNumber = value => /^[0-9]{1,11}$/.test(String(value));
 export const advanced = {
-  'cpu-lock':['CPU clock lock','Requests each cluster’s highest advertised clock inside its current maximum. This can substantially increase battery use and heat. Expires after 60 seconds.'],
-  'gpu-lock':['GPU clock lock','Requests the highest advertised Mali clock inside the current maximum. This can substantially increase heat and battery use. Expires after 60 seconds.'],
-  'gpu-thermal':['GPU cooling override','Requests cooling state zero for the Mali cooling device. This does not disable every thermal safeguard. Expires after 60 seconds.'],
-  'charging-thermal':['Charging thermal override','Removes one exposed charging thermal vote. It does not bypass every charging safeguard or guarantee uncapped wattage. Expires after 30 minutes at most.'],
   'charging-pause':['Bypass charging','Pauses battery charging while plugged in. The battery may still supply power. Ends after 30 minutes or on unplug.']
 };
 export function formatClock(value, gpu = false) {

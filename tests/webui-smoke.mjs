@@ -167,6 +167,8 @@ try {
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('#advanced-controls > .control-switch')).every(row=>{const copy=row.querySelector('.control-copy').getBoundingClientRect(), control=row.querySelector('.switch').getBoundingClientRect();return copy.right+15<=control.left && row.querySelector('.caption')?.parentElement.classList.contains('control-copy');})`),true);
   assert.equal(await evaluate(`document.querySelector('#advanced-controls').textContent.includes('Stock-kernel charging pause') || document.querySelector('#advanced-controls').textContent.includes('Battery bypass')`),false);
   assert.equal(await evaluate(`document.querySelector('#advanced-controls').textContent.includes('Bypass charging')`),true);
+  assert.equal(await evaluate(`document.querySelectorAll('#advanced-controls > .control-switch').length`),1);
+  assert.equal(await evaluate(`['CPU clock lock','GPU clock lock','GPU cooling override','Charging thermal override'].some(label=>document.querySelector('#advanced-controls').textContent.includes(label))`),false);
   await evaluate(`document.querySelector('#advanced-controls').closest('details').open=false`);
   assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('Use previous preferences')`),false);
   await evaluate(`globalThis.__butterFixture.audio.bluetoothConnected=false;globalThis.__butterFixture.audio.active=false;document.querySelector('#refresh').click()`);
