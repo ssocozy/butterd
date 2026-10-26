@@ -419,3 +419,16 @@ fn aggressive_recording_keeps_selected_floors_and_idle_releases_them() {
     state.telemetry["cpuBusyPercent"]=serde_json::json!(60.0);
     assert_eq!(decide(&cfg,&mut state,&ctx,105).0,Mode::Aggressive);
 }
+
+#[test]
+fn charging_pause_and_bypass_ignore_butter_temperature_gates_only() {
+    use butter::{model::Feature,runtime::override_temperature_allowed};
+    let mut ctx=context();ctx.temperature=Some(455);ctx.soc_millic=Some(91000);
+    for starting in [true,false] {
+        for feature in [Feature::ChargingPause,Feature::Bypass] {assert!(override_temperature_allowed(&feature,&ctx,starting));}
+        for feature in [Feature::ChargingThermal,Feature::CpuLock,Feature::GpuLock,Feature::GpuThermal] {assert!(!override_temperature_allowed(&feature,&ctx,starting));}
+    }
+    ctx.temperature=None;ctx.soc_millic=None;
+    assert!(override_temperature_allowed(&Feature::ChargingPause,&ctx,true));
+    assert!(!override_temperature_allowed(&Feature::ChargingThermal,&ctx,true));
+}

@@ -331,13 +331,21 @@ fn refresh(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &mut Runt
     event(cfg,"display-request",&format!("Requested {hz} Hz for {} using {controls} display preferences ({backend})",ctx.app.as_deref().unwrap_or("unknown app")));
     Ok(())
 }
+/// Charging pause/bypass does not raise clock or thermal-current limits.
+/// Keep temperature gating for actual thermal and clock overrides only.
+pub fn override_temperature_allowed(feature: &Feature, ctx: &Context, starting: bool) -> bool {
+    if matches!(feature, Feature::ChargingPause | Feature::Bypass) { return true; }
+    let ceiling=if starting {400}else{420};
+    if ctx.temperature.is_none_or(|value| !(0..ceiling).contains(&value)) { return false; }
+    if *feature==Feature::ChargingThermal { return starting || ctx.soc_millic.is_none_or(|value|value<85000); }
+    ctx.soc_millic.is_some_and(|value|value < if starting {75000}else{85000})
+}
 fn thermal_cleanup(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &mut RuntimeState, ctx: &Context, now: u64) -> Result<()> {
-    let unsafe_temperature = ctx.temperature.is_none_or(|temp| !(0..420).contains(&temp)) || ctx.soc_millic.is_some_and(|temp| temp >= 85000);
     let mut errors = Vec::new();
     for feature in [Feature::ChargingPause, Feature::ChargingThermal, Feature::GpuThermal, Feature::CpuLock, Feature::GpuLock, Feature::Bypass] {
         if feature==Feature::ChargingPause && state.app_controls.charging_owned { continue; }
         let charging = matches!(feature, Feature::ChargingPause | Feature::ChargingThermal | Feature::Bypass);
-        let should_restore = state.advanced_deadlines.get(&feature.key()).is_none_or(|expires| *expires <= now || *expires > now.saturating_add(1800)) || unsafe_temperature || ctx.battery.is_none_or(|level| level <= 20) || ctx.saver != Some(false) || (charging && ctx.online != Some(true)) || (!charging && (ctx.awake != Some(true) || ctx.soc_millic.is_none()));
+        let should_restore = state.advanced_deadlines.get(&feature.key()).is_none_or(|expires| *expires <= now || *expires > now.saturating_add(1800)) || !override_temperature_allowed(&feature,ctx,false) || ctx.battery.is_none_or(|level| level <= 20) || ctx.saver != Some(false) || (charging && ctx.online != Some(true)) || (!charging && (ctx.awake != Some(true) || ctx.soc_millic.is_none()));
         if should_restore {
             match e.session(&feature).and_then(|session| if session.is_some() { e.apply_targets(feature.clone(), Vec::new(), true).map(|_| ()) } else { Ok(()) }) {
                 Ok(()) => {
@@ -572,9 +580,9 @@ pub fn launch_if_requested(boot: &str) -> Result<()> {
 
 pub fn guarded_apply(boot: &str, feature: Feature) -> Result<String> {
     let ctx = context();
-    if ctx.temperature.is_none_or(|value| !(0..400).contains(&value)) || ctx.battery.is_none_or(|value| value <= 20) || ctx.saver != Some(false) { return Err("Advanced controls require a known battery temperature below 40°C, battery above 20%, and battery saver off".into()); }
+    if ctx.battery.is_none_or(|value| value <= 20) || ctx.saver != Some(false) { return Err("Controls require battery above 20% and battery saver off".into()); }
     let charging = matches!(feature, Feature::ChargingPause | Feature::ChargingThermal | Feature::Bypass);
-    if !charging && ctx.soc_millic.is_none_or(|value| value >= 75000) { return Err("Clock and GPU cooling overrides require a readable SoC temperature below 75°C".into()); }
+    if !override_temperature_allowed(&feature,&ctx,true) { return Err("Clock and thermal overrides require battery below 40°C and clocks require SoC below 75°C".into()); }
     if (charging && ctx.online != Some(true)) || (!charging && ctx.awake != Some(true)) { return Err("Connect a charger for charging controls, or wake the screen for clock controls".into()); }
     ensure_daemon()?;
     let e = engine(boot)?;

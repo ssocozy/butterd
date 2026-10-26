@@ -27,7 +27,7 @@ pub fn remaining(saved: &SavedControl, feature: &Feature, epoch: u64) -> Option<
 }
 fn ready(feature: &Feature, ctx: &Context) -> bool {
     if !feature.advanced() { return true; }
-    if ctx.temperature.is_none_or(|value| !(0..400).contains(&value)) || ctx.battery.is_none_or(|value| value<=20) || ctx.saver!=Some(false) { return false; }
+    if !crate::runtime::override_temperature_allowed(feature,ctx,true) || ctx.battery.is_none_or(|value| value<=20) || ctx.saver!=Some(false) { return false; }
     if matches!(feature,Feature::ChargingPause|Feature::ChargingThermal|Feature::Bypass) { ctx.online==Some(true) }
     else { ctx.awake==Some(true) && ctx.soc_millic.is_some_and(|value| value<75000) }
 }

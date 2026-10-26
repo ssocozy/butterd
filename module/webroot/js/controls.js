@@ -5,8 +5,7 @@ export const advanced = {
   'gpu-lock':['GPU clock lock','Requests the highest advertised Mali clock inside the current maximum. This can substantially increase heat and battery use. Expires after 60 seconds.'],
   'gpu-thermal':['GPU cooling override','Requests cooling state zero for the Mali cooling device. This does not disable every thermal safeguard. Expires after 60 seconds.'],
   'charging-thermal':['Charging thermal override','Removes one exposed charging thermal vote. It does not bypass every charging safeguard or guarantee uncapped wattage. Expires after 30 minutes at most.'],
-  'bypass':['Battery bypass','Requires an advertised kernel bypass control and a separate active-state readback. Unsupported stock kernels cannot enable it. Ends on unplug, low battery, heat or after 30 minutes.'],
-  'charging-pause':['Stock-kernel charging pause','Requests zero battery charge current and pauses the primary charger together. This is not proof of physical battery bypass; the battery may supplement system power. Previous values are retained. Ends on unplug, low battery, heat or after 30 minutes.']
+  'charging-pause':['Bypass charging','Pauses battery charging while plugged in. The battery may still supply power. Ends after 30 minutes or on unplug.']
 };
 export function formatClock(value, gpu = false) {
   const hz = Number(value) * (gpu ? 1 : 1000);
@@ -141,7 +140,7 @@ export function renderControls(state, run, requestAdvanced) {
   for (const [key,[title,description]] of Object.entries(advanced)) {
     const capability = state[key] || {};
     let summary = capability.available ? capability.state : 'Not supported by this kernel';
-    if (key === 'charging-pause' && capability.available && Number.isFinite(capability.batteryCurrentUa)) summary += ' · Battery-current magnitude: '+Math.round(Math.abs(capability.batteryCurrentUa)/1000)+' mA (live sample, not bypass confirmation).';
+    if (key === 'charging-pause' && capability.available && Number.isFinite(capability.batteryCurrentUa)) summary += ' · '+Math.round(Math.abs(capability.batteryCurrentUa)/1000)+' mA';
     host.append(toggle(title,capability.state === 'Request active',capability.available === true,{off:'restore '+key,confirm:()=>requestAdvanced(key,title,description)},run,summary));
   }
   updateSelectors();

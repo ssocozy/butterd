@@ -966,3 +966,18 @@ fn mismatched_gpu_index_tables_fail_before_any_writes_and_manual_ranges_are_reje
     assert!(butter::hardware::validate_path_value(&Feature::Profile,butter::gpu::GED_FLOOR,"256").is_err());
     assert!(butter::hardware::validate_path_value(&Feature::GpuThermal,butter::gpu::GED_FLOOR,"0").is_err());
 }
+
+#[test]
+fn saved_charging_pause_resumes_while_hot_and_still_expires() {
+    use butter::{preferences::{SavedControl,resume},runtime::RuntimeState};
+    let (engine,_,mut ctx)=app_rule_fixture();ctx.temperature=Some(455);ctx.soc_millic=Some(91000);ctx.saver=Some(false);
+    let controls=BTreeMap::from([("charging-pause".into(),SavedControl{setting:String::new(),expires_utc:Some(1_800_000_040)})]);
+    let mut state=RuntimeState::default();
+    resume(&engine,&controls,&mut state,&ctx,1_800_000_020,3);
+    assert!(state.preference_errors.is_empty());
+    assert!(engine.session(&Feature::ChargingPause).unwrap().is_some());
+    assert_eq!(engine.hardware.read(butter::hardware::PAUSE).unwrap(),"0 1");
+    resume(&engine,&controls,&mut state,&ctx,1_800_000_040,23);
+    assert!(engine.session(&Feature::ChargingPause).unwrap().is_none());
+    assert_eq!(engine.hardware.read(butter::hardware::PAUSE).unwrap(),"0 0");
+}

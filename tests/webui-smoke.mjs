@@ -165,6 +165,8 @@ try {
   assert.equal(await evaluate(`__micPaints.length>=4 && __micPaints.every(Boolean)`),true,'Mic requests entered the root bridge before a pending frame could paint');
   await evaluate(`document.querySelector('#advanced-controls').closest('details').open=true`);
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('#advanced-controls > .control-switch')).every(row=>{const copy=row.querySelector('.control-copy').getBoundingClientRect(), control=row.querySelector('.switch').getBoundingClientRect();return copy.right+15<=control.left && row.querySelector('.caption')?.parentElement.classList.contains('control-copy');})`),true);
+  assert.equal(await evaluate(`document.querySelector('#advanced-controls').textContent.includes('Stock-kernel charging pause') || document.querySelector('#advanced-controls').textContent.includes('Battery bypass')`),false);
+  assert.equal(await evaluate(`document.querySelector('#advanced-controls').textContent.includes('Bypass charging')`),true);
   await evaluate(`document.querySelector('#advanced-controls').closest('details').open=false`);
   assert.equal(await evaluate(`document.querySelector('#audio-controls').textContent.includes('Use previous preferences')`),false);
   await evaluate(`globalThis.__butterFixture.audio.bluetoothConnected=false;globalThis.__butterFixture.audio.active=false;document.querySelector('#refresh').click()`);

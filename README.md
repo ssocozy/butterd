@@ -42,7 +42,7 @@ In **Apps**, assign a preset, refresh rate, high touch sampling, or charging-pau
 - **Monitoring:** battery power, temperatures, display Hz, CPU/GPU clocks, battery drain and estimated deep sleep.
 - **Running apps:** CPU/RAM readings and confirmed batch force-stop. Protected apps are hidden by default; nothing is killed automatically.
 - **Hardware controls:** supported CPU governors, clock ranges, TCP algorithms and high touch sampling.
-- **Charging pause:** pauses battery charging at your selected level. The battery may still supply power; this is not guaranteed physical battery bypass.
+- **Bypass charging:** pauses battery charging while plugged in. The battery may still supply power. Manual use expires after 30 minutes; kernel protections stay active.
 - **Phone microphone:** prefer the built-in mic with Bluetooth earbuds. App routing and ROM support can affect results.
 - **Recording assist:** optional higher clock requests during detected screen capture. Detection can take 15 seconds. Its SoC cutoff is 90°C; battery limits stay unchanged.
 - **Advanced overrides:** optional, time-limited clock and thermal controls, with confirmation before enabling.
