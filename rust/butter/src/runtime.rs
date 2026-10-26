@@ -400,11 +400,6 @@ pub fn daemon(boot: &str) -> Result<()> {
     let mut last_sample_event = 0;
     let mut wake_events = crate::events::WakeEvents::new();
     let mut notices=crate::notifications::Notices::default();
-    if let Ok(cfg)=config() {
-        if cfg.notifications {
-            if let Err(error)=crate::notifications::post("Starting Butterd. Checking saved settings…") { event(&cfg,"notification-error",&error.to_string()); }
-        }
-    }
     loop {
         let ctx = context();
         let now = uptime()?;
@@ -511,10 +506,8 @@ pub fn daemon(boot: &str) -> Result<()> {
         save("runtime.json", &state)?;
         drop(e);
         if cfg.notifications {
-            if let Some(message)=crate::notifications::message(&state) {
-                if notices.next(&message,now) {
-                    if let Err(error)=crate::notifications::post(&message) { event(&cfg,"notification-error",&error.to_string()); }
-                }
+            if let Some(message)=notices.update(&state,now) {
+                if let Err(error)=crate::notifications::post(&message) { event(&cfg,"notification-error",&error.to_string()); }
             }
         } else { notices=crate::notifications::Notices::default(); }
         wake_events.wait(next_wait(&state, ctx.awake == Some(true), now));

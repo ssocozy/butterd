@@ -432,3 +432,28 @@ fn charging_pause_and_bypass_ignore_butter_temperature_gates_only() {
     assert!(override_temperature_allowed(&Feature::ChargingPause,&ctx,true));
     assert!(!override_temperature_allowed(&Feature::ChargingThermal,&ctx,true));
 }
+
+#[test]
+fn notification_updates_ignore_wake_and_sampling_but_report_charging_changes() {
+    use butter::notifications::Notices;
+    let mut notices=Notices::default();
+    let mut runtime=RuntimeState{active:Mode::Battery,reason:"Selected preset".into(),..Default::default()};
+    assert_eq!(notices.update(&runtime,100).as_deref(),Some("Saver preset active."));
+    runtime.active=Mode::Balanced;runtime.reason="Screen off".into();
+    assert!(notices.update(&runtime,120).is_none());
+    runtime.active=Mode::Battery;runtime.reason="Selected preset".into();
+    assert!(notices.update(&runtime,140).is_none());
+    runtime.reason="Foreground app unknown or multiple resumed apps".into();
+    assert!(notices.update(&runtime,160).is_none());
+    runtime.reason="Selected preset".into();assert!(notices.update(&runtime,180).is_none());
+    runtime.app_controls.charging_owned=true;
+    assert_eq!(notices.update(&runtime,200).as_deref(),Some("Bypass charging active."));
+    assert!(notices.update(&runtime,220).is_none());
+    runtime.app_controls.charging_owned=false;
+    assert_eq!(notices.update(&runtime,240).as_deref(),Some("Bypass charging stopped."));
+    runtime.active=Mode::Performance;runtime.reason="Foreground app rule".into();
+    assert_eq!(notices.update(&runtime,260).as_deref(),Some("Performance app preset applied."));
+    runtime.error=Some("fixture".into());
+    assert_eq!(notices.update(&runtime,280).as_deref(),Some("Tuning paused. Open Butterd for details."));
+    assert!(notices.update(&runtime,300).is_none());
+}

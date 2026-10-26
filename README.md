@@ -65,6 +65,8 @@ This can complement a compatible [Fenrir](https://github.com/R0rt1z2/fenrir) set
 > [!IMPORTANT]
 > Releases pass automated checks before publication; device testing is ongoing. Butterd cannot guarantee better FPS or battery life on every ROM. Use at your own risk; no warranty is provided. See [LICENSE](LICENSE).
 
+Engine notifications use one silent entry for preset, bypass-charging and error updates. Routine screen-off/wake transitions do not announce the preset again.
+
 ## Troubleshooting
 
 Open **Settings → Diagnostics → Export diagnostics** after reproducing an issue. Reports include app names; review them before sharing.
