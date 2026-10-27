@@ -24,7 +24,7 @@ public final class EngineNotification {
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Butterd").setContentText(args[0])
             .setStyle(new Notification.BigTextStyle().bigText(args[0]))
-            .setSilent(true).setOnlyAlertOnce(true).build();
+            .setSound(null).setVibrate(null).setDefaults(0).setOnlyAlertOnce(true).build();
         Class<?> services=Class.forName("android.os.ServiceManager");
         IBinder binder=(IBinder)services.getMethod("getService",String.class).invoke(null,"notification");
         Class<?> api=Class.forName("android.app.INotificationManager");
