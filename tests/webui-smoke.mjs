@@ -222,6 +222,12 @@ try {
   assert.equal(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),true,'Mobile settings overflow horizontally');
   await evaluate(`document.querySelector('[data-page=apps]').click()`); await until(`!document.getElementById('page-apps').hidden`);
   await screenshot('webui-apps-dark.png');
+  assert.equal(await evaluate(`document.querySelector('[data-preset=battery] strong').textContent`),'Saver');
+  assert.equal(await evaluate(`document.querySelector('#app-preset option[value=battery]').textContent`),'Saver');
+  await evaluate(`__butterFixture.supervisor.runtime.active='battery';__butterFixture.supervisor.runtime.reason='Selected preset';document.querySelector('#refresh').click()`);
+  await until(`document.querySelector('#preset-label').textContent==='Saver' && document.querySelector('#refresh').disabled===false`);
+  await evaluate(`__butterFixture.supervisor.config.automatic=false;__butterFixture.supervisor.runtime.selected='aggressive';__butterFixture.supervisor.runtime.active='balanced';__butterFixture.supervisor.runtime.reason='Cooling down';document.querySelector('#refresh').click()`);
+  await until(`document.querySelector('#engine-reason').textContent==='Aggressive · cooling, clock floors released' && document.querySelector('#refresh').disabled===false`);
   await evaluate(`__butterFixture.supervisor.health={running:false,error:'Example startup failure'};__butterFixture.supervisor.runtime.error='Example startup failure';document.getElementById('refresh').click()`);
   await until(`document.getElementById('engine-state').textContent==='Needs attention'`);
   assert.match(await evaluate(`document.getElementById('engine-reason').textContent`),/Example startup failure/);

@@ -29,7 +29,7 @@ Settings and app profiles survive reboot. Stable updates appear through the modu
 | Preset | Behavior |
 | --- | --- |
 | **Balanced** | Lets the ROM manage CPU/GPU scaling. |
-| **Battery** | Lowers maximum clocks to reduce power use. |
+| **Saver** | Lowers maximum clocks to reduce power use. |
 | **Performance** | Raises minimum clocks, then eases them during heat or idle. A good starting point for games. |
 | **Aggressive** | Starts with higher minimum clocks and gradually eases them as heat builds. Uses more power; higher clocks don’t guarantee smoother gameplay. |
 

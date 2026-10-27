@@ -244,7 +244,12 @@ pub fn decide(config: &Config, state: &mut RuntimeState, context: &Context, now:
          if state.thermal_stage > 0 { "Recording assist: reduced floors for heat" } else { "Recording assist: capture session active" })
     }
     else if matches!(requested, Mode::Performance | Mode::Aggressive) && state.idle_samples >= 3 { (Mode::Balanced, "Idle workload; frequency floors released") }
-    else if matches!(requested, Mode::Performance | Mode::Aggressive) && state.thermal_stage > 0 { (requested, if state.thermal_stage == 1 { "Cooling: reduced performance floors" } else { "Cooling: minimal performance floors" }) }
+    else if matches!(requested, Mode::Performance | Mode::Aggressive) && state.thermal_stage > 0 { (requested, match (requested,state.thermal_stage) {
+        (Mode::Aggressive,1)=>"Cooling: Aggressive clock floors reduced",
+        (Mode::Aggressive,_)=>"Cooling: Aggressive clock floors reduced further",
+        (_,1)=>"Cooling: reduced performance floors",
+        _=>"Cooling: minimal performance floors",
+    }) }
     else { (requested, if config.automatic && rule.is_some() { "Foreground app rule" } else { "Selected preset" }) }
 }
 fn context() -> Context {

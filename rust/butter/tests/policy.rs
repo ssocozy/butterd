@@ -457,3 +457,12 @@ fn notification_updates_ignore_wake_and_sampling_but_report_charging_changes() {
     assert_eq!(notices.update(&runtime,280).as_deref(),Some("Tuning paused. Open Butterd for details."));
     assert!(notices.update(&runtime,300).is_none());
 }
+
+#[test]
+fn aggressive_cooling_reasons_name_the_actual_preset() {
+    let cfg=Config::default();let mut state=RuntimeState{selected:Mode::Aggressive,tuning_requested:true,..Default::default()};let mut ctx=context();
+    ctx.soc_millic=Some(75000);
+    assert_eq!(decide(&cfg,&mut state,&ctx,100),(Mode::Aggressive,"Cooling: Aggressive clock floors reduced"));
+    ctx.soc_millic=Some(80000);
+    assert_eq!(decide(&cfg,&mut state,&ctx,101),(Mode::Aggressive,"Cooling: Aggressive clock floors reduced further"));
+}

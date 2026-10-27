@@ -19,15 +19,18 @@ window.addEventListener('error',event=>notify('Interface error: '+event.message,
 window.addEventListener('unhandledrejection',event=>notify('Request failed: '+(event.reason?.message || event.reason),true));
 for (const node of document.querySelectorAll('[data-close]')) node.addEventListener('click',()=>$(node.dataset.close).close());
 function detailsRow(host,name,value) { const row = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = name; dd.textContent = value; row.append(dt,dd); host.append(row); }
+const presetName=value=>({balanced:'Balanced',performance:'Performance',battery:'Saver',aggressive:'Aggressive',boost:'Launch boost'}[value]||'Balanced');
 function render(state) {
   snapshot = state;
   const supervisor = state.supervisor || {}, config = supervisor.config || {}, runtime = supervisor.runtime || {}, health = supervisor.health || {}, telemetry = runtime.telemetry || {};
   const sampled = runtime.sampled_at > 0, age = health.sampleAgeSeconds ?? (sampled ? supervisor.uptime-runtime.sampled_at : null), running = health.running === true;
   $('engine-state').textContent = health.error || config.error || runtime.error || runtime.blocked ? 'Needs attention' : running ? sampled ? 'Monitoring active' : 'Starting monitoring' : 'Monitoring stopped';
   $('engine-reason').textContent = health.error || config.error || runtime.error || runtime.refresh_error || runtime.reason || (running ? 'Waiting for the first sensor sample.' : 'Tap Start / retry monitoring in Settings.');
+  const requested=runtime.pending_preset || (config.automatic ? config.rules?.find(rule=>rule.package===runtime.foreground)?.preset || config.preset : runtime.selected || config.preset);
+  if(!health.error && !config.error && !runtime.error && !runtime.refresh_error && runtime.reason==='Cooling down') $('engine-reason').textContent=requested==='battery'?'Saver · cooling, caps retained':presetName(requested)+' · cooling, clock floors released';
   if (telemetry.displayRequestSatisfied === false && telemetry.displayRequestHz != null) $('engine-reason').textContent += ' · Requested '+telemetry.displayRequestHz+' Hz; display reports '+Math.round(telemetry.screenHz)+' Hz.';
   if (running && age > 30) { $('engine-state').textContent = 'Readings are stale'; $('engine-reason').textContent = 'The supervisor has not produced a recent sample. Export diagnostics.'; }
-  $('preset-label').textContent = runtime.reason?.startsWith('Recording assist:') ? 'Recording assist' : runtime.active ? runtime.active[0].toUpperCase()+runtime.active.slice(1) : 'Balanced';
+  $('preset-label').textContent = runtime.reason?.startsWith('Recording assist:') ? 'Recording assist' : presetName(runtime.active);
   const delivery=supervisor.notificationDelivery;
   $('notification-status').textContent=delivery?.error ? 'Notification delivery needs attention: '+delivery.error : delivery?.accepted ? 'Test sent. Check Android’s notification settings if it doesn’t appear.' : '';
   $('recording-assist').checked = config.recording_assist === true;
@@ -135,7 +138,7 @@ function renderApps() {
     const row=button('',()=>openApp(app),true,'app-row');
     let icon; if (typeof app.icon==='string' && /^data:image\/png;base64,[A-Za-z0-9+/=]{1,3000}$/.test(app.icon)) { icon=document.createElement('img'); icon.src=app.icon; icon.alt=''; icon.loading='lazy'; } else { icon=document.createElement('span'); icon.textContent=String(app.label || app.package).slice(0,1).toUpperCase(); icon.setAttribute('aria-hidden','true'); } icon.className='app-icon';
     const info=document.createElement('span'); info.className='app-name'; const label=document.createElement('strong'); label.textContent=app.label || app.package; const detail=document.createElement('small'); detail.textContent=app.package; info.append(label,detail); row.append(icon,info);
-    const rule=rules.find(rule=>rule.package===app.package); if (rule) { const badge=document.createElement('span'); badge.className='app-badge'; badge.textContent=rule.preset; row.append(badge); } else if (app.game) { const badge=document.createElement('span'); badge.className='app-badge'; badge.textContent='Game'; row.append(badge); }
+    const rule=rules.find(rule=>rule.package===app.package); if (rule) { const badge=document.createElement('span'); badge.className='app-badge'; badge.textContent=presetName(rule.preset); row.append(badge); } else if (app.game) { const badge=document.createElement('span'); badge.className='app-badge'; badge.textContent='Game'; row.append(badge); }
     const chevron=document.createElement('span'); chevron.className='chevron'; chevron.append(phosphorIcon('caret-right')); row.append(chevron); host.append(row);
   }
 }
