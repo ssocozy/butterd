@@ -48,13 +48,13 @@ pub(crate) fn load<T: serde::de::DeserializeOwned + Default>(name: &str) -> Resu
         Err(error) => Err(error.into()),
         Ok(meta) => {
             if !meta.is_file() || meta.file_type().is_symlink() { return Err("Invalid engine state file".into()); }
-            Ok(serde_json::from_str(&read_bounded(&path, 65536)?)?)
+            Ok(serde_json::from_str(&read_bounded(&path, if name=="app-scheduler.json" {262144}else{65536})?)?)
         }
     }
 }
 pub(crate) fn save(name: &str, value: &impl Serialize) -> Result<()> {
     let bytes = serde_json::to_vec(value)?;
-    if bytes.len() > 65536 { return Err("Engine state exceeds limit".into()); }
+    if bytes.len() > if name=="app-scheduler.json" {262144}else{65536} { return Err("Engine state exceeds limit".into()); }
     let temporary = Path::new(DIRECTORY).join(format!("state-{}.tmp", std::process::id()));
     let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&temporary)?;
     let result = (|| -> Result<()> {
@@ -472,6 +472,7 @@ pub fn daemon(boot: &str) -> Result<()> {
     let mut compositor_sample = Value::Null;
     let mut compositor_mode_seen = None;
     let mut compositor_sample_at = 0;
+    let mut scheduler_app_seen = None;
     let mut renderer_sample = Value::Null;
     let mut last_error = String::new();
     let mut last_sample_event = 0;
@@ -569,12 +570,12 @@ pub fn daemon(boot: &str) -> Result<()> {
             }
         }
         let compositor_mode = if cfg.compositor_disabled || state.blocked { Mode::Balanced } else { state.active };
-        if compositor_mode_seen != Some((compositor_mode,state.thermal_stage)) || now.saturating_sub(compositor_sample_at) >= 15 {
-            compositor_sample = match crate::scheduler::reconcile_cooled(boot, compositor_mode, state.thermal_stage) {
+        if compositor_mode_seen != Some((compositor_mode,state.thermal_stage)) || scheduler_app_seen != ctx.app || now.saturating_sub(compositor_sample_at) >= 5 {
+            compositor_sample = match crate::scheduler::reconcile_foreground(boot, compositor_mode, state.thermal_stage, ctx.app.as_deref()) {
                 Ok(value) => value,
                 Err(error) => json!({"mode":compositor_mode,"error":error.to_string()}),
             };
-            compositor_mode_seen = Some((compositor_mode,state.thermal_stage)); compositor_sample_at = now;
+            compositor_mode_seen = Some((compositor_mode,state.thermal_stage)); compositor_sample_at = now; scheduler_app_seen=ctx.app.clone();
         }
         sampled_telemetry["gpuControl"]=json!({"state":if state.gpu_profile_paused {"ROM managed after conflict"}else if state.gpu_satisfied_by_rom {"ROM already satisfies GPU floor request"}else{"Preset requests available"},"error":state.gpu_profile_error,"retries":state.gpu_profile_retries});
         sampled_telemetry["compositorScheduling"] = compositor_sample.clone();
@@ -766,9 +767,9 @@ pub fn live_status(boot: &str) -> Result<Value> {
     let ged=crate::gpu::dummy(&hardware);
     let current=hardware.read(crate::gpu::GED_CURRENT).ok().and_then(|raw|crate::gpu::ged_current(&raw)).map(|(_,hz)|hz.to_string())
         .or_else(||hardware.read(&format!("{base}/cur_freq")).ok());
-    let ged_request=if ged { requested(crate::gpu::GED_FLOOR).and_then(|index|index.parse::<usize>().ok()).and_then(|index|crate::gpu::ged_table(&hardware).ok()?.get(index).copied()).map(|hz|hz.to_string()) } else {None};
+    let ged_request=if ged { requested(crate::gpu::floor_node(&hardware)).and_then(|index|index.parse::<usize>().ok()).and_then(|index|crate::gpu::ged_table(&hardware).ok()?.get(index).copied()).map(|hz|hz.to_string()) } else {None};
     let gpu=json!({"requestedMin":ged_request.or_else(||requested(gpu_path)),"requestedMax":requested(&format!("{base}/max_freq")),"current":current,"min":if ged{None}else{hardware.read(gpu_path).ok()},
-        "max":hardware.read(&format!("{base}/max_freq")).ok(),"gedFloorIndex":hardware.read(crate::gpu::GED_FLOOR).ok()});
+        "max":hardware.read(&format!("{base}/max_freq")).ok(),"floorBackend":crate::gpu::floor_node(&hardware),"gedFloorIndex":hardware.read(crate::gpu::floor_node(&hardware)).ok()});
     Ok(json!({"supervisor":supervisor_snapshot(boot)?,"clocks":{"cpus":cpus,"gpu":gpu}}))
 }
 

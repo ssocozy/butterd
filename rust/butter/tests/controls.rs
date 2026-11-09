@@ -1090,3 +1090,38 @@ fn initial_aggressive_request_does_not_weaken_an_existing_stronger_rom_floor() {
     maintain_profile(&engine,&mut state,Mode::Balanced,false).unwrap();
     assert!(!state.gpu_satisfied_by_rom);assert_eq!(engine.hardware.writes.get(),0);
 }
+
+#[test]
+fn apiboost_profile_is_independent_of_powerhal_fpsgo_and_restores_disabled_baseline() {
+    use butter::{gpu::{APIBOOST_FLOOR,GED_FLOOR},presets::Mode};
+    let engine=ged_fixture();engine.hardware.put(butter::vendor::SF_POLICY,"1");
+    engine.hardware.put(APIBOOST_FLOOR,"-1");
+    engine.preset(Mode::Aggressive).unwrap();
+    assert_eq!(engine.hardware.read(APIBOOST_FLOOR).unwrap(),"1");
+    assert_eq!(engine.hardware.read(GED_FLOOR).unwrap(),"4");
+    for rom in ["0","4","2"] {
+        engine.hardware.put(GED_FLOOR,rom);
+        assert_eq!(engine.state(&Feature::Profile).unwrap(),"Request active");
+        assert_eq!(engine.hardware.read(APIBOOST_FLOOR).unwrap(),"1");
+    }
+    engine.preset_cooled(Mode::Aggressive,1).unwrap();
+    assert_eq!(engine.hardware.read(APIBOOST_FLOOR).unwrap(),"2");
+    engine.preset(Mode::Balanced).unwrap();
+    assert_eq!(engine.hardware.read(APIBOOST_FLOOR).unwrap(),"-1");
+    assert_eq!(engine.hardware.read(GED_FLOOR).unwrap(),"2");
+}
+#[test]
+fn apiboost_preserves_stronger_external_floor_and_releases_old_ged_backend() {
+    use butter::{gpu::{APIBOOST_FLOOR,GED_FLOOR},presets::Mode};
+    let engine=ged_fixture();engine.hardware.put(butter::vendor::SF_POLICY,"1");
+    engine.preset(Mode::Aggressive).unwrap();
+    engine.hardware.put(APIBOOST_FLOOR,"4");
+    engine.preset(Mode::Aggressive).unwrap();
+    assert_eq!(engine.hardware.read(GED_FLOOR).unwrap(),"4");
+    assert_eq!(engine.hardware.read(APIBOOST_FLOOR).unwrap(),"1");
+    engine.hardware.put(APIBOOST_FLOOR,"0");
+    engine.preset(Mode::Balanced).unwrap();
+    assert_eq!(engine.hardware.read(APIBOOST_FLOOR).unwrap(),"0");
+    engine.preset(Mode::Performance).unwrap();
+    assert_eq!(engine.hardware.read(APIBOOST_FLOOR).unwrap(),"0");
+}

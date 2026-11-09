@@ -59,7 +59,11 @@ pub fn plan_cooled(hardware: &impl Hardware, mode: Mode, baseline: Option<&Journ
         if !cpu && crate::gpu::dummy(hardware) {
             let table=crate::gpu::ged_table(hardware)?;
             let index=crate::gpu::floor_index(mode,stage,table.len())?;
-            targets.push((crate::gpu::GED_FLOOR.into(),index.to_string()));
+            let node=crate::gpu::floor_node(hardware);
+            if node==crate::gpu::APIBOOST_FLOOR && table.len()>100 { return Err("GPU APIBOOST OPP table exceeds command width".into()); }
+            let original_floor=original(node)?.parse::<i32>()?;
+            let index=if original_floor>=0 { index.min(original_floor as usize) } else {index};
+            targets.push((node.into(),index.to_string()));
             if mode!=Mode::Battery {continue;}
         }
         let prefix = if cpu { "scaling_" } else { "" };

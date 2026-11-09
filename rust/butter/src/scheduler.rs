@@ -212,6 +212,9 @@ fn reconcile_threads(session: &mut Session, mode: Mode, rom_managed: bool) -> Re
 }
 pub fn reconcile(boot: &str, mode: Mode) -> Result<Value> { reconcile_cooled(boot,mode,0) }
 pub fn reconcile_cooled(boot: &str, mode: Mode, stage: u8) -> Result<Value> {
+    reconcile_foreground(boot,mode,stage,None)
+}
+pub fn reconcile_foreground(boot: &str, mode: Mode, stage: u8, app: Option<&str>) -> Result<Value> {
     if stage>3 { return Err("Invalid scheduler cooling stage".into()); }
     let mut session: Session = runtime::load("scheduler.json")?;
     if session.boot != boot { session = Session { boot: boot.into(), ..Default::default() }; }
@@ -224,15 +227,20 @@ pub fn reconcile_cooled(boot: &str, mode: Mode, stage: u8) -> Result<Value> {
         return Err("Invalid top-app clamp journal".into());
     }
     // Each controller owns its own failure state and restores only its own writes.
-    let top_app = match reconcile_group(&mut session, mode, stage) {
+    let rom_managed=crate::vendor::dynamic_policy(&crate::hardware::SystemHardware);
+    let top_app_result = if rom_managed {
+        restore_group(&mut session).and_then(|()|crate::app_scheduler::reconcile(boot,mode,stage,app))
+    } else {
+        crate::app_scheduler::reconcile(boot,Mode::Balanced,0,None).and_then(|_|reconcile_group(&mut session,mode,stage))
+    };
+    let top_app = match top_app_result {
         Ok(value)=>value,
         Err(error)=>{
             session.top_app_blocked=true; save(&session)?;
-            let cleanup=restore_group(&mut session).err().map(|error|error.to_string());
+            let cleanup=if rom_managed { crate::app_scheduler::reconcile(boot,Mode::Balanced,0,None).err().map(|error|error.to_string()) } else { restore_group(&mut session).err().map(|error|error.to_string()) };
             json!({"state":"Paused","error":error.to_string(),"cleanupError":cleanup})
         }
     };
-    let rom_managed=crate::vendor::dynamic_policy(&crate::hardware::SystemHardware);
     let compositor = match reconcile_threads(&mut session,mode,rom_managed) {
         Ok(value)=>value,
         Err(error)=>{

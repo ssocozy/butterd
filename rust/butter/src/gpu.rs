@@ -33,8 +33,52 @@ pub const GED_CURRENT:&str="/sys/kernel/ged/hal/current_freqency";
 pub const OPP_TABLE:&str="/proc/gpufreqv2/gpu_working_opp_table";
 pub const LIMIT_TABLE:&str="/proc/gpufreqv2/limit_table";
 
+// MiCode MTK_kernel_device_modules, bsp-duchamp-u-oss:
+// gpufreq/v2/gpufreq_debug.c limit_table_proc_write; gpuppm.c LIMIT_APIBOOST.
+/// Virtual node: read/write only APIBOOST's floor, preserving its ceiling and flags.
+pub const APIBOOST_FLOOR: &str = "vendor:gpu-apiboost-floor";
+#[derive(Debug, PartialEq, Eq)]
+pub struct ApiBoost { pub id: u32, pub floor: i32 }
+pub fn apiboost(raw: &str) -> crate::Result<ApiBoost> {
+    if raw.len()>8192 { return Err("GPU limiter table exceeds limit".into()); }
+    let mut rows=std::collections::BTreeMap::new();
+    let mut ids=std::collections::BTreeSet::new();
+    for line in raw.lines().filter(|line| !line.trim().is_empty()) {
+        let fields:Vec<_>=line.split_whitespace().collect();
+        if fields.first()==Some(&"[id]") { continue; }
+        if fields.len()!=7 { return Err("Unsupported GPU limiter table".into()); }
+        let id=fields[0].parse::<u32>()?;
+        let priority=fields[2].parse::<u32>()?;
+        let ceiling=fields[3].parse::<i32>()?;
+        let floor=fields[4].parse::<i32>()?;
+        if id>99 || !(-1..=99).contains(&ceiling) || !(-1..=99).contains(&floor)
+            || !matches!(fields[5],"0"|"1") || !matches!(fields[6],"0"|"1")
+            || !ids.insert(id) || rows.insert(fields[1],(id,priority,floor,fields[5],fields[6])).is_some() {
+            return Err("Invalid GPU limiter row".into());
+        }
+    }
+    let api=rows.get("APIBOOST").ok_or("GPU APIBOOST limiter missing")?;
+    let fpsgo=rows.get("FPSGO").ok_or("GPU FPSGO limiter missing")?;
+    for name in ["THERMAL_AP","THERMAL_EB"] {
+        let thermal=rows.get(name).ok_or("GPU thermal limiter missing")?;
+        if thermal.1<=api.1 || thermal.3!="1" { return Err("GPU thermal priority is unsupported".into()); }
+    }
+    if api.1!=3 || fpsgo.1!=2 || api.4!="1" { return Err("GPU APIBOOST priority or enable flag unsupported".into()); }
+    Ok(ApiBoost{id:api.0,floor:api.2})
+}
+pub fn floor_node(hardware: &impl Hardware) -> &'static str {
+    if hardware.read(APIBOOST_FLOOR).is_ok() { APIBOOST_FLOOR } else { GED_FLOOR }
+}
+pub fn apiboost_command(raw: &str, value: &str) -> crate::Result<String> {
+    let row=apiboost(raw)?;
+    let floor=value.parse::<i32>()?;
+    if !(-1..=99).contains(&floor) { return Err("Invalid APIBOOST floor".into()); }
+    // -3 means KEEP. Never reset or raise the ceiling and never switch flags.
+    Ok(format!("set {} -3 {floor}",row.id))
+}
+
 pub fn profile_node(path: &str) -> bool {
-    path == GED_FLOOR || [GPU,GPU_ALT].iter().any(|node| path==*node || path==node.replace("min_freq","max_freq"))
+    path == GED_FLOOR || path == APIBOOST_FLOOR || [GPU,GPU_ALT].iter().any(|node| path==*node || path==node.replace("min_freq","max_freq"))
 }
 
 pub fn dummy(hardware:&impl Hardware)->bool {
@@ -84,6 +128,18 @@ pub fn ged_current(raw:&str)->Option<(usize,u64)> {
 #[cfg(test)]
 mod tests {
     use super::parse_ged;
+    #[test]
+    fn apiboost_targets_its_own_slot_without_changing_thermal_limits() {
+        let table="[id] [name] [priority] [ceiling] [floor] [c_enable] [f_enable]\n4 THERMAL_AP 6 47 -1 1 1\n5 THERMAL_EB 6 -1 -1 1 1\n11 APIBOOST 3 -1 64 1 1\n12 FPSGO 2 -1 0 1 1\n";
+        assert_eq!(super::apiboost(table).unwrap(),super::ApiBoost{id:11,floor:64});
+        assert_eq!(super::apiboost_command(table,"16").unwrap(),"set 11 -3 16");
+        assert_eq!(super::apiboost_command(table,"-1").unwrap(),"set 11 -3 -1");
+        assert_eq!(super::apiboost(&table.replace("11 APIBOOST","10 APIBOOST")).unwrap().id,10);
+        for bad in [table.replace("APIBOOST 3","APIBOOST 8"), table.replace("47 -1 1 1","47 -1 0 1"),table.replace("64 1 1","64 1 0"),table.replace("11 APIBOOST","12 APIBOOST"),format!("{table}11 APIBOOST 3 -1 64 1 1\n")] {
+            assert!(super::apiboost(&bad).is_err(),"{bad}");
+        }
+        for value in ["-2","-3","100","16 0","x"] { assert!(super::apiboost_command(table,value).is_err()); }
+    }
     #[test]
     fn loading_is_the_first_counter_and_invalid_samples_stay_unknown() {
         assert_eq!(parse_ged("37 2 61\n"),Some(37.0));

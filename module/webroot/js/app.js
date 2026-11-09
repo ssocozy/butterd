@@ -37,7 +37,7 @@ function render(state) {
   $('compositor').checked = config.compositor_disabled !== true;
   const scheduling=telemetry.compositorScheduling;
   $('compositor-status').textContent = scheduling?.error || [
-    scheduling?.topApp?.error || (scheduling?.topApp?.minimumPercent!=null ? 'Foreground apps: '+scheduling.topApp.minimumPercent+'–'+scheduling.topApp.maximumPercent+'% scheduler request.' : ''),
+    scheduling?.topApp?.error || (scheduling?.topApp?.minimumPercent!=null ? 'Foreground apps: '+scheduling.topApp.minimumPercent+'–'+scheduling.topApp.maximumPercent+'% scheduler request.' : scheduling?.topApp?.threads>0 ? 'Foreground app: '+scheduling.topApp.threads+' thread clamp requests active.' : ''),
     scheduling?.compositor?.error || (scheduling?.compositor?.state==='Managed by HyperOS' ? 'HyperOS manages compositor scheduling.' : '')
   ].filter(Boolean).join(' ');
   const graphics = state.graphics;

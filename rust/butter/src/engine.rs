@@ -375,9 +375,9 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             || !crate::gpu::dummy(&self.hardware) { return Ok(false); }
         let table=crate::gpu::ged_table(&self.hardware)?;
         let wanted=crate::gpu::floor_index(mode,stage,table.len())?;
-        let actual=self.hardware.read(crate::gpu::GED_FLOOR)?.parse::<usize>()?;
+        let actual=self.hardware.read(crate::gpu::floor_node(&self.hardware))?.parse::<i32>()?;
         // GED indices descend in frequency. A smaller index is a stronger vote.
-        Ok(actual<=wanted)
+        Ok(actual>=0 && actual as usize<=wanted)
     }
     pub fn reconcile_gpu_profile_cooled(&self, mode:crate::presets::Mode, stage:u8) -> Result<String> {
         let mut journal=self.session(&Feature::Profile)?.ok_or("No GPU profile to reconcile")?;
@@ -541,9 +541,9 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         let gpu_path = if self.hardware.read(hardware::GPU).is_ok() { hardware::GPU } else { hardware::GPU_ALT };
         let gpu_base = gpu_path.trim_end_matches("/min_freq");
         let ged = if crate::gpu::dummy(&self.hardware) {crate::gpu::ged_table(&self.hardware).ok()}else{None};
-        let ged_request=requested(crate::gpu::GED_FLOOR).and_then(|index|index.parse::<usize>().ok()).and_then(|index|ged.as_ref()?.get(index).copied());
+        let ged_request=requested(crate::gpu::floor_node(&self.hardware)).and_then(|index|index.parse::<usize>().ok()).and_then(|index|ged.as_ref()?.get(index).copied());
         let ged_current=self.hardware.read(crate::gpu::GED_CURRENT).ok().and_then(|raw|crate::gpu::ged_current(&raw));
-        output.insert("gpuRange".into(), json!({"backend":if crate::gpu::dummy(&self.hardware){"MediaTek GED"}else{"devfreq"},"manualRanges":!crate::gpu::dummy(&self.hardware),"currentSource":if ged_current.is_some(){"MediaTek GED"}else{"devfreq"},"gedFloorIndex":self.hardware.read(crate::gpu::GED_FLOOR).ok(),"limitTable":self.hardware.read(crate::gpu::LIMIT_TABLE).ok(),"current":ged_current.map(|(_,hz)|hz.to_string()).unwrap_or_else(||self.hardware.read(&format!("{gpu_base}/cur_freq")).unwrap_or_default()),"referenceMax":ged.as_ref().and_then(|table|table.first()).map(ToString::to_string).or_else(||profile.as_ref().and_then(|journal|journal.observed_limits.get(&format!("{gpu_base}/max_freq"))).cloned()),"frequencies":self.hardware.read(&format!("{gpu_base}/available_frequencies")).unwrap_or_default(), "devfreqMin":self.hardware.read(gpu_path).ok(),"min":if ged.is_some(){None}else{self.hardware.read(gpu_path).ok()}, "max":self.hardware.read(&format!("{gpu_base}/max_freq")).unwrap_or_default(), "requestedMin":ged_request.map(|hz|hz.to_string()).or_else(||requested(gpu_path)),"requestedMax":requested(&format!("{gpu_base}/max_freq")), "active":self.session(&Feature::GpuRange).ok().flatten().is_some()}));
+        output.insert("gpuRange".into(), json!({"backend":if crate::gpu::dummy(&self.hardware){"MediaTek GED"}else{"devfreq"},"manualRanges":!crate::gpu::dummy(&self.hardware),"currentSource":if ged_current.is_some(){"MediaTek GED"}else{"devfreq"},"floorBackend":crate::gpu::floor_node(&self.hardware),"gedFloorIndex":self.hardware.read(crate::gpu::floor_node(&self.hardware)).ok(),"limitTable":self.hardware.read(crate::gpu::LIMIT_TABLE).ok(),"current":ged_current.map(|(_,hz)|hz.to_string()).unwrap_or_else(||self.hardware.read(&format!("{gpu_base}/cur_freq")).unwrap_or_default()),"referenceMax":ged.as_ref().and_then(|table|table.first()).map(ToString::to_string).or_else(||profile.as_ref().and_then(|journal|journal.observed_limits.get(&format!("{gpu_base}/max_freq"))).cloned()),"frequencies":self.hardware.read(&format!("{gpu_base}/available_frequencies")).unwrap_or_default(), "devfreqMin":self.hardware.read(gpu_path).ok(),"min":if ged.is_some(){None}else{self.hardware.read(gpu_path).ok()}, "max":self.hardware.read(&format!("{gpu_base}/max_freq")).unwrap_or_default(), "requestedMin":ged_request.map(|hz|hz.to_string()).or_else(||requested(gpu_path)),"requestedMax":requested(&format!("{gpu_base}/max_freq")), "active":self.session(&Feature::GpuRange).ok().flatten().is_some()}));
         output.insert("cpuPolicies".into(), json!(policies));
         output.insert(
             "engine".into(),

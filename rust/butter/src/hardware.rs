@@ -74,6 +74,7 @@ impl Hardware for SystemHardware {
         paths.iter().map(|path| self.read(path)).collect()
     }
     fn check_write(&self, path: &str) -> Result<()> {
+        if path == crate::gpu::APIBOOST_FLOOR { self.read(path)?; return self.check_write(crate::gpu::LIMIT_TABLE); }
         if path == crate::touch::NODE { return self.check_write(HTSR); }
         if crate::audio::preset(path).is_some() { return Ok(()); }
         if crate::display::node(path).is_some() { return Ok(()); }
@@ -81,6 +82,12 @@ impl Hardware for SystemHardware {
         Ok(())
     }
     fn read(&self, path: &str) -> Result<String> {
+        if path == crate::gpu::APIBOOST_FLOOR {
+            let row=crate::gpu::apiboost(&self.read(crate::gpu::LIMIT_TABLE)?)?;
+            let count=self.read(crate::gpu::GED_COUNT)?.parse::<i32>()?;
+            if !(2..=100).contains(&count) || row.floor>=count { return Err("GPU APIBOOST OPP map unsupported".into()); }
+            return Ok(row.floor.to_string());
+        }
         if path == crate::vendor::SF_POLICY { return crate::android::command("/system/bin/getprop", &["vendor.debug.sf.cpupolicy"]); }
         if path == crate::touch::NODE { return crate::touch::read(); }
         if let Some(value) = crate::audio::read(path) { return value; }
@@ -88,6 +95,13 @@ impl Hardware for SystemHardware {
         Ok(read_bounded(Path::new(path), if path==crate::gpu::OPP_TABLE {32768}else{4096})?.trim().to_string())
     }
     fn write(&self, path: &str, value: &str) -> Result<()> {
+        if path == crate::gpu::APIBOOST_FLOOR {
+            self.read(path)?;
+            let count=self.read(crate::gpu::GED_COUNT)?.parse::<i32>()?;
+            if value.parse::<i32>()?>=count { return Err("GPU APIBOOST floor outside OPP table".into()); }
+            let command=crate::gpu::apiboost_command(&self.read(crate::gpu::LIMIT_TABLE)?,value)?;
+            return self.write(crate::gpu::LIMIT_TABLE,&command);
+        }
         if path == crate::touch::NODE { return crate::touch::write(value); }
         if let Some(result) = crate::audio::write(path,value) { return result; }
         if let Some(result) = crate::display::write(path,value) { return result; }
@@ -146,7 +160,7 @@ pub fn allowed(hardware: &impl Hardware, feature: &Feature, path: &str) -> bool 
             .strip_prefix(&format!("{CPU}/"))
             .and_then(|v| v.strip_suffix("/scaling_min_freq"))
             .is_some_and(valid_policy),
-        Feature::GpuLock => path == GPU || path == GPU_ALT || (path==crate::gpu::GED_FLOOR && crate::gpu::ged_table(hardware).is_ok()),
+        Feature::GpuLock => path == GPU || path == GPU_ALT || ((path==crate::gpu::GED_FLOOR || (path==crate::gpu::APIBOOST_FLOOR && hardware.read(path).is_ok())) && crate::gpu::ged_table(hardware).is_ok()),
         Feature::ChargingThermal => path == CHARGE,
         Feature::GpuThermal => cooling(hardware).is_ok_and(|current| current == path),
         Feature::Touch => path == GOODIX || path == HTSR || path == crate::touch::NODE,
@@ -159,7 +173,7 @@ pub fn allowed(hardware: &impl Hardware, feature: &Feature, path: &str) -> bool 
         Feature::GpuRange => [GPU, GPU_ALT].iter().any(|node| path == *node || path == node.replace("min_freq", "max_freq")),
         Feature::Profile => {
             let cpu = path.strip_prefix(&format!("{CPU}/")).and_then(|tail| tail.split_once('/')).is_some_and(|(policy, field)| valid_policy(policy) && matches!(field, "scaling_min_freq" | "scaling_max_freq"));
-            cpu || path == crate::vendor::POWERHAL || (path==crate::gpu::GED_FLOOR && crate::gpu::ged_table(hardware).is_ok()) || allowed(hardware, &Feature::GpuRange, path)
+            cpu || path == crate::vendor::POWERHAL || ((path==crate::gpu::GED_FLOOR || (path==crate::gpu::APIBOOST_FLOOR && hardware.read(path).is_ok())) && crate::gpu::ged_table(hardware).is_ok()) || allowed(hardware, &Feature::GpuRange, path)
         }
         Feature::Refresh(user) => crate::display::node(path).is_some_and(|(id, _, _)| id == *user),
         Feature::ChargingPause => path == PAUSE || path == FCC,
@@ -167,6 +181,10 @@ pub fn allowed(hardware: &impl Hardware, feature: &Feature, path: &str) -> bool 
     }
 }
 pub fn validate_path_value(feature: &Feature, path: &str, value: &str) -> Result<()> {
+    if path==crate::gpu::APIBOOST_FLOOR {
+        if !matches!(feature,Feature::Profile|Feature::GpuLock) || !(-1..=99).contains(&value.parse::<i32>()?) { return Err("Invalid APIBOOST floor request".into()); }
+        return Ok(());
+    }
     if path==crate::gpu::GED_FLOOR {
         if !matches!(feature,Feature::Profile|Feature::GpuLock)||number(value)?>255 { return Err("Invalid MediaTek GPU floor request".into()); }
         return Ok(());
@@ -247,7 +265,7 @@ pub fn plan(
             }
         }
         Feature::GpuLock if crate::gpu::dummy(hardware) => {
-            crate::gpu::ged_table(hardware)?;targets.push((crate::gpu::GED_FLOOR.into(),"0".into()));
+            crate::gpu::ged_table(hardware)?;targets.push((crate::gpu::floor_node(hardware).into(),"0".into()));
         }
         Feature::GpuLock => {
             let path = if hardware.read(GPU).is_ok() {

@@ -36,3 +36,4 @@ pub mod battery_usage;
 pub mod graphics;
 
 pub mod scheduler;
+mod app_scheduler;

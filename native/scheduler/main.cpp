@@ -1,5 +1,7 @@
-// Narrow root helper: change only SurfaceFlinger thread uclamp.min and cpuset.
+// Root helper: SurfaceFlinger scheduling and identity-checked app thread clamps.
 #include <cerrno>
+#include <dirent.h>
+#include <vector>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -35,9 +37,86 @@ static bool group(const std::string& value) {
     return value == "/" || value == "/foreground" || value == "/system-background" ||
         value == "/top-app" || value == "/background";
 }
+static std::string identity(unsigned long tid) {
+    const auto stat = read("/proc/" + std::to_string(tid) + "/stat");
+    const auto end = stat.rfind(')');
+    if (end == std::string::npos) throw std::runtime_error("Missing thread identity");
+    std::istringstream fields(stat.substr(end + 2)); std::string start;
+    for (int field = 3; field <= 22; ++field)
+        if (!(fields >> start)) throw std::runtime_error("Invalid thread identity");
+    return start;
+}
+static void app_process(unsigned long pid) {
+    const auto status = read("/proc/" + std::to_string(pid) + "/status");
+    const auto offset = status.find("Uid:");
+    if (offset == std::string::npos) throw std::runtime_error("Missing app identity");
+    std::istringstream ids(status.substr(offset + 4)); unsigned long uid = 0; ids >> uid;
+    const auto appid = uid % 100000;
+    if (appid < 10000 || appid > 19999) throw std::runtime_error("Only application UIDs are supported");
+}
+static int app_command(int argc, char** argv) {
+    const auto pid = number(argv[2]);
+    if (pid == 0 || pid > 4194304) throw std::runtime_error("Invalid app process");
+    app_process(pid);
+    const auto process_start = identity(pid);
+    const std::string task = "/proc/" + std::to_string(pid) + "/task/";
+    if (std::string(argv[1]) == "app-get" && argc == 3) {
+        DIR* directory = opendir(task.c_str());
+        if (!directory) throw std::runtime_error("Cannot list app threads");
+        std::vector<unsigned long> tids;
+        while (auto* entry = readdir(directory)) {
+            if (entry->d_name[0] == '.') continue;
+            tids.push_back(number(entry->d_name));
+        }
+        closedir(directory);
+        if (tids.size() > 512) throw std::runtime_error("App thread count exceeds limit");
+        for (auto tid : tids) {
+            Attributes attributes{}; attributes.size = sizeof(attributes);
+            try {
+                const auto start = identity(tid);
+                if (syscall(SYS_sched_getattr, tid, &attributes, sizeof(attributes), 0) != 0) {
+                    if (errno == ESRCH) continue;
+                    throw std::runtime_error("Cannot read app thread attributes");
+                }
+                if (identity(tid) != start || access((task + std::to_string(tid)).c_str(), F_OK) != 0) continue;
+                std::cout << tid << ' ' << start << ' ' << attributes.minimum << ' ' << attributes.maximum << '\n';
+            } catch (const std::exception&) {
+                if (access((task + std::to_string(tid)).c_str(), F_OK) != 0) continue;
+                throw;
+            }
+        }
+    } else if (std::string(argv[1]) == "app-set" && argc >= 9 && (argc - 3) % 6 == 0 && argc <= 3075) {
+        for (int i = 3; i < argc; i += 6) {
+            const auto tid = number(argv[i]);
+            const auto previous = number(argv[i+2]), target = number(argv[i+3]), maximum = number(argv[i+4]), target_max = number(argv[i+5]);
+            if (tid == 0 || tid > 4194304 || previous > maximum || target > target_max || maximum > 1024 || target_max > 1024)
+                throw std::runtime_error("Invalid app thread clamp");
+            if (access((task + std::to_string(tid)).c_str(), F_OK) != 0) continue;
+            const auto start = identity(tid);
+            if (start != argv[i+1]) continue; // Exited thread ID was reused.
+            Attributes attributes{}; attributes.size = sizeof(attributes);
+            if (syscall(SYS_sched_getattr, tid, &attributes, sizeof(attributes), 0) != 0) {
+                if (errno == ESRCH) continue;
+                throw std::runtime_error("Cannot read app thread attributes");
+            }
+            if (attributes.minimum != previous || attributes.maximum != maximum)
+                throw std::runtime_error("App thread clamp changed before write");
+            if (identity(pid) != process_start || identity(tid) != start)
+                throw std::runtime_error("App process identity changed");
+            attributes.flags = (attributes.flags & 1) | 8 | 16 | 32 | 64;
+            attributes.minimum = target; attributes.maximum = target_max;
+            if (syscall(SYS_sched_setattr, tid, &attributes, 0) != 0 && errno != ESRCH)
+                throw std::runtime_error("Cannot set app minimum clamp");
+        }
+    } else throw std::runtime_error("Invalid app scheduler command");
+    if (identity(pid) != process_start) throw std::runtime_error("App process identity changed");
+    return 0;
+}
 int main(int argc, char** argv) {
     try {
-        if (getuid() != 0 || (argc != 3 && argc != 6)) throw std::runtime_error("Invalid scheduler command");
+        if (getuid() != 0 || argc < 3) throw std::runtime_error("Invalid scheduler command");
+        if (std::string(argv[1]) == "app-get" || std::string(argv[1]) == "app-set") return app_command(argc, argv);
+        if (argc != 3 && argc != 6) throw std::runtime_error("Invalid scheduler command");
         const auto tid = number(argv[2]);
         if (tid == 0 || tid > 4194304) throw std::runtime_error("Invalid thread ID");
         const std::string base = "/proc/" + std::to_string(tid);
@@ -66,7 +145,7 @@ int main(int argc, char** argv) {
                 throw std::runtime_error("Thread identity or target changed");
             if (attributes.minimum != minimum) {
                 // KEEP_POLICY | KEEP_PARAMS | UTIL_CLAMP_MIN. Preserve uclamp.max.
-                attributes.flags = 8 | 16 | 32; attributes.minimum = minimum;
+                attributes.flags = (attributes.flags & 1) | 8 | 16 | 32; attributes.minimum = minimum;
                 if (syscall(SYS_sched_setattr, tid, &attributes, 0) != 0)
                     throw std::runtime_error("Cannot set compositor minimum clamp");
             }
