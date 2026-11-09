@@ -41,3 +41,5 @@
 #stop-results{margin-top:12px}#stop-results p+p{margin-top:8px}
 
 #page-settings>.setting-row>.control-copy{padding-top:0}
+
+.app-row{content-visibility:auto;contain-intrinsic-size:auto 76px}

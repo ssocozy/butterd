@@ -2,7 +2,7 @@ import {icon as phosphorIcon,mountIcons} from './icons.js';
 mountIcons();
 import {exec,binary,validPackage} from './bridge.js';
 import {$,notify,button,paragraph,setBusy,updateSelectors} from './ui.js';
-import {renderControls,advanced} from './controls.js';
+import {renderControls,updateClockReadings,advanced} from './controls.js';
 import './activity.js';
 import {renderHardware} from './hardware.js';
 let snapshot = null, busy = false, polling = false, hardwareSignature = '', selectedApp = null, apps = [], appsLoaded = false, loadingApps = false, appRulesSignature = '';
@@ -58,8 +58,11 @@ function render(state) {
   const recording=telemetry.recording;
   if (recording?.available) detailsRow(metrics,'Screen capture',recording.screenCapture ? 'Session active · '+recording.package : recording.active ? 'Other projection session' : 'No active session');
   $('sensor-note').textContent = sampled ? '' : running ? 'Waiting for readings…' : 'Start monitoring to see readings.';
-  const signature = JSON.stringify([state.audio,state.supervisor?.runtime?.app_controls,state.supervisor?.config?.controls,state.supervisor?.runtime?.preference_errors,state.governors,state.cpuPolicies,state.gpuRange,state.touch,state.tcp,...Object.keys(advanced).map(key=>state[key])]);
+  const controlPolicies=(state.cpuPolicies || []).map(({current,min,max,requestedMin,requestedMax,...capabilities})=>capabilities);
+  const controlGpu=state.gpuRange && {active:state.gpuRange.active,backend:state.gpuRange.backend,manualRanges:state.gpuRange.manualRanges,frequencies:state.gpuRange.frequencies};
+  const signature = JSON.stringify([state.audio,state.supervisor?.runtime?.app_controls,state.supervisor?.config?.controls,state.supervisor?.runtime?.preference_errors,state.governors,controlPolicies,controlGpu,state.touch,state.tcp,...Object.keys(advanced).map(key=>state[key])]);
   if (!busy && signature !== hardwareSignature && !$('choice-dialog')?.open) { renderControls(state,run,requestAdvanced); hardwareSignature = signature; }
+  updateClockReadings(state);
   renderHardware(state);
   const compatibility = state.compatibility || {};
   if (models[compatibility.selectedModel]) { if (!$('choice-dialog')?.open) $('identity').value = compatibility.selectedModel; $('identity-summary').textContent = models[compatibility.selectedModel]+' · configured'; }
@@ -70,7 +73,7 @@ function render(state) {
   if (appsLoaded && rulesSignature !== appRulesSignature) { appRulesSignature = rulesSignature; renderApps(); }
   updateSelectors();
 }
-async function refresh(manual = false, force = false) {
+async function refresh(manual = false, force = false, light = false) {
   const trigger = $('refresh');
   if ((manual && trigger.dataset.refreshing === 'true') || (!manual && polling && !force)) return;
   const started = performance.now();
@@ -78,7 +81,13 @@ async function refresh(manual = false, force = false) {
   try {
     while (polling) await new Promise(resolve=>setTimeout(resolve,40));
     polling = true;
-    render(JSON.parse(await exec(binary+' status')));
+    const useLive=light && snapshot;
+    const data=JSON.parse(await exec(binary+(useLive ? ' live' : ' status')));
+    if (useLive) {
+      render({...snapshot,supervisor:data.supervisor,
+        cpuPolicies:(snapshot.cpuPolicies || []).map(policy=>({...policy,...data.clocks?.cpus?.find(clock=>clock.id===policy.id)})),
+        gpuRange:{...snapshot.gpuRange,...data.clocks?.gpu}});
+    } else { hardwareSignature=''; render(data); }
     if (manual) notify('Readings updated.');
   } catch (error) { $('engine-state').textContent = 'Connection failed'; $('engine-reason').textContent = error.message; notify(error.message,true); }
   finally {
@@ -138,23 +147,30 @@ $('risk-ack').addEventListener('change',event=>{ $('risk-apply').disabled=!event
 $('risk-form').addEventListener('submit',event=>{ event.preventDefault(); if ($('risk-ack').checked && Object.hasOwn(advanced,requestedAdvanced)) { $('risk-dialog').close(); run('enable '+requestedAdvanced+' --accept-risk'); } });
 async function loadApps() {
   if (loadingApps) return; loadingApps=true; $('app-message').textContent='Reading installed apps…'; $('reload-apps').disabled=true;
-  try { const catalogue=JSON.parse(await exec(binary+' apps')); apps=(catalogue.apps || []).filter(app=>validPackage(app.package)); appsLoaded=true; $('app-message').textContent=catalogue.warning || 'Tap an app to configure its preset and refresh rate.'; renderApps(); }
+  try { await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    if ($('page-apps').hidden) return;
+    const catalogue=JSON.parse(await exec(binary+' apps')); apps=(catalogue.apps || []).filter(app=>validPackage(app.package)); appsLoaded=true; $('app-message').textContent=catalogue.warning || 'Tap an app to configure its preset and refresh rate.'; renderApps(); }
   catch (error) { $('app-message').textContent=error.message; notify('Could not load apps: '+error.message,true); }
   finally { loadingApps=false; $('reload-apps').disabled=false; }
 }
-$('reload-apps').addEventListener('click',loadApps); $('app-search').addEventListener('input',renderApps);
+$('reload-apps').addEventListener('click',loadApps);
+let appSearchFrame;
+$('app-search').addEventListener('input',()=>{ if(appSearchFrame) cancelAnimationFrame(appSearchFrame); appSearchFrame=requestAnimationFrame(()=>{ appSearchFrame=null; renderApps(); }); });
 function renderApps() {
-  const term=$('app-search').value.trim().toLocaleLowerCase(), rules=snapshot?.supervisor?.config?.rules || [];
-  const visible=apps.filter(app=>(String(app.label)+' '+app.package).toLocaleLowerCase().includes(term)).sort((a,b)=>Number(rules.some(rule=>rule.package===b.package))-Number(rules.some(rule=>rule.package===a.package)) || String(a.label).localeCompare(String(b.label)));
+  const term=$('app-search').value.trim().toLocaleLowerCase(), rules=snapshot?.supervisor?.config?.rules || [], ruleMap=new Map(rules.map(rule=>[rule.package,rule]));
+  appRulesSignature=JSON.stringify(rules);
+  const visible=apps.filter(app=>(String(app.label)+' '+app.package).toLocaleLowerCase().includes(term)).sort((a,b)=>Number(ruleMap.has(b.package))-Number(ruleMap.has(a.package)) || String(a.label).localeCompare(String(b.label)));
   $('app-count').textContent=visible.length+' installed app'+(visible.length===1 ? '' : 's'); const host=$('app-list'); host.replaceChildren();
   if (!visible.length) { host.append(paragraph(term ? 'No apps match your search.' : 'No launchable apps were returned. Tap Reload to retry.','empty-state')); return; }
+  const fragment=document.createDocumentFragment();
   for (const app of visible) {
     const row=button('',()=>openApp(app),true,'app-row');
     let icon; if (typeof app.icon==='string' && /^data:image\/png;base64,[A-Za-z0-9+/=]{1,3000}$/.test(app.icon)) { icon=document.createElement('img'); icon.src=app.icon; icon.alt=''; icon.loading='lazy'; } else { icon=document.createElement('span'); icon.textContent=String(app.label || app.package).slice(0,1).toUpperCase(); icon.setAttribute('aria-hidden','true'); } icon.className='app-icon';
     const info=document.createElement('span'); info.className='app-name'; const label=document.createElement('strong'); label.textContent=app.label || app.package; const detail=document.createElement('small'); detail.textContent=app.package; info.append(label,detail); row.append(icon,info);
-    const rule=rules.find(rule=>rule.package===app.package); if (rule) { const badge=document.createElement('span'); badge.className='app-badge'; badge.textContent=presetName(rule.preset); row.append(badge); } else if (app.game) { const badge=document.createElement('span'); badge.className='app-badge'; badge.textContent='Game'; row.append(badge); }
-    const chevron=document.createElement('span'); chevron.className='chevron'; chevron.append(phosphorIcon('caret-right')); row.append(chevron); host.append(row);
+    const rule=ruleMap.get(app.package); if (rule) { const badge=document.createElement('span'); badge.className='app-badge'; badge.textContent=presetName(rule.preset); row.append(badge); } else if (app.game) { const badge=document.createElement('span'); badge.className='app-badge'; badge.textContent='Game'; row.append(badge); }
+    const chevron=document.createElement('span'); chevron.className='chevron'; chevron.append(phosphorIcon('caret-right')); row.append(chevron); fragment.append(row);
   }
+  host.append(fragment);
 }
 function openApp(app) {
   selectedApp=app; const rule=snapshot?.supervisor?.config?.rules?.find(rule=>rule.package===app.package);
@@ -199,4 +215,4 @@ setPage(); updateSelectors();
     if (snapshot && snapshot.supervisor?.health?.running!==true) { await run('monitor',null,true); }
   } catch (error) { $('engine-state').textContent='Root connection needed'; $('engine-reason').textContent=error.message; notify(error.message,true); }
 })();
-setInterval(()=>{ if (!document.hidden && !busy) refresh(); },5000);
+setInterval(()=>{ if (!document.hidden && !busy && !document.querySelector('dialog[open]')) refresh(false,false,true); },5000);

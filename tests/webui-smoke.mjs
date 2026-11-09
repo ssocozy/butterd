@@ -54,11 +54,16 @@ try {
   };
   for(const name of ['cpu-lock','gpu-lock','gpu-thermal','charging-thermal','bypass','charging-pause'])fixture[name]={available:name!=='bypass',state:'Off',reason:'Kernel does not advertise observable battery bypass'};
   await send('Page.addScriptToEvaluateOnNewDocument',{source:`
+    const originalSetInterval=globalThis.setInterval;
+    globalThis.setInterval=(callback,ms,...args)=>{if(ms===5000)globalThis.__pollReadings=callback;return originalSetInterval(callback,ms,...args);};
+    globalThis.__appsPagePainted=false;globalThis.__appScanAfterPaint=false;
+    window.addEventListener('hashchange',()=>{if(location.hash==='#apps')requestAnimationFrame(()=>{globalThis.__appsPagePainted=true;});});
     globalThis.__micPaints=[];globalThis.__micPaintObserved=false;
     document.addEventListener('change',event=>{if(event.target.matches('#audio-controls input')){globalThis.__micPaintObserved=false;requestAnimationFrame(()=>{globalThis.__micPaintObserved=true;});}});
     globalThis.__butterCommands=[];globalThis.__butterFixture=${JSON.stringify(fixture)};
     globalThis.ksu={exec(command,options,callback){
       if(command.endsWith('phone-mic'))__micPaints.push(__micPaintObserved);
+      if(command.endsWith(' apps'))__appScanAfterPaint=__appsPagePainted&&!document.getElementById('page-apps').hidden;
       __butterCommands.push(command);let stdout='Request saved.',code=0,stderr='';const state=__butterFixture;
       if(command.endsWith('id -u'))stdout='0';
       else if(command.endsWith(' monitor')){state.supervisor.health={running:true,sampleAgeSeconds:2};state.supervisor.runtime.sampled_at=100;state.supervisor.runtime.reason='Monitoring only';state.supervisor.runtime.telemetry={batteryPercent:72,batteryWatts:-2.4,batteryTempC:34.2,socTempC:46,screenHz:120,supportedHz:[60,120],cpuBusyPercent:12,gpuBusyPercent:8,cycleCount:125,health:'Good',batteryStatus:'Discharging'};}
@@ -73,6 +78,7 @@ try {
       else if(command.endsWith(' recording off'))state.supervisor.config.recording_assist=false;
       else if(command.endsWith(' notifications on'))state.supervisor.config.notifications=true;
       else if(command.endsWith(' notifications off'))state.supervisor.config.notifications=false;
+      else if(command.endsWith(' live'))stdout=JSON.stringify({supervisor:state.supervisor,clocks:{cpus:state.cpuPolicies,gpu:state.gpuRange}});
       else if(command.endsWith(' status'))stdout=JSON.stringify(state);
       else if(command.endsWith(' activity'))stdout=JSON.stringify({sampleSeconds:1,apps:[{package:'com.example.game',label:'Pocket Game',rssKb:524288,cpuPercent:12.5,foreground:false,canStop:true},{package:'com.android.systemui',label:'System UI',rssKb:262144,cpuPercent:2,foreground:true,canStop:false,protectedReason:'Protected system app'}]});
       else if(command.includes(' activity stop --confirm '))stdout=JSON.stringify({results:[{package:'com.example.game',result:'stopped',detail:'Android accepted force-stop'}]});
@@ -106,9 +112,15 @@ try {
   await evaluate(`document.querySelector('[data-close=aggressive-dialog]').click()`);
   await until(`!document.getElementById('aggressive-dialog').open`);
   await evaluate(`location.hash='apps'`); await until(`document.querySelectorAll('.app-row').length===2`);
+  assert.equal(await evaluate(`__appScanAfterPaint`),true,'App scan started before the Apps page could paint');
+  await evaluate(`globalThis.__firstAppRow=document.querySelector('.app-row');location.hash='overview'`);
+  await until(`!document.getElementById('page-overview').hidden`);
+  await evaluate(`location.hash='apps'`);await until(`!document.getElementById('page-apps').hidden`);
+  assert.equal(await evaluate(`document.querySelector('.app-row')===__firstAppRow && __butterCommands.filter(command=>command.endsWith(' apps')).length===1`),true,'Tab navigation rebuilt or rescanned the app catalogue');
+
   assert.equal(await evaluate(`document.querySelectorAll('#app-list img').length`),0,'An app label was interpreted as HTML');
   await evaluate(`document.getElementById('app-search').value='pocket';document.getElementById('app-search').dispatchEvent(new Event('input'))`);
-  assert.equal(await evaluate(`document.querySelectorAll('.app-row').length`),1);
+  await until(`document.querySelectorAll('.app-row').length===1`);
   await evaluate(`document.querySelector('.app-row').click()`); await until(`document.getElementById('app-dialog').open`);
   assert.equal(await evaluate(`document.getElementById('app-package').textContent`),'com.example.game');
   await evaluate(`document.querySelector('[data-select=app-preset]').click()`); await until(`document.getElementById('choice-dialog').open`);
@@ -141,6 +153,18 @@ try {
   assert.equal(await evaluate(`[...document.querySelectorAll('.select-trigger')].every(node=>node.querySelector('svg.ph-icon') && !node.textContent.includes('⌄'))`),true);
   await evaluate(`document.querySelector('#cpu-controls').closest('details').open=true`); await delay(250);
   assert.equal(await evaluate(`document.querySelector('#governor-all').value`),'schedutil');
+  await evaluate(`__butterFixture.cpuPolicies[0].choices.push('sugov_ext');__butterFixture.cpuPolicies[0].governor='sugov_ext';document.getElementById('refresh').click()`);
+  await until(`document.querySelector('#governor-all').value==='sugov_ext' && !document.getElementById('refresh').disabled`);
+  await evaluate(`[...document.querySelectorAll('#cpu-controls button')].find(node=>node.textContent==='Apply to all clusters').click()`);
+  await until(`__butterCommands.some(command=>command.endsWith(' governor all sugov_ext')) && document.body.getAttribute('aria-busy')==='false'`);
+  await evaluate(`[...document.getElementById('governor-policy0').closest('.control').querySelectorAll('button')].find(node=>node.textContent==='Apply governor').click()`);
+  await until(`__butterCommands.some(command=>command.endsWith(' governor policy0 sugov_ext')) && document.body.getAttribute('aria-busy')==='false'`);
+  await evaluate(`globalThis.__editedMinimum=document.getElementById('minimum-policy0');__editedMinimum.value='1000000';__butterFixture.cpuPolicies[0].current='1500000';globalThis.__statusCount=__butterCommands.filter(command=>command.endsWith(' status')).length;__pollReadings()`);
+  await until(`__butterCommands.some(command=>command.endsWith(' live')) && document.getElementById('hardware-details').textContent.includes('1.5 GHz')`);
+  assert.equal(await evaluate(`document.getElementById('minimum-policy0')===__editedMinimum && __editedMinimum.value==='1000000'`),true,'Live polling rebuilt an edited frequency control');
+  assert.equal(await evaluate(`__butterCommands.filter(command=>command.endsWith(' status')).length===__statusCount`),true,'Automatic polling ran full capability discovery');
+
+
   assert.equal(await evaluate(`document.querySelectorAll('#touch-controls button').length===0 && document.querySelector('#touch-controls input[role=switch]')!==null`),true);
   assert.equal(await evaluate(`document.querySelector('#vulkan-ui').checked`),true);
   await evaluate(`document.querySelector('#vulkan-ui').click()`);

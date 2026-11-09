@@ -663,6 +663,39 @@ fn recover_refresh(e: &Engine<SystemHardware, DiskStore>) -> Result<()> {
     if errors.is_empty() { Ok(()) } else { Err(errors.join("; ").into()) }
 }
 
+/// UI polling reads existing state and clock nodes without Android service probes.
+pub fn supervisor_snapshot(boot: &str) -> Result<Value> {
+    Ok(json!({"config":config().map(|value|json!(value)).unwrap_or_else(|error|json!({"error":error.to_string()})),
+        "runtime":state(boot).map(|value|json!(value)).unwrap_or_else(|error|json!({"error":error.to_string()})),
+        "uptime":uptime()?,"notificationDelivery":notification_status(),"health":supervisor_status(boot)}))
+}
+pub fn live_status(boot: &str) -> Result<Value> {
+    let hardware=SystemHardware;
+    let reader=Engine{hardware:SystemHardware,store:DiskStore::new(DIRECTORY),boot:boot.into()};
+    let profile=reader.session(&Feature::Profile).ok().flatten();
+    let requested=|path: &str| profile.as_ref().and_then(|journal|journal.entries.iter().find(|entry|entry.path==path)).map(|entry|entry.expected.clone());
+    let vendor=requested(crate::vendor::POWERHAL).and_then(|raw|crate::vendor::parse(&raw).ok());
+    let mut policies=hardware.list(crate::hardware::CPU).unwrap_or_default();
+    policies.retain(|policy|crate::model::valid_policy(policy));
+    policies.sort_by_key(|policy|policy.trim_start_matches("policy").parse::<u32>().unwrap_or(u32::MAX));
+    let cpus:Vec<_>=policies.into_iter().take(16).enumerate().map(|(index,policy)| {
+        let base=format!("{}/{policy}",crate::hardware::CPU);
+        json!({"id":policy,"current":hardware.read(&format!("{base}/scaling_cur_freq")).ok(),
+            "min":hardware.read(&format!("{base}/scaling_min_freq")).ok(),"max":hardware.read(&format!("{base}/scaling_max_freq")).ok(),
+            "requestedMin":vendor.as_ref().and_then(|values|values.get(index*2)).filter(|value|**value>0).map(ToString::to_string).or_else(||requested(&format!("{base}/scaling_min_freq"))),
+            "requestedMax":vendor.as_ref().and_then(|values|values.get(index*2+1)).filter(|value|**value>0).map(ToString::to_string).or_else(||requested(&format!("{base}/scaling_max_freq")))})
+    }).collect();
+    let gpu_path=if hardware.read(crate::hardware::GPU).is_ok(){crate::hardware::GPU}else{crate::hardware::GPU_ALT};
+    let base=gpu_path.trim_end_matches("/min_freq");
+    let ged=crate::gpu::dummy(&hardware);
+    let current=hardware.read(crate::gpu::GED_CURRENT).ok().and_then(|raw|crate::gpu::ged_current(&raw)).map(|(_,hz)|hz.to_string())
+        .or_else(||hardware.read(&format!("{base}/cur_freq")).ok());
+    let ged_request=if ged { requested(crate::gpu::GED_FLOOR).and_then(|index|index.parse::<usize>().ok()).and_then(|index|crate::gpu::ged_table(&hardware).ok()?.get(index).copied()).map(|hz|hz.to_string()) } else {None};
+    let gpu=json!({"requestedMin":ged_request.or_else(||requested(gpu_path)),"requestedMax":requested(&format!("{base}/max_freq")),"current":current,"min":if ged{None}else{hardware.read(gpu_path).ok()},
+        "max":hardware.read(&format!("{base}/max_freq")).ok(),"gedFloorIndex":hardware.read(crate::gpu::GED_FLOOR).ok()});
+    Ok(json!({"supervisor":supervisor_snapshot(boot)?,"clocks":{"cpus":cpus,"gpu":gpu}}))
+}
+
 pub fn supervisor_status(boot: &str) -> Value {
     let running = crate::lock::FileLock::held(&Path::new(DIRECTORY).join("daemon.lock"));
     let last = state(boot).ok().map(|state| state.sampled_at).filter(|time| *time > 0);

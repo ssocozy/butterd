@@ -44,6 +44,9 @@ export function updateSelectors() {
   for (const [select, trigger] of selectors) {
     if (!select.isConnected) { selectors.delete(select); continue; }
     const label = select.labels?.[0]?.textContent?.trim() || select.getAttribute('aria-label') || 'Selection';
+    const signature=JSON.stringify([label,select.selectedOptions[0]?.textContent,select.disabled]);
+    if (trigger.dataset.signature===signature) continue;
+    trigger.dataset.signature=signature;
     const value = document.createElement('span'); value.textContent = select.selectedOptions[0]?.textContent || 'Choose'; trigger.replaceChildren(value, icon('caret-down')); trigger.setAttribute('aria-label', label + ': ' + (select.selectedOptions[0]?.textContent || 'Choose'));
     trigger.disabled = select.disabled; trigger.dataset.capable = String(!select.disabled);
   }

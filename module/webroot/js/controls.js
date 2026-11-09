@@ -69,8 +69,7 @@ export function renderControls(state, run, requestAdvanced) {
   const clustersOpen = cpu.querySelector(':scope > details')?.open === true;
   cpu.replaceChildren();
   const policies = state.cpuPolicies || [];
-  const allowed = ['schedutil','ondemand','conservative','powersave','interactive'];
-  const common = allowed.filter(value => policies.length && policies.every(policy => (policy.choices || []).includes(value)));
+  const common = [...new Set(policies[0]?.choices || [])].filter(value => /^[a-z][a-z0-9_]{0,31}$/.test(value) && policies.every(policy => (policy.choices || []).includes(value)));
   const current = new Set(policies.map(policy => policy.governor));
   const unified = document.createElement('div'); unified.className = 'control';
   const heading = document.createElement('h3'); heading.textContent = 'All CPU clusters';
@@ -88,10 +87,10 @@ export function renderControls(state, run, requestAdvanced) {
   for (const policy of state.cpuPolicies || []) {
     if (!/^policy[0-9]{1,3}$/.test(policy.id)) continue;
     const host = document.createElement('div'); host.className = 'control'; const title = document.createElement('h3'); const cluster = names.get(policy.id); title.textContent = cluster.name; host.append(title,paragraph(cluster.cores+' '+(cluster.cores === 1 ? 'core' : 'cores')+' · supported up to '+formatClock(cluster.peak),'cluster-meta'),paragraph('Effective limits: '+formatClock(policy.min)+' – '+formatClock(policy.max),'caption'));
-    if (Number(policy.requestedMin)>Number(policy.max) && Number(policy.max)>0) host.append(paragraph('Limited by the ROM/kernel.','caption'));
-    if (validNumber(policy.current)) host.append(paragraph('Current clock: '+formatClock(policy.current),'caption'));
-    if (validNumber(policy.requestedMin) && validNumber(policy.requestedMax)) host.append(paragraph('Preset request: '+formatClock(policy.requestedMin)+' – '+formatClock(policy.requestedMax),'preset-request'));
-    const allowed = ['schedutil','ondemand','conservative','powersave','interactive']; const choices = [...new Set([policy.governor,...(policy.choices || [])])].filter(v => /^[a-z][a-z0-9_]{0,31}$/.test(v));
+    for (const [field,style] of [['limited','caption'],['limits','caption'],['current','caption'],['request','preset-request']]) {
+      const reading=paragraph('',style);reading.id='clock-'+field+'-'+policy.id;reading.hidden=true;host.append(reading);
+    }
+    const allowed = (policy.choices || []).filter(value => /^[a-z][a-z0-9_]{0,31}$/.test(value)); const choices = [...new Set([policy.governor,...(policy.choices || [])])].filter(v => /^[a-z][a-z0-9_]{0,31}$/.test(v));
     const governor = selection('governor-'+policy.id,'CPU governor',choices,policy.governor,host);
     host.append(actions(button('Apply governor', () => { if (allowed.includes(governor.value)) run('governor '+policy.id+' '+governor.value); else run(null,'This governor is shown for reference but cannot be selected by butter.'); },state.governors?.original !== true),button('Restore governor', () => run('restore '+policy.id),policy.original === true)));
     range(host,policy.id,{frequencies:policy.frequencies,min:policy.min,max:policy.max,active:policy.rangeActive},run); details.append(host);
@@ -99,12 +98,10 @@ export function renderControls(state, run, requestAdvanced) {
   if (!policies.length) cpu.append(paragraph('CPU controls could not be discovered. Export diagnostics for the exact failure.'));
   const gpu = $('gpu-controls'); gpu.replaceChildren(); const gpuRange = state.gpuRange || {};
   if (gpuRange.backend) gpu.append(paragraph('Controller: '+gpuRange.backend,'caption'));
-  if (validNumber(gpuRange.current)) gpu.append(paragraph('Current clock: '+formatClock(gpuRange.current,true),'caption'));
   if (validNumber(gpuRange.referenceMax)) gpu.append(paragraph('Reference ceiling: '+formatClock(gpuRange.referenceMax,true),'caption'));
-  if (!validNumber(gpuRange.min) && validNumber(gpuRange.max)) gpu.append(paragraph('Effective ceiling: '+formatClock(gpuRange.max,true),'caption'));
-  if (validNumber(gpuRange.min) && validNumber(gpuRange.max)) gpu.append(paragraph('Effective limits: '+formatClock(gpuRange.min,true)+' – '+formatClock(gpuRange.max,true),'caption'));
-  if (validNumber(gpuRange.requestedMin) && !validNumber(gpuRange.requestedMax)) gpu.append(paragraph('Preset minimum request: '+formatClock(gpuRange.requestedMin,true),'preset-request'));
-  if (validNumber(gpuRange.requestedMin) && validNumber(gpuRange.requestedMax)) gpu.append(paragraph('Preset request: '+formatClock(gpuRange.requestedMin,true)+' – '+formatClock(gpuRange.requestedMax,true),'preset-request'));
+  for (const [field,style] of [['current','caption'],['limits','caption'],['request','preset-request']]) {
+    const reading=paragraph('',style);reading.id='clock-'+field+'-gpu';reading.hidden=true;gpu.append(reading);
+  }
   if (gpuRange.manualRanges===false) gpu.append(paragraph('GPU clocks are managed through presets.','caption'));
   else range(gpu,'gpu',gpuRange,run);
   const touch = state.touch || {}, touchActions = $('touch-controls'); touchActions.replaceChildren();
@@ -140,4 +137,18 @@ export function renderControls(state, run, requestAdvanced) {
     host.append(toggle(title,capability.state === 'Request active',capability.available === true,{off:'restore '+key,confirm:()=>requestAdvanced(key,title,description)},run,summary));
   }
   updateSelectors();
+}
+
+export function updateClockReadings(state) {
+  const set=(id,text)=>{const node=$(id);if(!node)return;node.hidden=!text;if(node.textContent!==text)node.textContent=text;};
+  for (const policy of state.cpuPolicies || []) {
+    set('clock-limited-'+policy.id,Number(policy.requestedMin)>Number(policy.max)&&Number(policy.max)>0?'Limited by the ROM/kernel.':'');
+    set('clock-limits-'+policy.id,'Effective limits: '+formatClock(policy.min)+' – '+formatClock(policy.max));
+    set('clock-current-'+policy.id,validNumber(policy.current)?'Current clock: '+formatClock(policy.current):'');
+    set('clock-request-'+policy.id,validNumber(policy.requestedMin)&&validNumber(policy.requestedMax)?'Preset request: '+formatClock(policy.requestedMin)+' – '+formatClock(policy.requestedMax):'');
+  }
+  const gpu=state.gpuRange || {};
+  set('clock-current-gpu',validNumber(gpu.current)?'Current clock: '+formatClock(gpu.current,true):'');
+  set('clock-limits-gpu',validNumber(gpu.max)?(validNumber(gpu.min)?'Effective limits: '+formatClock(gpu.min,true)+' – ':'Effective ceiling: ')+formatClock(gpu.max,true):'');
+  set('clock-request-gpu',validNumber(gpu.requestedMin)?(validNumber(gpu.requestedMax)?'Preset request: '+formatClock(gpu.requestedMin,true)+' – '+formatClock(gpu.requestedMax,true):'Preset minimum request: '+formatClock(gpu.requestedMin,true)):'');
 }

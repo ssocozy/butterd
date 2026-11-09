@@ -42,6 +42,10 @@ fn run() -> Result<()> {
         return Err("Boot identity unavailable".into());
     }
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args == ["live"] {
+        println!("{}", butter::runtime::live_status(&boot)?);
+        return Ok(());
+    }
     if args == ["status"] {
         let engine = Engine {
             hardware,
@@ -51,7 +55,7 @@ fn run() -> Result<()> {
         let mut status = engine.status();
         status["graphics"] = butter::graphics::status();
         status["compatibility"] = butter::runtime::compatibility_status();
-        status["supervisor"] = serde_json::json!({"config": butter::runtime::config().map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "runtime": butter::runtime::state(&engine.boot).map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "uptime": butter::runtime::uptime()?, "notificationDelivery":butter::runtime::notification_status(), "health":butter::runtime::supervisor_status(&engine.boot)});
+        status["supervisor"] = butter::runtime::supervisor_snapshot(&engine.boot)?;
         println!("{}", serde_json::to_string(&status)?);
         return Ok(());
     }
