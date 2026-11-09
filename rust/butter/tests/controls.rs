@@ -1003,3 +1003,90 @@ fn hyperos_keeps_gpu_control_when_shared_cpu_requests_change() {
     engine.preset(Mode::Balanced).unwrap();
     assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"4");
 }
+
+#[test]
+fn gpu_only_conflicts_retry_then_yield_without_blocking_cpu_scheduling() {
+    use butter::{presets::Mode,runtime::{RuntimeState,maintain_profile}};
+    let engine=ged_fixture();engine.hardware.put(butter::vendor::SF_POLICY,"1");
+    engine.preset(Mode::Aggressive).unwrap();
+    let mut state=RuntimeState{active:Mode::Aggressive,..Default::default()};
+    for retry in 1..=3 {
+        engine.hardware.put(butter::gpu::GED_FLOOR,"3");
+        assert_eq!(maintain_profile(&engine,&mut state,Mode::Aggressive,false).unwrap(),Some("gpu-request"));
+        assert_eq!(state.gpu_profile_retries,retry);
+        assert_eq!(state.profile_retries,0);
+        assert!(!state.blocked);assert!(state.error.is_none());
+        assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"1");
+    }
+    engine.hardware.put(butter::gpu::GED_FLOOR,"2");
+    assert_eq!(maintain_profile(&engine,&mut state,Mode::Aggressive,false).unwrap(),Some("gpu-paused"));
+    assert!(state.gpu_profile_paused);assert!(!state.blocked);assert_eq!(state.active,Mode::Aggressive);
+    assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"2");
+    assert!(engine.session(&Feature::Profile).unwrap().is_none());
+    let writes=engine.hardware.writes.get();
+    maintain_profile(&engine,&mut state,Mode::Aggressive,true).unwrap();
+    assert_eq!(engine.hardware.writes.get(),writes,"A cooling-stage change restarted a yielded GPU override");
+}
+
+#[test]
+fn thermal_gpu_ceiling_is_not_mistaken_for_a_replaced_floor_request() {
+    use butter::{presets::Mode,runtime::{RuntimeState,maintain_profile}};
+    let engine=ged_fixture();engine.hardware.put(butter::vendor::SF_POLICY,"1");
+    engine.preset(Mode::Aggressive).unwrap();
+    let mut state=RuntimeState{active:Mode::Aggressive,..Default::default()};
+    let max=butter::hardware::GPU.replace("min_freq","max_freq");engine.hardware.put(&max,"300000000");
+    let writes=engine.hardware.writes.get();
+    assert_eq!(maintain_profile(&engine,&mut state,Mode::Aggressive,false).unwrap(),None);
+    assert_eq!(state.gpu_profile_retries,0);assert!(!state.gpu_profile_paused);
+    assert_eq!(engine.hardware.writes.get(),writes);assert_eq!(engine.hardware.read(&max).unwrap(),"300000000");
+}
+
+#[test]
+fn gpu_apply_failure_is_local_and_gpu_reconciliation_rejects_cpu_entries() {
+    use butter::{presets::Mode,runtime::{RuntimeState,maintain_profile}};
+    let engine=ged_fixture();engine.hardware.put(butter::vendor::SF_POLICY,"1");
+    engine.hardware.fail_at.set(Some(1));
+    let mut state=RuntimeState::default();
+    assert_eq!(maintain_profile(&engine,&mut state,Mode::Aggressive,true).unwrap(),Some("gpu-paused"));
+    assert!(state.gpu_profile_paused);assert!(!state.blocked);assert!(state.error.is_none());
+    let mixed=ged_fixture();mixed.preset(Mode::Aggressive).unwrap();
+    let writes=mixed.hardware.writes.get();
+    assert!(mixed.reconcile_gpu_profile_cooled(Mode::Aggressive,0).is_err());
+    assert_eq!(mixed.hardware.writes.get(),writes);
+}
+
+#[test]
+fn stronger_powerhal_gpu_vote_is_preserved_and_request_resumes_when_it_releases() {
+    use butter::{presets::Mode,runtime::{RuntimeState,maintain_profile}};
+    let engine=ged_fixture();engine.hardware.put(butter::vendor::SF_POLICY,"1");
+    engine.preset(Mode::Aggressive).unwrap();
+    let mut state=RuntimeState{active:Mode::Aggressive,..Default::default()};
+    engine.hardware.put(butter::gpu::GED_FLOOR,"0");
+    let writes=engine.hardware.writes.get();
+    assert_eq!(maintain_profile(&engine,&mut state,Mode::Aggressive,false).unwrap(),Some("gpu-satisfied"));
+    assert!(state.gpu_satisfied_by_rom);assert!(!state.gpu_profile_paused);assert!(!state.blocked);
+    assert_eq!(state.gpu_profile_retries,0);assert_eq!(engine.hardware.writes.get(),writes);
+    assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"0");
+    assert!(engine.session(&Feature::Profile).unwrap().is_none());
+    maintain_profile(&engine,&mut state,Mode::Aggressive,true).unwrap();
+    assert_eq!(engine.hardware.writes.get(),writes);
+    engine.hardware.put(butter::gpu::GED_FLOOR,"4");
+    maintain_profile(&engine,&mut state,Mode::Aggressive,false).unwrap();
+    assert!(!state.gpu_satisfied_by_rom);assert!(!state.gpu_profile_paused);
+    assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"1");
+    maintain_profile(&engine,&mut state,Mode::Balanced,false).unwrap();
+    assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"4");
+}
+
+#[test]
+fn initial_aggressive_request_does_not_weaken_an_existing_stronger_rom_floor() {
+    use butter::{presets::Mode,runtime::{RuntimeState,maintain_profile}};
+    let engine=ged_fixture();engine.hardware.put(butter::vendor::SF_POLICY,"1");
+    engine.hardware.put(butter::gpu::GED_FLOOR,"0");
+    let mut state=RuntimeState::default();
+    assert_eq!(maintain_profile(&engine,&mut state,Mode::Aggressive,true).unwrap(),Some("gpu-satisfied"));
+    assert!(state.gpu_satisfied_by_rom);assert_eq!(engine.hardware.writes.get(),0);
+    assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"0");
+    maintain_profile(&engine,&mut state,Mode::Balanced,false).unwrap();
+    assert!(!state.gpu_satisfied_by_rom);assert_eq!(engine.hardware.writes.get(),0);
+}

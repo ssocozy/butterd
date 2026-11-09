@@ -33,6 +33,10 @@ pub const GED_CURRENT:&str="/sys/kernel/ged/hal/current_freqency";
 pub const OPP_TABLE:&str="/proc/gpufreqv2/gpu_working_opp_table";
 pub const LIMIT_TABLE:&str="/proc/gpufreqv2/limit_table";
 
+pub fn profile_node(path: &str) -> bool {
+    path == GED_FLOOR || [GPU,GPU_ALT].iter().any(|node| path==*node || path==node.replace("min_freq","max_freq"))
+}
+
 pub fn dummy(hardware:&impl Hardware)->bool {
     [GPU,GPU_ALT].iter().any(|node|hardware.read(&format!("{}/governor",node.trim_end_matches("/min_freq"))).is_ok_and(|name|name=="dummy"))
 }

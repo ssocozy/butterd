@@ -28,6 +28,7 @@ function render(state) {
   $('engine-reason').textContent = health.error || config.error || runtime.error || runtime.refresh_error || runtime.reason || (running ? 'Waiting for the first sensor sample.' : 'Tap Start / retry monitoring in Settings.');
   const requested=runtime.pending_preset || (config.automatic ? config.rules?.find(rule=>rule.package===runtime.foreground)?.preset || config.preset : runtime.selected || config.preset);
   if(!health.error && !config.error && !runtime.error && !runtime.refresh_error && runtime.reason==='Cooling down') $('engine-reason').textContent=requested==='battery'?'Saver · cooling, caps retained':presetName(requested)+' requested · cooling, boost released; resume below 39°C battery and 75°C SoC';
+  if (runtime.gpu_profile_paused && !runtime.error) $('engine-reason').textContent += ' · GPU tuning paused after a ROM conflict.';
   if (telemetry.displayRequestSatisfied === false && telemetry.displayRequestHz != null) $('engine-reason').textContent += ' · Requested '+telemetry.displayRequestHz+' Hz; display reports '+Math.round(telemetry.screenHz)+' Hz.';
   if (running && age > 30) { $('engine-state').textContent = 'Readings are stale'; $('engine-reason').textContent = 'The supervisor has not produced a recent sample. Export diagnostics.'; }
   $('preset-label').textContent = runtime.reason?.startsWith('Recording assist:') ? 'Recording assist' : presetName(runtime.active);

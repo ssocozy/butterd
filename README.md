@@ -14,7 +14,7 @@ A KernelSU / Magisk module for **POCO X6 Pro / Redmi K70E (Duchamp)**, powered b
 
 It discovers your kernel’s CPU/GPU controls, raises clock floors for demanding profiles, eases requests as heat builds, and releases them during idle or screen off. Android events drive updates, with periodic checks when events are unavailable. ROM/kernel limits remain in control. On HyperOS with its dynamic SurfaceFlinger CPU policy enabled, butter tunes CPU demand through top-app scheduler clamps and leaves the shared PowerHAL frequency request and compositor scheduling to the ROM.
 
-Your settings resume after reboot. Diagnostics show what butter requested and what the hardware actually allows. It uses explicit rules, not machine learning.
+Your settings resume after reboot. Diagnostics show what butter requested and what the hardware actually allows. On HyperOS, stronger ROM GPU floor requests are preserved. Weaker replacements receive bounded GPU-specific retries; repeated conflicts pause GPU requests while independent CPU scheduling continues. It uses explicit rules, not machine learning.
 
 ## Install
 

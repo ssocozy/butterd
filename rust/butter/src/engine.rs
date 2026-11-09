@@ -364,6 +364,36 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             }
         }
     }
+    pub fn gpu_only_profile(&self) -> Result<bool> {
+        Ok(self.session(&Feature::Profile)?.is_some_and(|journal|journal.entries.iter().all(|entry|crate::gpu::profile_node(&entry.path))))
+    }
+    pub fn vendor_cpu_profile(&self) -> Result<bool> {
+        Ok(self.session(&Feature::Profile)?.is_some_and(|journal|journal.entries.iter().any(|entry|entry.path==crate::vendor::POWERHAL)))
+    }
+    pub fn rom_gpu_floor_satisfies(&self, mode:crate::presets::Mode, stage:u8) -> Result<bool> {
+        if !matches!(mode,crate::presets::Mode::Performance|crate::presets::Mode::Aggressive|crate::presets::Mode::Boost)
+            || !crate::gpu::dummy(&self.hardware) { return Ok(false); }
+        let table=crate::gpu::ged_table(&self.hardware)?;
+        let wanted=crate::gpu::floor_index(mode,stage,table.len())?;
+        let actual=self.hardware.read(crate::gpu::GED_FLOOR)?.parse::<usize>()?;
+        // GED indices descend in frequency. A smaller index is a stronger vote.
+        Ok(actual<=wanted)
+    }
+    pub fn reconcile_gpu_profile_cooled(&self, mode:crate::presets::Mode, stage:u8) -> Result<String> {
+        let mut journal=self.session(&Feature::Profile)?.ok_or("No GPU profile to reconcile")?;
+        if !journal.entries.iter().all(|entry|crate::gpu::profile_node(&entry.path)) {
+            return Err("GPU-only reconciliation cannot adopt CPU requests".into());
+        }
+        for entry in &mut journal.entries {
+            let current=hardware::value(&self.hardware,&entry.path)?;
+            if !entry.owned(&current) {
+                hardware::validate_path_value(&Feature::Profile,&entry.path,&current)?;
+                entry.original=current.clone();entry.expected=current;entry.before=None;
+            }
+        }
+        self.store.save(&journal)?;
+        self.preset_cooled(mode,stage)
+    }
     pub fn reconcile_vendor_profile(&self, mode: crate::presets::Mode) -> Result<String> {
         self.reconcile_vendor_profile_cooled(mode, 0)
     }

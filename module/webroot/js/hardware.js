@@ -23,6 +23,7 @@ export function renderHardware(state) {
     row(list,'Available governors',(policy.choices || []).join(', '));
   }
   const gpu=state.gpuRange || {},graphics=group(host,'Graphics');row(graphics,'GPU','Mali');
+  const gpuControl=state.supervisor?.runtime?.telemetry?.gpuControl;row(graphics,'Preset control',gpuControl?.state);row(graphics,'Control detail',gpuControl?.error);
   row(graphics,'Current clock',Number(gpu.current)>0?formatClock(gpu.current,true):null);
   if(Number(gpu.requestedMin)>0)row(graphics,'Preset request',formatClock(gpu.requestedMin,true)+(Number(gpu.requestedMax)>0?' – '+formatClock(gpu.requestedMax,true):' minimum'));
   if(Number(gpu.min)>0 && Number(gpu.max)>0)row(graphics,'Effective clock range',formatClock(gpu.min,true)+' – '+formatClock(gpu.max,true));

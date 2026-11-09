@@ -33,6 +33,7 @@ pub struct RuntimeState {
     pub boot: String, pub active: Mode, pub reason: String, pub foreground: Option<String>,
     pub tuning_requested: bool, pub selected: Mode, pub advanced_deadlines: BTreeMap<String, u64>, pub leases: Vec<Lease>, pub blocked: bool, pub refresh_user: Option<u32>, pub refresh_hz: Option<u32>, pub idle_samples: u8, pub sampled_at: u64,
     pub telemetry: Value, pub error: Option<String>, pub pending_preset: Option<Mode>,
+    pub gpu_satisfied_by_rom: bool, pub gpu_profile_paused: bool, pub gpu_profile_retries: u8, pub gpu_profile_error: Option<String>, pub gpu_scope: Option<String>,
     pub refresh_error: Option<String>, pub refresh_blocked: bool, pub profile_retries: u8,
     pub preferences_loaded: bool, pub resumed_controls: std::collections::BTreeSet<String>, pub preference_errors: BTreeMap<String,String>, pub audio_checked_at: u64,
 }
@@ -69,6 +70,7 @@ pub fn config() -> Result<Config> { let value: Config = load("config.json")?; va
 pub fn state(boot: &str) -> Result<RuntimeState> {
     let value: RuntimeState = load("runtime.json")?;
     if value.boot != boot { return Ok(RuntimeState { boot: boot.into(), ..Default::default() }); }
+    if value.gpu_profile_retries>3 || value.gpu_scope.as_ref().is_some_and(|scope|scope.len()>256) { return Err("Invalid GPU retry state".into()); }
     if value.thermal_stage > 3 { return Err("Invalid cooling stage".into()); }
     if value.app_controls.key.as_ref().is_some_and(|key|key.len()>512) || value.app_controls.errors.len()>4 { return Err("Invalid app control state".into()); }
     if value.advanced_deadlines.len() > 8 || value.advanced_deadlines.keys().any(|key| !matches!(key.as_str(), "cpu-lock" | "gpu-lock" | "charging-thermal" | "gpu-thermal" | "charging-pause" | "bypass")) || value.leases.len() > 16 || value.leases.iter().any(|lease| !matches!(lease.source.as_str(), "launch" | "manual")) || value.refresh_user.is_some_and(|user| user > 99999) { return Err("Invalid runtime state".into()); }
@@ -173,6 +175,9 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
             _ => return Err("Usage: preset balanced|performance|battery|aggressive [--accept-risk] | auto on|off | app PACKAGE PRESET 60|90|120|rom | app PACKAGE remove rom | boost SECONDS | logging on|off | reset".into()),
         }
         cfg.validate()?;
+        if args.first().is_some_and(|command|matches!(command.as_str(),"preset"|"auto"|"app"|"boost"|"monitor"|"reset")) {
+            state.gpu_satisfied_by_rom=false;state.gpu_profile_paused=false;state.gpu_profile_retries=0;state.gpu_profile_error=None;state.gpu_scope=None;
+        }
         save("config.json", &cfg)?; save("runtime.json", &state)?;
         event(&cfg, "configuration", &args.join(" "));
     }
@@ -392,6 +397,68 @@ pub fn busy(previous: (u64, u64), next: (u64, u64)) -> Option<f64> {
     if total == 0 || idle > total { return None; }
     Some((total - idle) as f64 * 100.0 / total as f64)
 }
+/// Maintain frequency requests independently from top-app scheduler clamps.
+/// A ROM repeatedly replacing a GPU-only request delegates that GPU request,
+/// while the selected preset remains available to CPU scheduling.
+pub fn maintain_profile<H: Hardware,S: crate::journal::Store>(e: &Engine<H,S>, state: &mut RuntimeState, desired: Mode, stage_changed: bool) -> Result<Option<&'static str>> {
+    let gpu_backend=crate::vendor::dynamic_policy(&e.hardware) || e.gpu_only_profile()?;
+    if state.gpu_profile_paused && gpu_backend {
+        if e.session(&Feature::Profile)?.is_some() {
+            if let Err(error)=e.preset(Mode::Balanced) { state.gpu_profile_error=Some(format!("GPU release pending: {error}")); }
+        }
+        return Ok(None);
+    }
+    let mut resume_gpu=false;
+    if state.gpu_satisfied_by_rom {
+        if desired!=Mode::Balanced && e.rom_gpu_floor_satisfies(desired,state.thermal_stage)? { return Ok(None); }
+        state.gpu_satisfied_by_rom=false;resume_gpu=desired!=Mode::Balanced;
+    }
+    let result=(|| -> Result<Option<&'static str>> {
+        let stricter=desired!=Mode::Balanced && e.refresh_profile_caps(desired,state.thermal_stage)?;
+        if gpu_backend && e.session(&Feature::Profile)?.is_none() && e.rom_gpu_floor_satisfies(desired,state.thermal_stage)? {
+            state.gpu_satisfied_by_rom=true;state.gpu_profile_error=None;
+            return Ok(Some("gpu-satisfied"));
+        }
+        let mut event=None;
+        if e.session(&Feature::Profile)?.is_some() && !matches!(e.state(&Feature::Profile)?,"Request active"|"Off") {
+            if desired==Mode::Balanced { e.preset(Mode::Balanced)?; }
+            else if e.gpu_only_profile()? {
+                if e.rom_gpu_floor_satisfies(desired,state.thermal_stage)? {
+                    e.preset(Mode::Balanced)?;
+                    state.gpu_satisfied_by_rom=true;state.gpu_profile_error=None;
+                    return Ok(Some("gpu-satisfied"));
+                }
+                if state.gpu_profile_retries>=3 {
+                    state.gpu_profile_paused=true;
+                    state.gpu_profile_error=Some("ROM repeatedly replaced the GPU request; select a preset to retry".into());
+                    e.preset(Mode::Balanced)?;
+                    return Ok(Some("gpu-paused"));
+                }
+                state.gpu_profile_retries+=1;
+                e.reconcile_gpu_profile_cooled(desired,state.thermal_stage)?;
+                event=Some("gpu-request");
+            } else if e.vendor_cpu_profile()? {
+                if state.profile_retries>=3 { return Err("Vendor CPU request changed repeatedly; profile paused after three retries".into()); }
+                state.profile_retries+=1;
+                e.reconcile_vendor_profile_cooled(desired,state.thermal_stage)?;
+                event=Some("vendor-request");
+            } else { return Err("A profile request changed externally; no shared vendor CPU request is available to reconcile".into()); }
+        }
+        if resume_gpu || stricter || desired!=state.active || stage_changed || (desired==Mode::Balanced && e.session(&Feature::Profile)?.is_some()) {
+            e.preset_cooled(desired,state.thermal_stage)?;
+        }
+        Ok(event)
+    })();
+    match result {
+        Err(error) if gpu_backend => {
+            state.gpu_profile_paused=true;state.gpu_profile_error=Some(error.to_string());
+            if let Err(cleanup)=e.preset(Mode::Balanced) { state.gpu_profile_error=Some(format!("{error}; GPU release pending: {cleanup}")); }
+            Ok(Some("gpu-paused"))
+        }
+        other=>other,
+    }
+}
+
 pub fn daemon(boot: &str) -> Result<()> {
     // Separate singleton lock; short-lived control locks let WebUI requests coexist.
     { let _ = engine(boot)?; }
@@ -464,18 +531,26 @@ pub fn daemon(boot: &str) -> Result<()> {
         let recording_soc_cutoff = if recording_eligible(&cfg, &state, &ctx, now) { 90 } else { 85 };
         let prior_thermal_stage = state.thermal_stage;
         let (desired, reason) = decide(&cfg, &mut state, &ctx, now);
+        if ctx.app.is_some() {
+            let rule=if cfg.automatic {cfg.rules.iter().find(|rule|Some(&rule.package)==ctx.app.as_ref())}else{None};
+            let requested=state.pending_preset.unwrap_or(rule.map_or(cfg.preset,|rule|rule.preset));
+            let scope=format!("{requested:?}:{}",rule.map_or("global",|rule|rule.package.as_str()));
+            if state.gpu_scope.as_ref()!=Some(&scope) {
+                state.gpu_scope=Some(scope);state.gpu_satisfied_by_rom=false;state.gpu_profile_paused=false;state.gpu_profile_retries=0;state.gpu_profile_error=None;
+            }
+        }
         let result = (|| -> Result<()> {
             thermal_cleanup(&e, &cfg, &mut state, &ctx, now)?;
-            let stricter_caps = if desired != Mode::Balanced { e.refresh_profile_caps(desired,state.thermal_stage)? } else { false };
-            if e.session(&Feature::Profile)?.is_some() && !matches!(e.state(&Feature::Profile)?, "Request active" | "Off") {
-                if desired == Mode::Balanced { e.preset(Mode::Balanced)?; }
-                else if state.profile_retries < 3 {
-                    state.profile_retries += 1;
-                    e.reconcile_vendor_profile_cooled(desired, state.thermal_stage)?;
-                    event(&cfg, "vendor-request", "Reapplied the selected CPU QoS request; thermal policy remains unchanged");
-                } else { return Err("Vendor CPU request changed repeatedly; profile paused after three retries".into()); }
+            let stage_changed=prior_thermal_stage!=state.thermal_stage;
+            if let Some(kind)=maintain_profile(&e,&mut state,desired,stage_changed)? {
+                let detail=match kind {
+                    "gpu-request"=>"Reapplied the selected GPU request after a ROM change; effective limits remain in control",
+                    "gpu-satisfied"=>"ROM GPU floor already satisfies the preset; stronger external request preserved",
+                    "gpu-paused"=>"GPU requests delegated to the ROM after a conflict; independent CPU scheduling continues",
+                    _=>"Reapplied the selected CPU QoS request; thermal policy remains unchanged",
+                };
+                event(&cfg,kind,detail);
             }
-            if stricter_caps || desired != state.active || prior_thermal_stage != state.thermal_stage || (desired == Mode::Balanced && e.session(&Feature::Profile)?.is_some()) { e.preset_cooled(desired, state.thermal_stage)?; }
             Ok(())
         })();
         match result {
@@ -501,6 +576,7 @@ pub fn daemon(boot: &str) -> Result<()> {
             };
             compositor_mode_seen = Some((compositor_mode,state.thermal_stage)); compositor_sample_at = now;
         }
+        sampled_telemetry["gpuControl"]=json!({"state":if state.gpu_profile_paused {"ROM managed after conflict"}else if state.gpu_satisfied_by_rom {"ROM already satisfies GPU floor request"}else{"Preset requests available"},"error":state.gpu_profile_error,"retries":state.gpu_profile_retries});
         sampled_telemetry["compositorScheduling"] = compositor_sample.clone();
         // Display failures and CPU failures have independent state and ownership.
         match refresh(&e, &cfg, &mut state, &ctx) {

@@ -254,6 +254,12 @@ try {
   assert.equal(await evaluate(`document.querySelector('#cpu-controls > details').open`),false,'Live readings reopened manually collapsed cluster controls');
   await evaluate(`document.querySelector('#cpu-controls > details').open=true`);
 
+  await evaluate(`__butterFixture.supervisor.runtime.active='aggressive';__butterFixture.supervisor.runtime.reason='Selected preset';__butterFixture.supervisor.runtime.gpu_profile_paused=true;__butterFixture.supervisor.runtime.telemetry.gpuControl={state:'ROM managed after conflict',error:'ROM replaced GPU request'};document.getElementById('refresh').click()`);
+  await until(`document.getElementById('engine-reason').textContent.includes('GPU tuning paused') && !document.getElementById('refresh').disabled`);
+  assert.equal(await evaluate(`document.getElementById('preset-label').textContent`),'Aggressive');
+  assert.equal(await evaluate(`document.getElementById('hardware-details').textContent.includes('ROM managed after conflict')`),true);
+  await evaluate(`__butterFixture.supervisor.runtime.gpu_profile_paused=false;__butterFixture.supervisor.runtime.telemetry.gpuControl={state:'ROM already satisfies GPU floor request'};document.getElementById('refresh').click()`);
+  await until(`document.getElementById('hardware-details').textContent.includes('ROM already satisfies GPU floor request') && !document.getElementById('refresh').disabled`);
   assert.equal(await evaluate(`document.querySelector('#cpu-controls').closest('details').querySelector('summary').textContent.includes('−')`),false);
   const arrowX = await evaluate(`document.querySelector('#cpu-controls').closest('details').querySelector('summary>.ph-icon').getBoundingClientRect().right`);
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('#cpu-controls').closest('details').querySelector('summary'),'::after').content`),'none');
