@@ -1,0 +1,2 @@
+debug.hwui.renderer=skiavk
+debug.renderengine.backend=skiavkthreaded

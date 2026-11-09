@@ -49,12 +49,18 @@ fn run() -> Result<()> {
             boot,
         };
         let mut status = engine.status();
+        status["graphics"] = butter::graphics::status();
         status["compatibility"] = butter::runtime::compatibility_status();
         status["supervisor"] = serde_json::json!({"config": butter::runtime::config().map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "runtime": butter::runtime::state(&engine.boot).map(|value| serde_json::json!(value)).unwrap_or_else(|error| serde_json::json!({"error":error.to_string()})), "uptime": butter::runtime::uptime()?, "notificationDelivery":butter::runtime::notification_status(), "health":butter::runtime::supervisor_status(&engine.boot)});
         println!("{}", serde_json::to_string(&status)?);
         return Ok(());
     }
     match args.as_slice() {
+        [command, choice] if command == "graphics" && matches!(choice.as_str(), "on" | "off") => {
+            let _store = DiskStore::locked_wait("/data/adb/butterd", std::time::Duration::from_secs(5))?;
+            println!("{}", butter::graphics::set(choice == "on")?);
+            return Ok(());
+        },
         [command] if command == "notify-test" => { butter::notifications::post("Butterd notification test")?; println!("Android accepted the test notification. Check the notification shade."); return Ok(()); },
         [command, rest @ ..] if command == "activity" => { println!("{}",butter::app_activity::run(rest)?); return Ok(()); },
         [command] if command == "battery-usage" => { println!("{}",butter::battery_usage::read()?); return Ok(()); },
@@ -64,7 +70,7 @@ fn run() -> Result<()> {
         [command] if command == "diagnostics" => { println!("{}", serde_json::to_string_pretty(&butter::runtime::diagnostics(&boot)?)?); return Ok(()); }
         [command] if command == "shutdown" => { println!("{}", butter::runtime::shutdown(&boot)?); return Ok(()); }
         [command, package] if command == "measure" => { println!("{}", butter::runtime::frame_sample(package)?); return Ok(()); }
-        [command, ..] if matches!(command.as_str(), "preset" | "auto" | "app" | "boost" | "logging" | "recording" | "notifications" | "reset" | "monitor") => { println!("{}", butter::runtime::configure(&boot, &args)?); return Ok(()); }
+        [command, ..] if matches!(command.as_str(), "preset" | "auto" | "app" | "boost" | "logging" | "compositor" | "recording" | "notifications" | "reset" | "monitor") => { println!("{}", butter::runtime::configure(&boot, &args)?); return Ok(()); }
         _ => {}
     }
     let (feature, setting, restoring, accepted) = match args.as_slice() {

@@ -9,7 +9,8 @@ dist = root / 'dist'
 dist.mkdir(exist_ok=True)
 binary = root / 'build/libbutterd_compat.so'
 engine = root / 'rust/butter/target/aarch64-linux-android/release/butter'
-for path in (binary, engine):
+scheduler = root / "build/butter-scheduler"
+for path in (binary, engine, scheduler):
     if not path.is_file():
         raise SystemExit('Missing Actions-built binary: ' + path.name)
 vendor = root / 'build/rust-vendor'
@@ -18,7 +19,7 @@ if not vendor.is_dir():
 
 module_files = [(p, p.relative_to(root / 'module').as_posix())
                 for p in sorted((root / 'module').rglob('*')) if p.is_file()]
-module_files += [(binary, 'zygisk/arm64-v8a.so'), (engine, 'bin/butter-engine')]
+module_files += [(binary, 'zygisk/arm64-v8a.so'), (engine, 'bin/butter-engine'), (scheduler, 'bin/butter-scheduler')]
 module_files += [(root / name, name) for name in ('LICENSE', 'THIRD_PARTY_NOTICES.txt', 'README.md')]
 # Retain dependency notices in the runtime package without installing crate sources or archives.
 for crate in sorted(vendor.iterdir()):
@@ -47,7 +48,7 @@ def write_archive(output, files):
                 raise ValueError('Duplicate archive entry: ' + name)
             names.add(name)
             entry = ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
-            executable = name.endswith('.sh') or name in ('bin/butterctl', 'bin/butter', 'bin/butter-engine', 'META-INF/com/google/android/update-binary')
+            executable = name.endswith('.sh') or name in ('bin/butterctl', 'bin/butter', 'bin/butter-engine', 'bin/butter-scheduler', 'META-INF/com/google/android/update-binary')
             entry.create_system = 3
             entry.external_attr = (0o100755 if executable else 0o100644) << 16
             entry.compress_type = ZIP_DEFLATED

@@ -10,7 +10,7 @@ const MODULE: &str = "/data/adb/modules/butterd";
 pub struct AppRule { pub package: String, pub preset: Mode, pub hz: Option<u32>, #[serde(default)] pub high_touch:bool, #[serde(default)] pub charging_pause_at:Option<u8> }
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Config { pub recording_assist: bool, pub automatic: bool, pub preset: Mode, pub logcat: bool, pub notifications: bool, pub rules: Vec<AppRule>, pub controls: BTreeMap<String,crate::preferences::SavedControl> }
+pub struct Config { pub compositor_disabled: bool, pub recording_assist: bool, pub automatic: bool, pub preset: Mode, pub logcat: bool, pub notifications: bool, pub rules: Vec<AppRule>, pub controls: BTreeMap<String,crate::preferences::SavedControl> }
 impl Config {
     pub fn validate(&self) -> Result<()> {
         crate::preferences::validate(&self.controls)?;
@@ -40,7 +40,7 @@ pub fn uptime() -> Result<u64> {
     let text = read_bounded(Path::new("/proc/uptime"), 128)?;
     number(text.split('.').next().ok_or("Missing uptime")?)
 }
-fn load<T: serde::de::DeserializeOwned + Default>(name: &str) -> Result<T> {
+pub(crate) fn load<T: serde::de::DeserializeOwned + Default>(name: &str) -> Result<T> {
     let path = Path::new(DIRECTORY).join(name);
     match fs::symlink_metadata(&path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(T::default()),
@@ -51,7 +51,7 @@ fn load<T: serde::de::DeserializeOwned + Default>(name: &str) -> Result<T> {
         }
     }
 }
-fn save(name: &str, value: &impl Serialize) -> Result<()> {
+pub(crate) fn save(name: &str, value: &impl Serialize) -> Result<()> {
     let bytes = serde_json::to_vec(value)?;
     if bytes.len() > 65536 { return Err("Engine state exceeds limit".into()); }
     let temporary = Path::new(DIRECTORY).join(format!("state-{}.tmp", std::process::id()));
@@ -137,6 +137,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
         match args {
             [command] if command == "monitor" => { state.preference_errors.clear(); state.resumed_controls.clear(); },
             [command, choice] if command == "auto" && matches!(choice.as_str(), "on" | "off") => { state.refresh_blocked = false; state.refresh_error = None; cfg.automatic = choice == "on"; state.tuning_requested = cfg.automatic || cfg.preset != Mode::Balanced; state.blocked = false; state.leases.clear(); state.selected = cfg.preset; state.pending_preset = Some(cfg.preset); }
+            [command, choice] if command == "compositor" && matches!(choice.as_str(), "on" | "off") => cfg.compositor_disabled = choice == "off",
             [command, choice] if command == "recording" && matches!(choice.as_str(), "on" | "off") => cfg.recording_assist = choice == "on",
             [command, choice] if command == "notifications" && matches!(choice.as_str(), "on" | "off") => cfg.notifications = choice == "on",
             [command, choice] if command == "logging" && matches!(choice.as_str(), "on" | "off") => cfg.logcat = choice == "on",
@@ -401,6 +402,9 @@ pub fn daemon(boot: &str) -> Result<()> {
     let mut previous_cpu = None;
     let mut recording_sample = Value::Null;
     let mut recording_awake = None;
+    let mut compositor_sample = Value::Null;
+    let mut compositor_mode_seen = None;
+    let mut compositor_sample_at = 0;
     let mut last_error = String::new();
     let mut last_sample_event = 0;
     let mut wake_events = crate::events::WakeEvents::new();
@@ -484,6 +488,15 @@ pub fn daemon(boot: &str) -> Result<()> {
                 state.active = Mode::Balanced; state.reason = "Paused after a conflict or failure".into();
             }
         }
+        let compositor_mode = if cfg.compositor_disabled || state.blocked { Mode::Balanced } else { state.active };
+        if compositor_mode_seen != Some(compositor_mode) || now.saturating_sub(compositor_sample_at) >= 15 {
+            compositor_sample = match crate::scheduler::reconcile(boot, compositor_mode) {
+                Ok(()) => json!({"mode":compositor_mode,"error":null}),
+                Err(error) => json!({"mode":compositor_mode,"error":error.to_string()}),
+            };
+            compositor_mode_seen = Some(compositor_mode); compositor_sample_at = now;
+        }
+        sampled_telemetry["compositorScheduling"] = compositor_sample.clone();
         // Display failures and CPU failures have independent state and ownership.
         match refresh(&e, &cfg, &mut state, &ctx) {
             Ok(()) => { if !state.refresh_blocked { state.refresh_error = None; } },
@@ -533,7 +546,7 @@ pub fn diagnostics(boot: &str) -> Result<Value> {
     let mut controls = e.controls();
     if let Some(user) = state.get("refresh_user").and_then(Value::as_u64).filter(|user| *user <= 99999) { controls.push(Feature::Refresh(user as u32)); }
     let sessions: Vec<Value> = controls.iter().map(|feature| match e.session(feature) { Ok(session) => json!({"control":feature.key(),"journal":session}), Err(error) => json!({"control":feature.key(),"error":error.to_string()}) }).collect();
-    Ok(json!({"engine":e.status(),"sessions":sessions,"config":cfg,"runtime":state,"events":events,"notificationDelivery":notification_status(),"supervisor":supervisor_status(boot),"compatibility":compatibility_status(),"startupLog":read_bounded(&Path::new(DIRECTORY).join("boot.log"),32768).ok(),"supervisorLog":read_bounded(&Path::new(DIRECTORY).join("supervisor.log"),32768).ok(),"kernel":read_bounded(Path::new("/proc/version"),4096).ok(),"displayPreferences":android::command("/system/bin/settings", &["get","system","peak_refresh_rate"]).ok(),"romRefreshAdapter":crate::display::probe_current().unwrap_or_else(|error| json!({"error":error.to_string()})),"preferredDisplayMode":android::command("/system/bin/cmd", &["display","get-user-preferred-display-mode","0"]).ok(),"powerhalReadback":read_bounded(Path::new(crate::vendor::POWERHAL),4096).ok()}))
+    Ok(json!({"graphics":crate::graphics::status(),"engine":e.status(),"sessions":sessions,"config":cfg,"runtime":state,"events":events,"notificationDelivery":notification_status(),"supervisor":supervisor_status(boot),"compatibility":compatibility_status(),"startupLog":read_bounded(&Path::new(DIRECTORY).join("boot.log"),32768).ok(),"supervisorLog":read_bounded(&Path::new(DIRECTORY).join("supervisor.log"),32768).ok(),"kernel":read_bounded(Path::new("/proc/version"),4096).ok(),"displayPreferences":android::command("/system/bin/settings", &["get","system","peak_refresh_rate"]).ok(),"romRefreshAdapter":crate::display::probe_current().unwrap_or_else(|error| json!({"error":error.to_string()})),"preferredDisplayMode":android::command("/system/bin/cmd", &["display","get-user-preferred-display-mode","0"]).ok(),"powerhalReadback":read_bounded(Path::new(crate::vendor::POWERHAL),4096).ok()}))
 }
 pub fn shutdown(boot: &str) -> Result<String> {
     let e = engine(boot)?;
@@ -619,6 +632,7 @@ fn cleanup_all(e: &Engine<SystemHardware, DiskStore>, state: &mut RuntimeState) 
     for feature in e.controls() {
         if let Err(error) = e.session(&feature).and_then(|session| if session.is_some() { e.apply_targets(feature.clone(), Vec::new(), true).map(|_| ()) } else { Ok(()) }) { errors.push(format!("{}: {error}", feature.key())); }
     }
+    if let Err(error) = crate::scheduler::reconcile(&e.boot, Mode::Balanced) { errors.push(error.to_string()); }
     if let Err(error) = restore_refresh(e, state) { errors.push(error.to_string()); }
     if let Err(error) = recover_refresh(e) { errors.push(error.to_string()); }
     if errors.is_empty() { state.app_controls=Default::default(); Ok(()) } else { Err(errors.join("; ").into()) }

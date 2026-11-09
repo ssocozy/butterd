@@ -32,3 +32,7 @@ pub mod recording;
 pub mod app_activity;
 
 pub mod battery_usage;
+
+pub mod graphics;
+
+pub mod scheduler;

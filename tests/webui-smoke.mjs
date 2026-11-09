@@ -44,6 +44,7 @@ try {
   await send('Page.enable'); await send('Runtime.enable');
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   const fixture={
+    graphics:{enabled:true,available:true,error:null},
     engine:{version:'0.3.0'},cpuPolicies:[{id:'policy0',cores:'0 1 2 3',governor:'schedutil',choices:['schedutil','powersave'],frequencies:'500000 1000000 2000000',min:'500000',max:'2000000',requestedMin:'1000000',requestedMax:'2000000',original:false,rangeActive:false}],
     gpuRange:{frequencies:'300000000 600000000 1000000000',min:'300000000',max:'1000000000',active:false},
     audio:{available:true,bluetoothConnected:true,active:false,activeInputs:[]},
@@ -64,6 +65,10 @@ try {
       else if(command.endsWith(' enable phone-mic')){state.audio.active=true;state.supervisor.config.controls={'phone-mic':{setting:'',expires_utc:null}};}
       else if(command.endsWith(' restore phone-mic')){if(globalThis.__failMic){code=1;stderr='Example routing rejection';}else{state.audio.active=false;state.supervisor.config.controls={};}}
       else if(command.endsWith(' notify-test'))state.supervisor.notificationDelivery={accepted:true,error:null};
+      else if(command.endsWith(' graphics on'))state.graphics.enabled=true;
+      else if(command.endsWith(' graphics off'))state.graphics.enabled=false;
+      else if(command.endsWith(' compositor on'))state.supervisor.config.compositor_disabled=false;
+      else if(command.endsWith(' compositor off'))state.supervisor.config.compositor_disabled=true;
       else if(command.endsWith(' recording on'))state.supervisor.config.recording_assist=true;
       else if(command.endsWith(' recording off'))state.supervisor.config.recording_assist=false;
       else if(command.endsWith(' notifications on'))state.supervisor.config.notifications=true;
@@ -137,6 +142,16 @@ try {
   await evaluate(`document.querySelector('#cpu-controls').closest('details').open=true`); await delay(250);
   assert.equal(await evaluate(`document.querySelector('#governor-all').value`),'schedutil');
   assert.equal(await evaluate(`document.querySelectorAll('#touch-controls button').length===0 && document.querySelector('#touch-controls input[role=switch]')!==null`),true);
+  assert.equal(await evaluate(`document.querySelector('#vulkan-ui').checked`),true);
+  await evaluate(`document.querySelector('#vulkan-ui').click()`);
+  await until(`!document.querySelector('#vulkan-ui').checked && document.body.getAttribute('aria-busy')==='false'`);
+  assert.equal(await evaluate(`__butterCommands.some(command=>command.endsWith(' graphics off'))`),true);
+  await evaluate(`document.querySelector('#vulkan-ui').click()`);
+  await until(`document.querySelector('#vulkan-ui').checked && document.body.getAttribute('aria-busy')==='false'`);
+  assert.equal(await evaluate(`document.querySelector('#compositor').checked`),true);
+  await evaluate(`document.querySelector('#compositor').click()`);
+  await until(`!document.querySelector('#compositor').checked && document.body.getAttribute('aria-busy')==='false'`);
+  assert.equal(await evaluate(`__butterCommands.some(command=>command.endsWith(' compositor off'))`),true);
   assert.equal(await evaluate(`document.querySelector('#recording-assist').checked`),false);
   await evaluate(`document.querySelector('#recording-assist').click()`);
   await until(`document.querySelector('#recording-assist').checked && document.body.getAttribute('aria-busy')==='false'`);

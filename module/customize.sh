@@ -16,6 +16,7 @@ for conflict in /data/adb/modules/*; do
       abort "Disable the conflicting module ${conflict##*/} before installing Butterd." ;;
   esac
 done
+[ -f "$MODPATH/bin/butter-scheduler" ] || abort "The compositor scheduling helper is missing."
 [ -f "$MODPATH/bin/butter-engine" ] || abort "The compiled Rust engine is missing."
 [ -f "$MODPATH/zygisk/arm64-v8a.so" ] || abort "The compiled compatibility library is missing."
 # Fetch metadata during installation; an offline install keeps bundled profiles.
@@ -42,6 +43,20 @@ else
   CLASSPATH="$MODPATH/bin/catalog.dex" /system/bin/app_process /system/bin dev.butterd.module.PixelCatalog "$MODPATH/compatibility/profiles" || ui_print "- Network unavailable; keeping bundled profiles."
   select_identity "$selected" || abort "No usable Pixel identity is available."
 fi
+# Preserve only Butterd's exact renderer preference; never import unrelated properties.
+renderer_previous=/data/adb/modules/butterd/system.prop
+if [ -f "$renderer_previous" ] && [ ! -L "$renderer_previous" ]; then
+  renderer_expected=$(printf 'debug.hwui.renderer=skiavk\ndebug.renderengine.backend=skiavkthreaded\n')
+  renderer_rom="# Butterd renderer: ROM defaults."
+  renderer_saved=$(head -c 1024 "$renderer_previous")
+  if [ "$(wc -c < "$renderer_previous")" -le 1024 ] && { [ "$renderer_saved" = "$renderer_expected" ] || [ "$renderer_saved" = "$renderer_rom" ]; }; then
+    printf '%s\n' "$renderer_saved" > "$MODPATH/system.prop" || abort "Unable to preserve Vulkan UI rendering."
+    set_perm "$MODPATH/system.prop" 0 0 0644
+    ui_print "- Keeping your renderer preference; applies after reboot."
+  else
+    abort "Renderer properties were modified externally; resolve system.prop before updating."
+  fi
+fi
 # Leave webroot permissions/context to the WebUI host.
 for directory in bin lib compatibility zygisk; do
   set_perm_recursive "$MODPATH/$directory" 0 0 0755 0644
@@ -50,9 +65,12 @@ set_perm "$MODPATH/compatibility/pif.prop" 0 0 0600
 [ ! -f "$MODPATH/compatibility/pif.previous.prop" ] || set_perm "$MODPATH/compatibility/pif.previous.prop" 0 0 0600
 set_perm "$MODPATH/bin/butterctl" 0 0 0755
 set_perm "$MODPATH/bin/butter" 0 0 0755
+set_perm "$MODPATH/bin/butter-scheduler" 0 0 0755
 set_perm "$MODPATH/bin/butter-engine" 0 0 0755
 set_perm "$MODPATH/service.sh" 0 0 0755
 set_perm "$MODPATH/action.sh" 0 0 0755
+ui_print "- Vulkan UI rendering is enabled by default; change it in Settings and reboot."
+ui_print "- Compositor scheduling follows presets; ROM task profiles are preserved."
 ui_print "- Automatic tuning and advanced overrides stay off until you enable them."
 ui_print "- Compatibility requires enabled Zygisk (or a compatible KernelSU Zygisk provider)."
 ui_print "- Three compatibility options are included; no integrity verdict is guaranteed."

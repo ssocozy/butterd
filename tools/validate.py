@@ -10,7 +10,7 @@ assert {key for key in props if key.startswith('spoof')} == {'spoofBuild', 'spoo
 assert all(props[key] == 'true' for key in props if key.startswith('spoof'))
 assert props.get('DEVICE_INITIAL_SDK_INT', '').isdigit()
 assert props.get('SECURITY_PATCH')
-assert not (root / 'module/system.prop').exists()
+assert (root / "module/system.prop").read_text() == "debug.hwui.renderer=skiavk\ndebug.renderengine.backend=skiavkthreaded\n"
 assert (root / 'module/skip_mount').exists()
 assert not (root / 'module/post-fs-data.sh').exists()
 profiles = list((root / 'module/compatibility/profiles').glob('*.prop'))

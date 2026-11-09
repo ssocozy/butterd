@@ -44,6 +44,8 @@ In **Apps**, assign a preset, refresh rate, high touch sampling, or charging-pau
 - **Hardware controls:** supported CPU governors, clock ranges, TCP algorithms and high touch sampling.
 - **Bypass charging:** pauses battery charging while plugged in. The battery may still supply power. Manual use expires after 30 minutes; kernel protections stay active.
 - **Phone microphone:** prefer the built-in mic with Bluetooth earbuds. App routing and ROM support can affect results.
+- **Compositor scheduling:** enabled by default with presets. Saver lowers SurfaceFlinger and RenderEngine minimum CPU clamps to at most 110/1024; Performance/Aggressive use the existing foreground cpuset. Balanced, screen off, thermal release, or disabling the setting restores owned values. ROM task profiles and controller definitions are preserved.
+- **Vulkan UI rendering:** Vulkan rendering enabled by default for app interfaces, SystemUI and SurfaceFlinger composition. Change it in Settings and reboot; turn it off and reboot to use ROM defaults. The choice survives module updates. Games retain their own rendering engines.
 - **Recording assist:** optional higher clock requests during detected screen capture. Detection can take 15 seconds. Its SoC cutoff is 90°C; battery limits stay unchanged.
 
 CPU/GPU requests, effective limits and current clocks are separate readings. Features depend on what your ROM and kernel expose. Battery history comes from Android; it isn’t an instantaneous per-app power measurement.
