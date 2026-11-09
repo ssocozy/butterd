@@ -119,7 +119,7 @@ pub fn reconcile(boot:&str,mode:Mode,stage:u8,app:Option<&str>)->Result<Value> {
                 if !(10000..=19999).contains(&(uid%100000)) { continue; }
                 if !pids.insert(pid) || pids.len()>8 { return Err("Invalid foreground process list".into()); }
             },
-            Err(error) if error.downcast_ref::<android::CommandFailure>().is_some_and(|error|error.code==Some(1) && error.stdout.is_empty() && error.stderr.is_empty())=>(),
+            Err(error) if error.downcast_ref::<android::CommandFailure>().is_some_and(|error|error.code==Some(1) && error.stdout.is_empty() && error.stderr.is_empty())=>{},
             Err(error)=>return Err(error),
         }
     }
