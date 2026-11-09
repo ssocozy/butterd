@@ -145,7 +145,13 @@ jobs:
           java -cp "build/java-tests:build/java:$ANDROID_HOME/platforms/android-36/android.jar" dev.butterd.module.AudioRouteBridgeTest
           java -cp "build/java-tests:build/java:$ANDROID_HOME/platforms/android-36/android.jar" dev.butterd.module.AppActivityTest
       - name: Refresh bundled Pixel catalog
-        run: python3 tools/fetch_catalog.py
+        run: |
+          if [ "$RELEASE_CHANNEL" = development ]; then
+            python3 tools/fetch_catalog.py || echo "::warning::Fresh Pixel metadata unavailable; validating and retaining bundled profiles for this development build."
+          else
+            python3 tools/fetch_catalog.py
+          fi
+          python3 tools/validate.py
       - name: Package module
         run: |
           python3 tools/package.py
