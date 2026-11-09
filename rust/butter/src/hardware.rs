@@ -81,6 +81,7 @@ impl Hardware for SystemHardware {
         Ok(())
     }
     fn read(&self, path: &str) -> Result<String> {
+        if path == crate::vendor::SF_POLICY { return crate::android::command("/system/bin/getprop", &["vendor.debug.sf.cpupolicy"]); }
         if path == crate::touch::NODE { return crate::touch::read(); }
         if let Some(value) = crate::audio::read(path) { return value; }
         if let Some(value) = crate::display::read(path) { return value; }

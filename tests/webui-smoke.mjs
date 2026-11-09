@@ -148,6 +148,9 @@ try {
   assert.equal(await evaluate(`__butterCommands.some(command=>command.endsWith(' graphics off'))`),true);
   await evaluate(`document.querySelector('#vulkan-ui').click()`);
   await until(`document.querySelector('#vulkan-ui').checked && document.body.getAttribute('aria-busy')==='false'`);
+  await evaluate(`__butterFixture.supervisor.runtime.telemetry.renderers={systemUi:'Vulkan',composition:'OpenGL'};__butterFixture.supervisor.runtime.telemetry.compositorScheduling={topApp:{minimumPercent:50,maximumPercent:100},compositor:{state:'Managed by HyperOS'}};document.getElementById('refresh').click()`);
+  await until(`document.getElementById('graphics-status').textContent.includes('Composition: OpenGL')`);
+  assert.equal(await evaluate(`document.getElementById('compositor-status').textContent.includes('HyperOS manages compositor')`),true);
   assert.equal(await evaluate(`document.querySelector('#compositor').checked`),true);
   await evaluate(`document.querySelector('#compositor').click()`);
   await until(`!document.querySelector('#compositor').checked && document.body.getAttribute('aria-busy')==='false'`);
@@ -242,7 +245,7 @@ try {
   await evaluate(`__butterFixture.supervisor.runtime.active='battery';__butterFixture.supervisor.runtime.reason='Selected preset';document.querySelector('#refresh').click()`);
   await until(`document.querySelector('#preset-label').textContent==='Saver' && document.querySelector('#refresh').disabled===false`);
   await evaluate(`__butterFixture.supervisor.config.automatic=false;__butterFixture.supervisor.runtime.selected='aggressive';__butterFixture.supervisor.runtime.active='balanced';__butterFixture.supervisor.runtime.reason='Cooling down';document.querySelector('#refresh').click()`);
-  await until(`document.querySelector('#engine-reason').textContent==='Aggressive · cooling, clock floors released' && document.querySelector('#refresh').disabled===false`);
+  await until(`document.querySelector('#engine-reason').textContent==='Aggressive requested · cooling, boost released; resume below 39°C battery and 75°C SoC' && document.querySelector('#refresh').disabled===false`);
   await evaluate(`__butterFixture.supervisor.health={running:false,error:'Example startup failure'};__butterFixture.supervisor.runtime.error='Example startup failure';document.getElementById('refresh').click()`);
   await until(`document.getElementById('engine-state').textContent==='Needs attention'`);
   assert.match(await evaluate(`document.getElementById('engine-reason').textContent`),/Example startup failure/);

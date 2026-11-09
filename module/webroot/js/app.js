@@ -27,18 +27,24 @@ function render(state) {
   $('engine-state').textContent = health.error || config.error || runtime.error || runtime.blocked ? 'Needs attention' : running ? sampled ? 'Monitoring active' : 'Starting monitoring' : 'Monitoring stopped';
   $('engine-reason').textContent = health.error || config.error || runtime.error || runtime.refresh_error || runtime.reason || (running ? 'Waiting for the first sensor sample.' : 'Tap Start / retry monitoring in Settings.');
   const requested=runtime.pending_preset || (config.automatic ? config.rules?.find(rule=>rule.package===runtime.foreground)?.preset || config.preset : runtime.selected || config.preset);
-  if(!health.error && !config.error && !runtime.error && !runtime.refresh_error && runtime.reason==='Cooling down') $('engine-reason').textContent=requested==='battery'?'Saver · cooling, caps retained':presetName(requested)+' · cooling, clock floors released';
+  if(!health.error && !config.error && !runtime.error && !runtime.refresh_error && runtime.reason==='Cooling down') $('engine-reason').textContent=requested==='battery'?'Saver · cooling, caps retained':presetName(requested)+' requested · cooling, boost released; resume below 39°C battery and 75°C SoC';
   if (telemetry.displayRequestSatisfied === false && telemetry.displayRequestHz != null) $('engine-reason').textContent += ' · Requested '+telemetry.displayRequestHz+' Hz; display reports '+Math.round(telemetry.screenHz)+' Hz.';
   if (running && age > 30) { $('engine-state').textContent = 'Readings are stale'; $('engine-reason').textContent = 'The supervisor has not produced a recent sample. Export diagnostics.'; }
   $('preset-label').textContent = runtime.reason?.startsWith('Recording assist:') ? 'Recording assist' : presetName(runtime.active);
   const delivery=supervisor.notificationDelivery;
   $('notification-status').textContent=delivery?.error ? 'Notification delivery needs attention: '+delivery.error : delivery?.accepted ? 'Test sent. Check Android’s notification settings if it doesn’t appear.' : '';
   $('compositor').checked = config.compositor_disabled !== true;
-  $('compositor-status').textContent = telemetry.compositorScheduling?.error || '';
+  const scheduling=telemetry.compositorScheduling;
+  $('compositor-status').textContent = scheduling?.error || [
+    scheduling?.topApp?.error || (scheduling?.topApp?.minimumPercent!=null ? 'Foreground apps: '+scheduling.topApp.minimumPercent+'–'+scheduling.topApp.maximumPercent+'% scheduler request.' : ''),
+    scheduling?.compositor?.error || (scheduling?.compositor?.state==='Managed by HyperOS' ? 'HyperOS manages compositor scheduling.' : '')
+  ].filter(Boolean).join(' ');
   const graphics = state.graphics;
   $('vulkan-ui').checked = graphics?.enabled === true;
   $('vulkan-ui').dataset.capable = String(graphics?.available === true && !graphics?.error);
-  $('graphics-status').textContent = graphics?.error || (graphics?.enabled ? 'Vulkan selected. Reboot to apply across the system.' : 'ROM defaults selected. Reboot after changing the renderer.');
+  const renderers=telemetry.renderers;
+  const actualRenderers=renderers ? 'SystemUI: '+(renderers.systemUi || 'unverified')+'. Composition: '+(renderers.composition || 'unverified')+'. ' : '';
+  $('graphics-status').textContent = graphics?.error || actualRenderers+(graphics?.enabled ? 'Vulkan selected; reboot after changing this setting.' : 'ROM defaults selected; reboot after changing this setting.');
   $('recording-assist').checked = config.recording_assist === true;
   $('automatic').checked = config.automatic === true; $('logging').checked = config.logcat === true; $('notifications').checked = config.notifications === true;
   $('watts').textContent = Number.isFinite(telemetry.batteryWatts) ? (telemetry.batteryWatts > 0 ? '+' : '')+telemetry.batteryWatts.toFixed(1) : '—';

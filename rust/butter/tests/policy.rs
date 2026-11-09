@@ -466,3 +466,12 @@ fn aggressive_cooling_reasons_name_the_actual_preset() {
     ctx.soc_millic=Some(80000);
     assert_eq!(decide(&cfg,&mut state,&ctx,101),(Mode::Aggressive,"Cooling: Aggressive clock floors reduced further"));
 }
+
+#[test]
+fn cooling_notice_reports_requested_app_preset_without_claiming_it_applied() {
+    let mut runtime=RuntimeState{active:Mode::Balanced,reason:"Cooling down".into(),..Default::default()};
+    runtime.telemetry=serde_json::json!({"requestedPreset":"aggressive"});
+    assert_eq!(butter::notifications::message(&runtime).unwrap(),"Aggressive requested. Cooling; boost released.");
+    runtime.telemetry["requestedPreset"]=serde_json::json!("battery");
+    assert_eq!(butter::notifications::message(&runtime).unwrap(),"Saver active. Cooling; power limits retained.");
+}

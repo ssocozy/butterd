@@ -1,5 +1,9 @@
 //! Readable stock MT6897 PowerHAL QoS ABI: one min/max pair per CPU policy.
 use crate::{hardware::{Hardware, CPU}, Result};
+pub const SF_POLICY: &str = "vendor:sf-cpu-policy";
+pub fn dynamic_policy(hardware: &impl Hardware) -> bool {
+    hardware.read(SF_POLICY).is_ok_and(|value| value == "1")
+}
 pub const POWERHAL: &str = "/proc/powerhal_cpu_ctrl/perfserv_freq";
 pub fn parse(text: &str) -> Result<Vec<i64>> {
     let values: Vec<i64> = text.split_whitespace().map(str::parse).collect::<std::result::Result<_,_>>()?;

@@ -1,6 +1,7 @@
-//! Preset-scoped compositor scheduling with thread identities and crash-safe ownership.
+//! Independent foreground-app and compositor scheduling with crash-safe ownership.
 use crate::{android, presets::Mode, runtime, Result};
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::{collections::BTreeMap, fs, path::Path};
 const HELPER: &str = "/data/adb/modules/butterd/bin/butter-scheduler";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -11,10 +12,10 @@ struct Observed { start: String, minimum: u32, maximum: u32, group: String }
 struct Entry { original: Observed, expected: Observed }
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-struct GroupEntry { original: u32, expected: u32 }
+struct GroupEntry { original: u32, expected: u32, #[serde(default)] original_max: Option<u32>, #[serde(default)] expected_max: Option<u32> }
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-struct Session { top_app: Option<GroupEntry>, boot: String, mode: Mode, blocked: bool, entries: BTreeMap<u32, Entry> }
+struct Session { top_app_mode: Mode, top_app_blocked: bool, top_app: Option<GroupEntry>, boot: String, mode: Mode, blocked: bool, entries: BTreeMap<u32, Entry> }
 fn read(tid: u32) -> Result<Observed> {
     let text = android::command(HELPER, &["get", &tid.to_string()])?;
     let fields: Vec<_> = text.split_whitespace().collect();
@@ -80,10 +81,10 @@ fn group_restore(entry: &GroupEntry, current: u32) -> u32 {
     if current == entry.expected { entry.original } else { current }
 }
 fn group_value(path: &str) -> Result<u32> { percent(&crate::hardware::read_bounded(Path::new(path),128)?) }
-fn group_write(value: u32) -> Result<()> {
+fn group_write(path: &str, value: u32) -> Result<()> {
     if value>10000 { return Err("Invalid cgroup clamp target".into()); }
-    fs::write(TOP_MIN,format!("{}.{:02}",value/100,value%100))?;
-    if group_value(TOP_MIN)? != value { return Err("Top-app clamp readback changed".into()); }
+    fs::write(path,format!("{}.{:02}",value/100,value%100))?;
+    if group_value(path)? != value { return Err("Top-app clamp readback changed".into()); }
     Ok(())
 }
 fn save(session: &Session) -> Result<()> { runtime::save("scheduler.json", session) }
@@ -92,7 +93,7 @@ fn start_time(tid: u32) -> Result<String> {
     let (_, fields) = stat.rsplit_once(')').ok_or("Missing thread identity")?;
     Ok(fields.split_whitespace().nth(19).ok_or("Missing thread start time")?.into())
 }
-fn restore(session: &mut Session) -> Result<()> {
+fn restore_threads(session: &mut Session) -> Result<()> {
     let mut errors = Vec::new();
     for (tid, entry) in session.entries.clone() {
         if !Path::new(&format!("/proc/{tid}")).exists() { session.entries.remove(&tid); continue; }
@@ -109,19 +110,109 @@ fn restore(session: &mut Session) -> Result<()> {
             Err(error) => errors.push(error.to_string()),
         }
     }
-    if let Some(entry) = &session.top_app {
-        let result = (|| -> Result<()> {
-            let current = group_value(TOP_MIN)?;
-            let value = group_restore(entry, current);
-            if value != current { group_write(value)?; }
-            Ok(())
-        })();
-        match result { Ok(()) => session.top_app = None, Err(error) => errors.push(error.to_string()) }
-    }
     save(session)?;
     if errors.is_empty() { Ok(()) } else { Err(errors.join("; ").into()) }
 }
-pub fn reconcile(boot: &str, mode: Mode) -> Result<()> {
+fn group_limits(original: u32, maximum: u32, mode: Mode, stage: u8) -> (u32, u32) {
+    if mode == Mode::Battery { let ceiling=maximum*3/4; return (original.min(ceiling),ceiling); }
+    let floor = group_target(original, maximum, mode);
+    let minimum = match stage { 0=>floor, 1=>original.max(floor/2), 2=>original.max(floor/4), _=>original };
+    (minimum, maximum)
+}
+fn restore_group(session: &mut Session) -> Result<()> {
+    if let Some(entry) = &session.top_app {
+        let current = group_value(TOP_MIN)?;
+        let maximum = group_value(TOP_MAX)?;
+        let minimum_target = group_restore(entry, current);
+        let maximum_target = if entry.expected_max == Some(maximum) { entry.original_max.unwrap_or(maximum) } else { maximum };
+        apply_group(current, maximum, minimum_target, maximum_target)?;
+        session.top_app = None; save(session)?;
+    }
+    Ok(())
+}
+fn apply_group(minimum: u32, maximum: u32, target_min: u32, target_max: u32) -> Result<()> {
+    if target_max > maximum { group_write(TOP_MAX, target_max)?; }
+    if minimum != target_min { group_write(TOP_MIN, target_min)?; }
+    if target_max < maximum { group_write(TOP_MAX, target_max)?; }
+    Ok(())
+}
+fn reconcile_group(session: &mut Session, mode: Mode, stage: u8) -> Result<Value> {
+    if session.top_app_mode != mode || mode == Mode::Balanced {
+        restore_group(session)?;
+        if session.top_app_mode != mode || session.top_app_blocked {
+            session.top_app_mode = mode; session.top_app_blocked = false; save(session)?;
+        }
+    }
+    if mode == Mode::Balanced { return Ok(json!({"state":"ROM defaults"})); }
+    if !Path::new(TOP_MIN).is_file() || !Path::new(TOP_MAX).is_file() {
+        return Ok(json!({"state":"Not exposed"}));
+    }
+    if session.top_app_blocked { return Err("ROM changed top-app clamps; switch presets to retry".into()); }
+    let minimum = group_value(TOP_MIN)?;
+    let maximum = group_value(TOP_MAX)?;
+    if let Some(entry) = &session.top_app {
+        if (minimum != entry.expected && minimum != entry.original)
+            || entry.expected_max.zip(entry.original_max).is_some_and(|(expected,original)|maximum!=expected && maximum!=original) {
+            return Err("ROM changed top-app clamps; override paused".into());
+        }
+    }
+    let original = session.top_app.as_ref().map(|entry|entry.original).unwrap_or(minimum);
+    let original_max = session.top_app.as_ref().and_then(|entry|entry.original_max).unwrap_or(maximum);
+    let (expected, expected_max) = group_limits(original, original_max, mode, stage);
+    if session.top_app.as_ref().is_none_or(|entry|entry.expected!=expected || entry.expected_max!=Some(expected_max)) {
+        session.top_app = Some(GroupEntry{original,expected,original_max:Some(original_max),expected_max:Some(expected_max)});
+        save(session)?;
+    }
+    apply_group(minimum,maximum,expected,expected_max)?;
+    Ok(json!({"state":"Request active","minimumPercent":group_value(TOP_MIN)? as f64/100.0,"maximumPercent":group_value(TOP_MAX)? as f64/100.0}))
+}
+fn tids() -> Result<Vec<u32>> {
+    let pid: u32 = android::command("/system/bin/pidof", &["surfaceflinger"])?.parse()?;
+    let mut result = vec![pid];
+    for item in fs::read_dir(format!("/proc/{pid}/task"))? {
+        let item = item?;
+        if fs::read_to_string(item.path().join("comm")).unwrap_or_default().trim()=="RenderEngine" {
+            if let Some(tid)=item.file_name().to_str().and_then(|name|name.parse::<u32>().ok()) { result.push(tid); }
+        }
+    }
+    result.sort_unstable();result.dedup();
+    if result.len()>8 { return Err("Unsupported compositor thread count".into()); }
+    Ok(result)
+}
+fn reconcile_threads(session: &mut Session, mode: Mode, rom_managed: bool) -> Result<Value> {
+    if session.mode != mode || mode == Mode::Balanced || rom_managed {
+        if !session.entries.is_empty() { restore_threads(session)?; }
+        if session.mode != mode || session.blocked { session.mode = mode; session.blocked = false; save(session)?; }
+    }
+    if rom_managed {
+        let mut observed=Vec::new();
+        for tid in tids()? { observed.push(json!({"tid":tid,"actual":read(tid)?})); }
+        return Ok(json!({"state":"Managed by HyperOS","threads":observed}));
+    }
+    if mode == Mode::Balanced { return Ok(json!({"state":"ROM defaults"})); }
+    if session.blocked { return Err("Compositor scheduling paused after an external change; switch presets to retry".into()); }
+    let tids=tids()?;
+    for tid in session.entries.keys().copied().collect::<Vec<_>>() {
+        if tids.contains(&tid) && read(tid)?.start != session.entries[&tid].original.start { session.entries.remove(&tid); }
+    }
+    if session.entries.keys().any(|tid|!tids.contains(tid)) { restore_threads(session)?; }
+    for tid in tids {
+        let current = read(tid)?;
+        let original = session.entries.get(&tid).map(|entry|entry.original.clone()).unwrap_or_else(||current.clone());
+        if let Some(entry) = session.entries.get(&tid) {
+            if current != entry.expected && current != entry.original { return Err("ROM changed compositor scheduling; override paused".into()); }
+        }
+        let expected = target(&original, mode);
+        if session.entries.contains_key(&tid) && current == expected { continue; }
+        session.entries.insert(tid, Entry { original, expected: expected.clone() });
+        save(session)?; // Record ownership before either kernel write.
+        if current != expected { write(tid, &expected)?; }
+    }
+    Ok(json!({"state":"Request active"}))
+}
+pub fn reconcile(boot: &str, mode: Mode) -> Result<Value> { reconcile_cooled(boot,mode,0) }
+pub fn reconcile_cooled(boot: &str, mode: Mode, stage: u8) -> Result<Value> {
+    if stage>3 { return Err("Invalid scheduler cooling stage".into()); }
     let mut session: Session = runtime::load("scheduler.json")?;
     if session.boot != boot { session = Session { boot: boot.into(), ..Default::default() }; }
     if session.entries.keys().any(|tid| !(1..=4194304).contains(tid)) || session.entries.len()>8 { return Err("Invalid compositor journal size".into()); }
@@ -129,61 +220,31 @@ pub fn reconcile(boot: &str, mode: Mode) -> Result<()> {
         validate(&entry.original)?; validate(&entry.expected)?;
         if entry.original.start != entry.expected.start { return Err("Invalid compositor journal identity".into()); }
     }
-    if session.top_app.as_ref().is_some_and(|entry|entry.original>10000 || entry.expected>10000) { return Err("Invalid top-app clamp journal".into()); }
-    if mode == Mode::Balanced && session.top_app.is_none() && session.entries.is_empty() && session.mode == mode && !session.blocked { return Ok(()); }
-    if session.mode != mode || mode == Mode::Balanced {
-        restore(&mut session)?;
-        session.mode = mode; session.blocked = false; save(&session)?;
+    if session.top_app.as_ref().is_some_and(|entry| entry.original>10000 || entry.expected>10000 || entry.original_max.is_some_and(|value|value>10000) || entry.expected_max.is_some_and(|value|value>10000)) {
+        return Err("Invalid top-app clamp journal".into());
     }
-    if mode == Mode::Balanced { return Ok(()); }
-    if session.blocked { return Err("Compositor scheduling paused after an external change; switch presets to retry".into()); }
-    let result = (|| -> Result<()> {
-        let pid = android::command("/system/bin/pidof", &["surfaceflinger"])?;
-        let pid: u32 = pid.parse()?;
-        let mut tids = vec![pid];
-        for item in fs::read_dir(format!("/proc/{pid}/task"))? {
-            let item = item?;
-            let comm = fs::read_to_string(item.path().join("comm")).unwrap_or_default();
-            if comm.trim() == "RenderEngine" {
-                if let Some(tid) = item.file_name().to_str().and_then(|name| name.parse::<u32>().ok()) { tids.push(tid); }
-            }
+    // Each controller owns its own failure state and restores only its own writes.
+    let top_app = match reconcile_group(&mut session, mode, stage) {
+        Ok(value)=>value,
+        Err(error)=>{
+            session.top_app_blocked=true; save(&session)?;
+            let cleanup=restore_group(&mut session).err().map(|error|error.to_string());
+            json!({"state":"Paused","error":error.to_string(),"cleanupError":cleanup})
         }
-        tids.sort_unstable(); tids.dedup();
-        if tids.len()>8 { return Err("Unsupported compositor thread count".into()); }
-        // Retire dead/reused thread IDs before capturing a restarted compositor.
-        for tid in session.entries.keys().copied().collect::<Vec<_>>() {
-            if !tids.contains(&tid) { continue; }
-            if read(tid)?.start != session.entries[&tid].original.start { session.entries.remove(&tid); }
+    };
+    let rom_managed=crate::vendor::dynamic_policy(&crate::hardware::SystemHardware);
+    let compositor = match reconcile_threads(&mut session,mode,rom_managed) {
+        Ok(value)=>value,
+        Err(error)=>{
+            session.blocked=true; save(&session)?;
+            let cleanup=restore_threads(&mut session).err().map(|error|error.to_string());
+            json!({"state":"Paused","error":error.to_string(),"cleanupError":cleanup})
         }
-        if session.entries.keys().any(|tid|!tids.contains(tid)) { restore(&mut session)?; }
-        if matches!(mode,Mode::Performance|Mode::Aggressive|Mode::Boost) && Path::new(TOP_MIN).is_file() && Path::new(TOP_MAX).is_file() {
-            let current = group_value(TOP_MIN)?;
-            let original = session.top_app.as_ref().map(|entry|entry.original).unwrap_or(current);
-            if session.top_app.as_ref().is_some_and(|entry|current!=entry.expected && current!=entry.original) {
-                return Err("ROM changed the top-app clamp; override paused".into());
-            }
-            let expected = group_target(original, group_value(TOP_MAX)?, mode);
-            if session.top_app.is_none() || current!=expected {
-                session.top_app=Some(GroupEntry{original,expected});save(&session)?;
-                if current!=expected {group_write(expected)?;}
-            }
-        }
-        for tid in tids {
-            let current = read(tid)?;
-            let original = session.entries.get(&tid).map(|entry|entry.original.clone()).unwrap_or_else(||current.clone());
-            if let Some(entry) = session.entries.get(&tid) {
-                if current != entry.expected && current != entry.original { return Err("ROM changed compositor scheduling; override paused".into()); }
-            }
-            let expected = target(&original, mode);
-            if session.entries.contains_key(&tid) && current == expected { continue; }
-            session.entries.insert(tid, Entry { original, expected: expected.clone() });
-            save(&session)?; // Record ownership before either kernel write.
-            if current != expected { write(tid, &expected)?; }
-        }
-        Ok(())
-    })();
-    if result.is_err() { session.blocked = true; let _ = save(&session); let _ = restore(&mut session); }
-    result
+    };
+    if mode==Mode::Balanced && (!session.entries.is_empty() || session.top_app.is_some()) {
+        return Err("Some scheduler requests could not be restored; journal retained".into());
+    }
+    Ok(json!({"mode":mode,"topApp":top_app,"compositor":compositor}))
 }
 
 #[cfg(test)]
@@ -200,9 +261,20 @@ mod tests {
         assert_eq!(group_target(8000,10000,Mode::Performance),8000);
         assert_eq!(group_target(4000,6000,Mode::Aggressive),6000);
         assert_eq!(group_target(4000,3000,Mode::Aggressive),4000);
-        let entry=GroupEntry{original:4000,expected:7500};
+        let entry=GroupEntry{original:4000,expected:7500,original_max:Some(10000),expected_max:Some(10000)};
         assert_eq!(group_restore(&entry,7500),4000);
         assert_eq!(group_restore(&entry,6000),6000);
+    }
+    #[test]
+    fn cooling_and_saver_do_not_compound_or_raise_existing_limits() {
+        assert_eq!(group_limits(0,10000,Mode::Performance,0),(5000,10000));
+        assert_eq!(group_limits(0,10000,Mode::Performance,1),(2500,10000));
+        assert_eq!(group_limits(0,10000,Mode::Aggressive,2),(1875,10000));
+        assert_eq!(group_limits(0,6000,Mode::Battery,0),(0,4500));
+        assert_eq!(group_limits(8000,6000,Mode::Battery,0),(4500,4500));
+        let old:Session=serde_json::from_str(r#"{"mode":"performance","top_app":{"original":4000,"expected":5000}}"#).unwrap();
+        assert_eq!(old.top_app.unwrap().original_max,None);
+        assert_eq!(old.top_app_mode,Mode::Balanced);
     }
     fn original() -> Observed { Observed { start:"123".into(), minimum:328, maximum:1024, group:"/system-background".into() } }
     #[test]

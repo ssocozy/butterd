@@ -981,3 +981,25 @@ fn saved_charging_pause_resumes_while_hot_and_still_expires() {
     assert!(engine.session(&Feature::ChargingPause).unwrap().is_none());
     assert_eq!(engine.hardware.read(butter::hardware::PAUSE).unwrap(),"0 0");
 }
+
+#[test]
+fn hyperos_keeps_gpu_control_when_shared_cpu_requests_change() {
+    use butter::presets::Mode;
+    let engine=ged_fixture();
+    engine.hardware.put(butter::vendor::SF_POLICY,"1");
+    engine.hardware.put(butter::vendor::POWERHAL,"480000 2200000 400000 3200000 400000 3350000");
+    let original_cpu=engine.hardware.read(&format!("{CPU}/policy0/scaling_min_freq")).unwrap();
+    engine.preset(Mode::Performance).unwrap();
+    let journal=engine.session(&Feature::Profile).unwrap().unwrap();
+    assert!(journal.entries.iter().all(|entry|!entry.path.starts_with(CPU) && entry.path!=butter::vendor::POWERHAL));
+    for request in ["0 2200000 0 3200000 0 3350000","480000 1700000 400000 2500000 400000 2600000"] {
+        engine.hardware.put(butter::vendor::POWERHAL,request);
+        assert_eq!(engine.state(&Feature::Profile).unwrap(),"Request active");
+        engine.preset_cooled(Mode::Aggressive,1).unwrap();
+        assert_eq!(engine.hardware.read(butter::vendor::POWERHAL).unwrap(),request);
+    }
+    assert_ne!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"4");
+    assert_eq!(engine.hardware.read(&format!("{CPU}/policy0/scaling_min_freq")).unwrap(),original_cpu);
+    engine.preset(Mode::Balanced).unwrap();
+    assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"4");
+}

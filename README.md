@@ -12,7 +12,7 @@ A KernelSU / Magisk module for **POCO X6 Pro / Redmi K70E (Duchamp)**, powered b
 
 **butter is the Rust engine behind Butterd.** It follows the foreground app, screen state, workload and temperatures to apply your presets and app rules.
 
-It discovers your kernel’s CPU/GPU controls, raises clock floors for demanding profiles, eases requests as heat builds, and releases them during idle or screen off. Android events drive updates, with periodic checks when events are unavailable. ROM/kernel limits remain in control.
+It discovers your kernel’s CPU/GPU controls, raises clock floors for demanding profiles, eases requests as heat builds, and releases them during idle or screen off. Android events drive updates, with periodic checks when events are unavailable. ROM/kernel limits remain in control. On HyperOS with its dynamic SurfaceFlinger CPU policy enabled, butter tunes CPU demand through top-app scheduler clamps and leaves the shared PowerHAL frequency request and compositor scheduling to the ROM.
 
 Your settings resume after reboot. Diagnostics show what butter requested and what the hardware actually allows. It uses explicit rules, not machine learning.
 
@@ -33,7 +33,7 @@ Settings and app profiles survive reboot. Stable updates appear through the modu
 | **Performance** | Raises minimum clocks, then eases them during heat or idle. A good starting point for games. |
 | **Aggressive** | Starts with higher minimum clocks and gradually eases them as heat builds. Uses more power; higher clocks don’t guarantee smoother gameplay. |
 
-Performance starts near the middle of supported frequency steps; Aggressive starts around three-quarters. These are table positions, not percentages of GHz or performance. Both reduce requests in stages and release them at **42°C battery or 85°C SoC**, recovering after cooling. ROM/kernel limits always take priority.
+For clock-floor controls, Performance starts near the middle of supported frequency steps; Aggressive starts around three-quarters. HyperOS CPU scheduling requests are described below. These are table positions, not percentages of GHz or performance. Both reduce requests in stages and release them at **42°C battery or 85°C SoC**, recovering after cooling. ROM/kernel limits always take priority.
 
 In **Apps**, assign a preset, refresh rate, high touch sampling, or charging-pause threshold to individual apps. Their rules take priority over the overall preset while the app is open. Performance app profiles include a five-second launch boost.
 
@@ -44,8 +44,8 @@ In **Apps**, assign a preset, refresh rate, high touch sampling, or charging-pau
 - **Hardware controls:** supported CPU governors, clock ranges, TCP algorithms and high touch sampling.
 - **Bypass charging:** pauses battery charging while plugged in. The battery may still supply power. Manual use expires after 30 minutes; kernel protections stay active.
 - **Phone microphone:** prefer the built-in mic with Bluetooth earbuds. App routing and ROM support can affect results.
-- **CPU scheduling:** enabled by default with presets. Saver lowers SurfaceFlinger and RenderEngine minimum CPU clamps to at most 110/1024; Performance/Aggressive request top-app minimum clamps of at least 50%/75%, compositor minimum clamps of at least 512/768 out of 1024, and use the existing foreground cpuset. Existing maximum clamps take priority. Balanced, screen off, thermal release, or disabling the setting restores owned values. ROM task profiles and controller definitions are preserved.
-- **Vulkan UI rendering:** Vulkan rendering enabled by default for app interfaces, SystemUI and SurfaceFlinger composition. Change it in Settings and reboot; turn it off and reboot to use ROM defaults. The choice survives module updates. Games retain their own rendering engines.
+- **CPU scheduling:** enabled by default with presets. Performance/Aggressive start with top-app minimum clamp requests of 50%/75%, reducing with heat and respecting existing maximums. Saver requests a top-app ceiling at three-quarters of its captured maximum. On HyperOS with the dynamic compositor CPU policy enabled, compositor scheduling stays ROM-managed; app CPU clamps and GED GPU requests work independently. Other ROMs also receive scoped compositor minimum clamps and CPU placement. Balanced, screen off, or disabling the setting restores owned values. ROM task profiles and controller definitions are preserved.
+- **Vulkan UI rendering:** Vulkan rendering enabled by default for app interfaces, SystemUI and SurfaceFlinger composition. Change it in Settings and reboot; turn it off and reboot to use ROM defaults. The choice survives module updates. The WebUI reports the sampled SystemUI and composition backends separately from the selected preference; a ROM may retain OpenGL composition. Games retain their own rendering engines.
 - **Recording assist:** optional higher clock requests during detected screen capture. Detection can take 15 seconds. Its SoC cutoff is 90°C; battery limits stay unchanged.
 
 CPU/GPU requests, effective limits and current clocks are separate readings. Features depend on what your ROM and kernel expose. Battery history comes from Android; it isn’t an instantaneous per-app power measurement.
@@ -66,7 +66,7 @@ This can complement a compatible [Fenrir](https://github.com/R0rt1z2/fenrir) set
 > [!IMPORTANT]
 > Releases pass automated checks before publication; device testing is ongoing. Butterd cannot guarantee better FPS or battery life on every ROM. Use at your own risk; no warranty is provided. See [LICENSE](LICENSE).
 
-Engine notifications use one silent entry for preset, bypass-charging and error updates. Routine screen-off/wake transitions do not announce the preset again.
+Engine notifications use one silent entry for preset, bypass-charging and error updates. Cooling notices distinguish the requested preset from released boost requests. Routine screen-off/wake transitions do not announce the preset again.
 
 ## Troubleshooting
 

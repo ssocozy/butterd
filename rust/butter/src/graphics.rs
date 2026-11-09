@@ -67,9 +67,37 @@ pub fn status() -> Value {
     })
 }
 
+fn composition_backend(dump: &str) -> Option<&'static str> {
+    if dump.contains("RE Vulkan") || dump.lines().any(|line|line.trim()=="Vulkan device initialized: 1") { Some("Vulkan") }
+    else if dump.lines().any(|line|line.trim_start().starts_with("GLES:")) { Some("OpenGL") }
+    else { None }
+}
+fn ui_backend(dump: &str) -> Option<&'static str> {
+    if dump.contains("Pipeline=Skia (Vulkan)") { Some("Vulkan") }
+    else if dump.contains("Pipeline=Skia (OpenGL)") { Some("OpenGL") }
+    else { None }
+}
+pub fn probe(now: u64) -> Value {
+    let composition=android::execute("/system/bin/dumpsys", &["SurfaceFlinger"], &[], 5);
+    let ui=android::execute("/system/bin/dumpsys", &["gfxinfo","com.android.systemui"], &[], 5);
+    json!({"sampledAtUptime":now,
+        "composition":composition.as_ref().ok().and_then(|dump|composition_backend(dump)),
+        "systemUi":ui.as_ref().ok().and_then(|dump|ui_backend(dump)),
+        "compositionError":composition.err().map(|error|error.to_string()),
+        "systemUiError":ui.err().map(|error|error.to_string())})
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn renderer_selection_is_not_confused_with_running_backends() {
+        assert_eq!(composition_backend("debug.renderengine.backend=skiavkthreaded"),None);
+        assert_eq!(composition_backend("GLES: ARM, Mali"),Some("OpenGL"));
+        assert_eq!(composition_backend(" ------------RE Vulkan (Ganesh)----------"),Some("Vulkan"));
+        assert_eq!(ui_backend("Pipeline=Skia (Vulkan)"),Some("Vulkan"));
+        assert_eq!(ui_backend("No process found"),None);
+    }
     #[test]
     fn preference_is_reversible_and_preserves_external_changes() {
         let module = std::env::temp_dir().join(format!("butter-graphics-{}", std::process::id()));

@@ -88,7 +88,7 @@ pub fn valid_governor(value: &str) -> bool {
 pub fn selectable_governor(value: &str) -> bool {
     matches!(
         value,
-        "schedutil" | "ondemand" | "conservative" | "powersave" | "interactive"
+        "schedutil" | "sugov_ext" | "ondemand" | "conservative" | "powersave" | "interactive"
     )
 }
 pub fn number(value: &str) -> Result<u64> {

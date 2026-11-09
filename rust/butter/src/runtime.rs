@@ -405,6 +405,7 @@ pub fn daemon(boot: &str) -> Result<()> {
     let mut compositor_sample = Value::Null;
     let mut compositor_mode_seen = None;
     let mut compositor_sample_at = 0;
+    let mut renderer_sample = Value::Null;
     let mut last_error = String::new();
     let mut last_sample_event = 0;
     let mut wake_events = crate::events::WakeEvents::new();
@@ -422,6 +423,10 @@ pub fn daemon(boot: &str) -> Result<()> {
             recording_awake = ctx.awake;
         }
         sampled_telemetry["recording"] = recording_sample.clone();
+        if ctx.awake==Some(true) && renderer_sample["sampledAtUptime"].as_u64().is_none_or(|last|now.saturating_sub(last)>=60) {
+            renderer_sample=crate::graphics::probe(now);
+        }
+        sampled_telemetry["renderers"]=renderer_sample.clone();
         let e = match engine(boot) { Ok(e) => e, Err(_) => { std::thread::sleep(Duration::from_secs(1)); continue; } };
         let stopping = !Path::new(MODULE).is_dir() || ["disable", "remove"].iter().any(|file| Path::new(MODULE).join(file).exists()) || Path::new(DIRECTORY).join("stop").exists();
         let cfg = config();
@@ -489,12 +494,12 @@ pub fn daemon(boot: &str) -> Result<()> {
             }
         }
         let compositor_mode = if cfg.compositor_disabled || state.blocked { Mode::Balanced } else { state.active };
-        if compositor_mode_seen != Some(compositor_mode) || now.saturating_sub(compositor_sample_at) >= 15 {
-            compositor_sample = match crate::scheduler::reconcile(boot, compositor_mode) {
-                Ok(()) => json!({"mode":compositor_mode,"error":null}),
+        if compositor_mode_seen != Some((compositor_mode,state.thermal_stage)) || now.saturating_sub(compositor_sample_at) >= 15 {
+            compositor_sample = match crate::scheduler::reconcile_cooled(boot, compositor_mode, state.thermal_stage) {
+                Ok(value) => value,
                 Err(error) => json!({"mode":compositor_mode,"error":error.to_string()}),
             };
-            compositor_mode_seen = Some(compositor_mode); compositor_sample_at = now;
+            compositor_mode_seen = Some((compositor_mode,state.thermal_stage)); compositor_sample_at = now;
         }
         sampled_telemetry["compositorScheduling"] = compositor_sample.clone();
         // Display failures and CPU failures have independent state and ownership.
@@ -507,6 +512,9 @@ pub fn daemon(boot: &str) -> Result<()> {
                 let _ = restore_refresh(&e, &mut state);
             }
         }
+        sampled_telemetry["requestedPreset"] = json!(state.pending_preset.unwrap_or(if cfg.automatic {
+            ctx.app.as_ref().and_then(|app|cfg.rules.iter().find(|rule|&rule.package==app)).map_or(cfg.preset,|rule|rule.preset)
+        } else { state.selected }));
         state.telemetry = sampled_telemetry;
         state.telemetry["recording"]["assistEnabled"] = json!(cfg.recording_assist);
         state.telemetry["recording"]["socCutoffC"] = json!(recording_soc_cutoff);
@@ -516,7 +524,7 @@ pub fn daemon(boot: &str) -> Result<()> {
         state.telemetry["eventStreamRunning"] = json!(wake_events.available());
         state.telemetry["displayRequestHz"] = json!(state.refresh_hz);
         state.telemetry["displayRequestSatisfied"] = json!(state.refresh_hz.zip(ctx.hz).map(|(requested,actual)| (f64::from(requested)-actual).abs()<0.1));
-        state.telemetry["cpuBackend"] = json!(if e.session(&Feature::Profile).ok().flatten().is_some_and(|journal| journal.entries.iter().any(|entry| entry.path == crate::vendor::POWERHAL)) { "powerhal-qos" } else { "cpufreq" });
+        state.telemetry["cpuBackend"] = json!(if crate::vendor::dynamic_policy(&e.hardware) { "HyperOS scheduler" } else if e.session(&Feature::Profile).ok().flatten().is_some_and(|journal| journal.entries.iter().any(|entry| entry.path == crate::vendor::POWERHAL)) { "powerhal-qos" } else { "cpufreq" });
         state.foreground = ctx.app; state.sampled_at = now;
         if now.saturating_sub(last_sample_event) >= if cfg.logcat { 10 } else { 30 } {
             event(&cfg, "sample", &state.telemetry.to_string()); last_sample_event = now;

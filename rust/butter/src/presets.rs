@@ -51,7 +51,11 @@ pub fn plan_cooled(hardware: &impl Hardware, mode: Mode, baseline: Option<&Journ
         baseline.and_then(|journal|journal.entries.iter().find(|entry|entry.path==crate::vendor::POWERHAL)).and_then(|entry|crate::vendor::parse(&entry.original).ok())
             .or_else(||crate::vendor::read(hardware).ok().and_then(|value|crate::vendor::parse(&value).ok()))
     } else { None };
+    let scheduler_cpu = crate::vendor::dynamic_policy(hardware);
     for (base, cpu) in bases {
+        // HyperOS rewrites the shared PowerHAL request. CPU demand is handled by
+        // top-app uclamp; retain independent GPU floor/cap requests.
+        if cpu && scheduler_cpu { continue; }
         if !cpu && crate::gpu::dummy(hardware) {
             let table=crate::gpu::ged_table(hardware)?;
             let index=crate::gpu::floor_index(mode,stage,table.len())?;
