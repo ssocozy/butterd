@@ -76,7 +76,7 @@ pub fn charging_metrics(state:&RuntimeState)->Option<String> {
     let temp=t["batteryTempC"].as_f64().filter(|v|v.is_finite() && (-40.0..=125.0).contains(v)).map(|v|format!("{v:.1}°C")).unwrap_or_else(||"—".into());
     let watts=t["batteryWatts"].as_f64().filter(|v|v.is_finite() && (0.0..=500.0).contains(v)).map(|v|format!("{v:.1} W")).unwrap_or_else(||"—".into());
     let percent=t["batteryPercent"].as_u64().filter(|v|*v<=100).map(|v|format!("{v}%")).unwrap_or_else(||"—".into());
-    Some(format!("{temp} · {watts} · {percent}"))
+    Some(format!("{temp} · Charging {watts} · {percent}"))
 }
 pub fn confirm(reply:&str)->Result<()> {
     if !reply.lines().any(|line|line.trim()=="posted:") || reply.contains("couldn't find notification") { return Err("Android did not confirm the notification. Check Shell notification permissions and its notification channel.".into()); }

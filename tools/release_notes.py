@@ -14,7 +14,7 @@ def git(*args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', required=True)
-    parser.add_argument('--channel', choices=['production', 'development'], required=True)
+    parser.add_argument('--channel', choices=['production', 'development', 'draft'], required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', args.version):
@@ -41,7 +41,7 @@ def main():
         lines.append('')
     if previous:
         lines.extend([f'[Full comparison]({url}/compare/{previous}...{head})', ''])
-    filename = f'butterd-{args.version}.zip' if args.channel == 'production' else 'butterd-module.zip'
+    filename = f'butterd-{args.version}.zip' if args.channel != 'development' else 'butterd-module.zip'
     lines.extend(['## Install', '', f'Flash `{filename}` in KernelSU or Magisk, then reboot. The sources ZIP is for source code only.', '', 'CI checks passed. On-device behaviour still needs phone validation.', ''])
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text('\n'.join(lines), encoding='utf-8')

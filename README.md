@@ -48,7 +48,7 @@ In **Apps**, assign a preset, refresh rate, high touch sampling, or charging-pau
 - **Vulkan UI rendering:** Vulkan rendering enabled by default for app interfaces, SystemUI and SurfaceFlinger composition. Change it in Settings and reboot; turn it off and reboot to use ROM defaults. The choice survives module updates. The WebUI reports the sampled SystemUI and composition backends separately from the selected preference; a ROM may retain OpenGL composition. Games retain their own rendering engines.
 - **Recording assist:** optional higher clock requests during detected screen capture. Detection can take 15 seconds. Its SoC cutoff is 90°C; battery limits stay unchanged.
 
-Engine notifications show the preset and cooling or error status. While charging, they also show battery temperature, watts and percentage, updating silently about every 30 seconds. These readings disappear when charging stops.
+Engine notifications show the preset and cooling or error status. While charging, they also show battery temperature, `Charging` with watts, and percentage, updating silently about every 30 seconds. These readings disappear when charging stops.
 
 CPU/GPU requests, effective limits and current clocks are separate readings. Features depend on what your ROM and kernel expose. Battery history comes from Android; it isn’t an instantaneous per-app power measurement.
 

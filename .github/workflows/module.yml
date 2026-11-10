@@ -7,6 +7,7 @@ on:
         type: choice
         options:
           - development
+          - draft
           - production
         default: development
 permissions:
@@ -33,7 +34,7 @@ jobs:
           version=$(sed -n 's/^version=//p' module/module.prop)
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           echo "MODULE_VERSION=$version" >> "$GITHUB_ENV"
-          if [ "$RELEASE_CHANNEL" = production ]; then
+          if [ "$RELEASE_CHANNEL" != development ]; then
             if gh release view "v$version" >/dev/null 2>&1; then
               echo "Release v$version already exists. Increment the module version."
               exit 1
@@ -157,7 +158,7 @@ jobs:
           python3 tools/package.py
           unzip -t dist/butterd-module.zip
           unzip -t dist/butterd-sources.zip
-          if [ "$RELEASE_CHANNEL" = production ]; then
+          if [ "$RELEASE_CHANNEL" != development ]; then
             mv dist/butterd-module.zip "dist/butterd-$MODULE_VERSION.zip"
             mv dist/butterd-sources.zip "dist/butterd-$MODULE_VERSION-sources.zip"
           fi
@@ -167,10 +168,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 tools/release_notes.py --version "$MODULE_VERSION" --channel "$RELEASE_CHANNEL" --output build/release-notes.txt
-          if [ "$RELEASE_CHANNEL" = production ]; then
+          if [ "$RELEASE_CHANNEL" != development ]; then
             cp build/release-notes.txt dist/changelog.txt
             python3 tools/update_manifest.py --repository "$GITHUB_REPOSITORY" --output dist/update.json
-            gh release create "v$MODULE_VERSION" dist/*.zip dist/SHA256SUMS dist/update.json dist/changelog.txt --target "$GITHUB_SHA" --title "Butterd $MODULE_VERSION" --notes-file build/release-notes.txt --latest
+            if [ "$RELEASE_CHANNEL" = draft ]; then
+              gh release create "v$MODULE_VERSION" dist/*.zip dist/SHA256SUMS dist/update.json dist/changelog.txt --target "$GITHUB_SHA" --title "Butterd $MODULE_VERSION" --notes-file build/release-notes.txt --draft --latest=false
+            else
+              gh release create "v$MODULE_VERSION" dist/*.zip dist/SHA256SUMS dist/update.json dist/changelog.txt --target "$GITHUB_SHA" --title "Butterd $MODULE_VERSION" --notes-file build/release-notes.txt --latest
+            fi
           else
             gh release create "module-debug-${GITHUB_RUN_NUMBER}" dist/*.zip dist/SHA256SUMS --prerelease --target "$GITHUB_SHA" --title "Butterd module #${GITHUB_RUN_NUMBER}" --notes-file build/release-notes.txt
           fi

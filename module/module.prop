@@ -1,7 +1,7 @@
 id=butterd
 name=Butterd
-version=0.4.42
-versionCode=52
+version=0.4.43
+versionCode=53
 author=ssocozy
 description=Make your device optimized, one step at a time
 updateJson=https://github.com/ssocozy/butterd/releases/latest/download/update.json
