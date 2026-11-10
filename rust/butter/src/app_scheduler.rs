@@ -37,20 +37,35 @@ fn parse(raw:&str)->Result<BTreeMap<u32,Observed>> {
     Ok(result)
 }
 fn save(session:&Session)->Result<()> { runtime::save("app-scheduler.json",session) }
-fn apply(pid:u32, changes:&[(u32,Observed,u32,u32)])->Result<()> {
-    if changes.is_empty() { return Ok(()); }
+fn apply(pid:u32, changes:&[(u32,Observed,u32,u32)])->Result<BTreeMap<u32,(Observed,bool)>> {
+    if changes.is_empty() { return Ok(BTreeMap::new()); }
     let mut args=vec!["app-set".to_string(),pid.to_string()];
     for (tid,current,target,maximum) in changes {
         args.extend([tid.to_string(),current.start.clone(),current.minimum.to_string(),target.to_string(),current.maximum.to_string(),maximum.to_string()]);
     }
-    android::command(HELPER,&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+    let reply=android::command(HELPER,&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+    let mut skipped=BTreeSet::new();
+    for line in reply.lines().filter(|line|!line.is_empty()) {
+        let tid=line.strip_prefix("changed ").ok_or("Unsupported app batch reply")?.parse::<u32>()?;
+        if !changes.iter().any(|(changed,_,_,_)|*changed==tid) || !skipped.insert(tid) { return Err("Invalid app batch thread reply".into()); }
+    }
     let actual=snapshot(pid)?;
+    let mut changed=BTreeMap::new();
     for (tid,before,target,maximum) in changes {
-        if actual.get(tid).is_some_and(|now|now.start==before.start && (now.minimum!=*target || now.maximum!=*maximum)) {
-            return Err("App thread clamp readback changed".into());
+        if let Some(now)=actual.get(tid).filter(|now|now.start==before.start) {
+            if skipped.contains(tid) || now.minimum!=*target || now.maximum!=*maximum {
+                changed.insert(*tid,(now.clone(),skipped.contains(tid)));
+            }
         }
     }
-    Ok(())
+    Ok(changed)
+}
+fn adopt_changed(entry:&mut Entry, now:&Observed, before:&Observed, skipped:bool) {
+    let reference=if skipped {before}else{&entry.expected};
+    if now.minimum!=reference.minimum {entry.original.minimum=now.minimum;}
+    if now.maximum!=reference.maximum {entry.original.maximum=now.maximum;}
+    entry.original.minimum=entry.original.minimum.min(entry.original.maximum);
+    entry.expected=now.clone();
 }
 fn restore_target(entry:&Entry,current:&Observed)->(u32,u32) {
     if current.start!=entry.original.start { return (current.minimum,current.maximum); }
@@ -69,8 +84,9 @@ fn restore(session:&mut Session, keep:&BTreeSet<u32>)->Result<()> {
             let now=current.get(tid)?; let target=restore_target(entry,now);
             (target!=(now.minimum,now.maximum)).then(||(*tid,now.clone(),target.0,target.1))
         }).collect();
-        apply(pid,&changes)?;
-        session.entries.retain(|_,entry|entry.pid!=pid); save(session)?;
+        let changed=apply(pid,&changes)?;
+        session.entries.retain(|tid,entry|entry.pid!=pid || changed.contains_key(tid)); save(session)?;
+        if !changed.is_empty() { return Err("Some app threads changed during release; retry pending".into()); }
     }
     Ok(())
 }
@@ -126,6 +142,7 @@ pub fn reconcile(boot:&str,mode:Mode,stage:u8,app:Option<&str>)->Result<Value> {
     // Release old foreground threads before acquiring the new foreground process.
     restore(&mut session,&pids)?;
     let mut count=0;
+    let mut contended=0;
     for pid in pids {
         let current=snapshot(pid)?;
         session.entries.retain(|tid,entry|entry.pid!=pid || current.get(tid).is_some_and(|now|now.start==entry.original.start));
@@ -147,10 +164,16 @@ pub fn reconcile(boot:&str,mode:Mode,stage:u8,app:Option<&str>)->Result<Value> {
         }
         if session.entries.len()>512 { return Err("Foreground thread count exceeds limit".into()); }
         save(&session)?; // Persist ownership before the batch can partially succeed.
-        apply(pid,&changes)?;
+        let changed=apply(pid,&changes)?;
+        contended+=changed.len();
+        for (tid,(now,skipped)) in changed {
+            let before=&changes.iter().find(|(changed,_,_,_)|*changed==tid).ok_or("Missing changed thread")?.1;
+            if let Some(entry)=session.entries.get_mut(&tid) {adopt_changed(entry,&now,before,skipped);}
+        }
+        save(&session)?;
     }
     save(&session)?;
-    Ok(json!({"state":if count>0 {"Per-thread requests active"}else{"ROM defaults"},"backend":"Foreground thread uclamp","app":app,"threads":count,"coolingStage":stage}))
+    Ok(json!({"state":if count>contended {"Per-thread requests active"}else if contended>0 {"Waiting for thread changes"}else{"ROM defaults"},"backend":"Foreground thread uclamp","app":app,"threads":count-contended,"observedThreads":count,"contendedThreads":contended,"coolingStage":stage}))
 }
 
 #[cfg(test)]
@@ -166,6 +189,20 @@ mod tests {
         assert_eq!(target(&base,&base,Mode::Aggressive,2),(192,1024));
         assert_eq!(target(&base,&Observed{maximum:300,..base.clone()},Mode::Aggressive,0),(300,300));
         assert_eq!(target(&Observed{minimum:900,..base.clone()},&base,Mode::Aggressive,0),(900,1024));
+    }
+    #[test]
+    fn a_racing_thread_preserves_external_fields_without_losing_owned_baselines() {
+        let original=base();let expected=Observed{minimum:768,..original.clone()};
+        let mut entry=Entry{pid:10,original:original.clone(),expected:expected.clone()};
+        // Write succeeded, then ROM changed only the maximum. Our minimum is still owned.
+        adopt_changed(&mut entry,&Observed{maximum:900,..expected.clone()},&original,false);
+        assert_eq!(entry.original.minimum,0);assert_eq!(entry.original.maximum,900);
+        assert_eq!(restore_target(&entry,&entry.expected),(0,900));
+        // A stronger ROM touch boost raced before our write; retain that boost.
+        let mut entry=Entry{pid:10,original:original.clone(),expected};
+        adopt_changed(&mut entry,&Observed{minimum:900,..original.clone()},&original,true);
+        assert_eq!(entry.original.minimum,900);
+        assert_eq!(target(&entry.original,&entry.expected,Mode::Aggressive,0),(900,1024));
     }
     #[test]
     fn inherited_clamps_restore_and_saver_caps_do_not_compound() {

@@ -99,8 +99,10 @@ static int app_command(int argc, char** argv) {
                 if (errno == ESRCH) continue;
                 throw std::runtime_error("Cannot read app thread attributes");
             }
-            if (attributes.minimum != previous || attributes.maximum != maximum)
-                throw std::runtime_error("App thread clamp changed before write");
+            if (attributes.minimum != previous || attributes.maximum != maximum) {
+                std::cout << "changed " << tid << '\n';
+                continue; // A ROM touch boost must not abort unrelated threads.
+            }
             if (identity(pid) != process_start || identity(tid) != start)
                 throw std::runtime_error("App process identity changed");
             attributes.flags = (attributes.flags & 1) | 8 | 16 | 32 | 64;

@@ -14,6 +14,7 @@ const BOOT_ID: &str = "11111111-2222-3333-4444-555555555555";
 struct FakeHardware {
     nodes: RefCell<BTreeMap<String, String>>,
     writes: Cell<usize>,
+    audio_reads: Cell<usize>,
     fail_at: Cell<Option<usize>>,
 }
 impl FakeHardware {
@@ -23,6 +24,7 @@ impl FakeHardware {
 }
 impl Hardware for FakeHardware {
     fn read(&self, path: &str) -> Result<String> {
+        if path==butter::audio::STATUS || butter::audio::preset(path).is_some() {self.audio_reads.set(self.audio_reads.get()+1);}
         self.nodes
             .borrow()
             .get(path)
@@ -1124,4 +1126,30 @@ fn apiboost_preserves_stronger_external_floor_and_releases_old_ged_backend() {
     assert_eq!(engine.hardware.read(APIBOOST_FLOOR).unwrap(),"0");
     engine.preset(Mode::Performance).unwrap();
     assert_eq!(engine.hardware.read(APIBOOST_FLOOR).unwrap(),"0");
+}
+
+#[test]
+fn cached_audio_probe_checks_ownership_without_binder_reads_under_control_lock() {
+    use butter::{preferences::{SavedControl,resume_with_audio},runtime::{RuntimeState,Context}};
+    let engine=audio_fixture();engine.apply(Feature::PhoneMic,"",false,false).unwrap();
+    let controls=BTreeMap::from([("phone-mic".into(),SavedControl{setting:String::new(),expires_utc:None})]);
+    let mut state=RuntimeState::default();state.resumed_controls.insert("phone-mic".into());
+    let mut audio:serde_json::Value=serde_json::from_str(&engine.hardware.read(butter::audio::STATUS).unwrap()).unwrap();
+    audio["preferences"]=serde_json::json!({});
+    for source in butter::audio::PRESETS {
+        let path=format!("audio-capture:{source}");
+        audio["preferences"][&path]=serde_json::from_str(&engine.hardware.read(&path).unwrap()).unwrap();
+    }
+    engine.hardware.audio_reads.set(0);
+    resume_with_audio(&engine,&controls,&mut state,&Context::default(),1800000000,30,Some(&audio));
+    assert_eq!(engine.hardware.audio_reads.get(),0);
+    assert!(state.preference_errors.is_empty());assert_eq!(state.audio_checked_at,30);
+    // An external edit found in the next snapshot releases only still-owned presets.
+    let external=r#"[{"type":7,"address":"earbuds"}]"#;
+    engine.hardware.put("audio-capture:7",external);
+    audio["preferences"]["audio-capture:7"]=serde_json::from_str(external).unwrap();
+    resume_with_audio(&engine,&controls,&mut state,&Context::default(),1800000000,36,Some(&audio));
+    assert!(state.preference_errors.contains_key("phone-mic"));
+    assert_eq!(engine.hardware.read("audio-capture:7").unwrap(),external);
+    assert_eq!(engine.hardware.read("audio-capture:1").unwrap(),"[]");
 }

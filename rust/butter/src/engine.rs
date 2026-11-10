@@ -141,6 +141,7 @@ impl<H: Hardware, S: Store> Engine<H, S> {
             }
         };
         self.checked(&feature, &journal)?;
+        if feature==Feature::PhoneMic { return self.apply_audio(journal,targets,restoring); }
         if restoring && journal.entries.iter().all(|entry| hardware::value(&self.hardware, &entry.path).is_ok_and(|current| current == entry.original)) {
             self.store.remove(&feature)?;
             return Ok("Original values are already active; session released.".into());
@@ -410,6 +411,35 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         self.store.save(&journal)?;
         self.preset_cooled(mode, stage)
     }
+    fn apply_audio(&self, mut journal:Journal, targets:Vec<(String,String)>, restoring:bool)->Result<String> {
+        let current=self.hardware.read_many(&journal.entries.iter().map(|entry|entry.path.as_str()).collect::<Vec<_>>())?;
+        if current.len()!=journal.entries.len() { return Err("Audio snapshot is incomplete".into()); }
+        let mut changes=Vec::new();
+        for (entry,actual) in journal.entries.iter_mut().zip(current) {
+            hardware::validate_path_value(&Feature::PhoneMic,&entry.path,&actual)?;
+            if !entry.owned(&actual) {
+                if !restoring { return Err("Audio preferences changed externally; no write made".into()); }
+                entry.original=actual.clone();entry.expected=actual.clone();entry.before=None;
+            }
+            self.hardware.check_write(&entry.path)?;
+            let target=if restoring {entry.original.clone()} else {targets.iter().find(|(path,_)|path==&entry.path).ok_or("Missing audio target")?.1.clone()};
+            if actual!=target {
+                changes.push((entry.path.clone(),actual.clone(),target.clone()));
+                entry.before=Some(actual);
+            } else { entry.before=None; }
+            entry.expected=target;
+        }
+        // Journal the entire transaction before the Android batch can partly succeed.
+        if !changes.is_empty() { self.store.save(&journal)?;self.hardware.write_many(&changes)?; }
+        // Android's batch checks every result; fresh snapshot also verifies generic backends.
+        let actual=self.hardware.read_many(&journal.entries.iter().map(|entry|entry.path.as_str()).collect::<Vec<_>>())?;
+        if actual.len()!=journal.entries.len() || journal.entries.iter().zip(actual).any(|(entry,current)|entry.expected!=current) {
+            return Err("Audio batch readback changed; session retained".into());
+        }
+        for entry in &mut journal.entries {entry.before=None;}
+        if restoring {self.store.remove(&Feature::PhoneMic)?;} else {self.store.save(&journal)?;}
+        Ok(if restoring {"Original microphone preferences restored."}else{"Phone microphone preference verified."}.into())
+    }
     pub fn state(&self, feature: &Feature) -> Result<&'static str> {
         let Some(journal) = self.session(feature)? else {
             return Ok("Off");
@@ -476,7 +506,11 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         output.insert("governors".into(), json!({"original": self.session(&Feature::Governors).ok().flatten().is_some()}));
         let audio = crate::audio::status(&self.hardware).map(|mut value| {
             value["active"] = json!(self.session(&Feature::PhoneMic).ok().flatten().is_some());
-            value["state"] = json!(self.state(&Feature::PhoneMic).unwrap_or("Readback unavailable")); value
+            let state=self.session(&Feature::PhoneMic).ok().flatten().map(|journal| {
+                if value.get("preferences").is_some() { crate::audio::matches_snapshot(&value,&journal).map(|active|if active {"Request active"}else{"Readback changed; request no longer active"}) }
+                else { self.state(&Feature::PhoneMic) }
+            }).unwrap_or(Ok("Off"));
+            value["state"] = json!(state.unwrap_or("Readback unavailable")); value
         }).unwrap_or_else(|error| json!({"available":false,"reason":error.to_string()}));
         output.insert("audio".into(),audio);
         let mut policies = Vec::new();

@@ -41,3 +41,39 @@ pub fn read_many(paths: &[&str]) -> Result<Vec<String>> {
     let values: Value = serde_json::from_str(&bridge(&["preferences"])?)?;
     paths.iter().map(|path| normalize(&values.get(*path).ok_or("Missing capture preference")?.to_string())).collect()
 }
+
+/// A single Android process verifies and changes the three input presets.
+fn batch_request(changes:&[(String,String,String)])->Result<String> {
+    let mut values=serde_json::Map::new();
+    for (path,before,target) in changes {
+        if preset(path).is_none() || values.contains_key(path) { return Err("Invalid audio batch preset".into()); }
+        values.insert(path.clone(),json!({"before":serde_json::from_str::<Value>(&normalize(before)?)?,"target":serde_json::from_str::<Value>(&normalize(target)?)?}));
+    }
+    if values.is_empty() || values.len()>3 { return Err("Invalid audio batch size".into()); }
+    Ok(Value::Object(values).to_string())
+}
+pub fn write_many(changes:&[(String,String,String)])->Result<()> {
+    if bridge(&["write-preferences",&batch_request(changes)?])? != "verified" { return Err("Audio batch not verified".into()); }
+    Ok(())
+}
+pub fn matches_snapshot(snapshot:&Value,journal:&crate::journal::Journal)->Result<bool> {
+    journal.entries.iter().try_fold(true,|matches,entry| {
+        let current=normalize(&snapshot.get("preferences").and_then(|values|values.get(&entry.path)).ok_or("Audio preference snapshot missing")?.to_string())?;
+        Ok(matches && entry.before.is_none() && entry.expected==current)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn batch_keeps_expected_originals_and_validates_all_targets() {
+        let changes=vec![("audio-capture:1".into(),"[]".into(),r#"[{"type":15,"address":"bottom"}]"#.into())];
+        let value:Value=serde_json::from_str(&batch_request(&changes).unwrap()).unwrap();
+        assert_eq!(value["audio-capture:1"]["before"],json!([]));
+        assert_eq!(value["audio-capture:1"]["target"][0]["type"],15);
+        for bad in [vec![],vec![changes[0].clone(),changes[0].clone()],vec![("audio-output:1".into(),"[]".into(),"[]".into())],vec![("audio-capture:1".into(),"[]".into(),r#"[{"type":0,"address":""}]"#.into())]] {
+            assert!(batch_request(&bad).is_err());
+        }
+    }
+}

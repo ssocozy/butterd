@@ -37,6 +37,16 @@ pub fn bypass_node(hardware: &impl Hardware) -> Result<String> {
 pub trait Hardware {
     fn read(&self, path: &str) -> Result<String>;
     fn write(&self, path: &str, value: &str) -> Result<()>;
+    fn write_many(&self, changes: &[(String,String,String)]) -> Result<()> {
+        for (path,before,_) in changes {
+            if self.read(path)? != *before { return Err("Preferences changed before batch".into()); }
+        }
+        for (path,before,target) in changes {
+            if self.read(path)? != *before { return Err("Preferences changed before write".into()); }
+            self.write(path,target)?;
+        }
+        Ok(())
+    }
     fn read_many(&self, paths: &[&str]) -> Result<Vec<String>> {
         paths.iter().map(|path| self.read(path)).collect()
     }
@@ -67,6 +77,11 @@ pub fn read_bounded(path: &Path, limit: u64) -> Result<String> {
     read_stream(&mut fs::File::open(path)?,limit)
 }
 impl Hardware for SystemHardware {
+    fn write_many(&self, changes: &[(String,String,String)]) -> Result<()> {
+        if changes.is_empty() { return Ok(()); }
+        if changes.iter().all(|(path,_,_)|crate::audio::preset(path).is_some()) { return crate::audio::write_many(changes); }
+        Err("Unsupported hardware batch".into())
+    }
     fn read_many(&self, paths: &[&str]) -> Result<Vec<String>> {
         if !paths.is_empty() && paths.iter().all(|path| crate::audio::preset(path).is_some()) {
             return crate::audio::read_many(paths);

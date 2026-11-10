@@ -32,6 +32,9 @@ fn ready(feature: &Feature, ctx: &Context) -> bool {
     else { ctx.awake==Some(true) && ctx.soc_millic.is_some_and(|value| value<75000) }
 }
 pub fn resume<H:Hardware,S:Store>(engine: &Engine<H,S>, controls: &BTreeMap<String,SavedControl>, state: &mut RuntimeState, ctx: &Context, epoch: u64, now: u64) {
+    resume_with_audio(engine,controls,state,ctx,epoch,now,None)
+}
+pub fn resume_with_audio<H:Hardware,S:Store>(engine: &Engine<H,S>, controls: &BTreeMap<String,SavedControl>, state: &mut RuntimeState, ctx: &Context, epoch:u64, now:u64, audio:Option<&serde_json::Value>) {
     if !controls.contains_key("phone-mic") && engine.session(&Feature::PhoneMic).ok().flatten().is_some() {
         if let Err(error) = engine.apply(Feature::PhoneMic,"",true,false) { state.preference_errors.insert("phone-mic".into(),error.to_string()); }
     }
@@ -45,11 +48,18 @@ pub fn resume<H:Hardware,S:Store>(engine: &Engine<H,S>, controls: &BTreeMap<Stri
             if feature == Feature::PhoneMic && !state.preference_errors.contains_key(key) {
                 if now.saturating_sub(state.audio_checked_at)<5 { return Ok(()); }
                 state.audio_checked_at=now;
-                let audio = crate::audio::status(&engine.hardware)?;
+                let audio = if let Some(sample)=audio {
+                    if let Some(error)=sample.get("error").and_then(serde_json::Value::as_str) { return Err(error.into()); }
+                    sample.clone()
+                } else {crate::audio::status(&engine.hardware)?};
                 if audio["bluetoothConnected"] != true {
                     engine.apply(feature,"",true,false)?; state.resumed_controls.remove(key); return Ok(());
                 }
-                if engine.session(&feature)?.is_some() && engine.state(&feature)? != "Request active" {
+                let changed=if let Some(journal)=engine.session(&feature)? {
+                    if audio.get("preferences").is_some() { !crate::audio::matches_snapshot(&audio,&journal)? }
+                    else {engine.state(&feature)? != "Request active"}
+                } else {false};
+                if changed {
                     engine.apply(feature,"",true,false)?;
                     return Err("Microphone preferences changed externally; enable again to retry".into());
                 }

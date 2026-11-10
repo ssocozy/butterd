@@ -495,6 +495,14 @@ pub fn daemon(boot: &str) -> Result<()> {
             renderer_sample=crate::graphics::probe(now);
         }
         sampled_telemetry["renderers"]=renderer_sample.clone();
+        // Audio Binder calls can take seconds on vendor ROMs. Probe before the
+        // control lock; reuse the same preferences snapshot for ownership checks.
+        let audio_journal=||read_bounded(&Path::new(DIRECTORY).join("phone-mic.json"),16384).ok();
+        let audio_revision=audio_journal();
+        let audio_sample=if config().is_ok_and(|config|config.controls.contains_key("phone-mic"))
+            && state(boot).is_ok_and(|state|now.saturating_sub(state.audio_checked_at)>=5 && !state.preference_errors.contains_key("phone-mic")) {
+            Some(crate::audio::status(&SystemHardware).unwrap_or_else(|error|json!({"error":error.to_string()})))
+        } else { None };
         let e = match engine(boot) { Ok(e) => e, Err(_) => { std::thread::sleep(Duration::from_secs(1)); continue; } };
         let stopping = !Path::new(MODULE).is_dir() || ["disable", "remove"].iter().any(|file| Path::new(MODULE).join(file).exists()) || Path::new(DIRECTORY).join("stop").exists();
         let cfg = config();
@@ -518,7 +526,7 @@ pub fn daemon(boot: &str) -> Result<()> {
             state.selected=cfg.preset; state.tuning_requested=cfg.automatic || cfg.preset!=Mode::Balanced; state.preferences_loaded=true;
         }
         let previous_errors=state.preference_errors.clone();
-        crate::preferences::resume(&e,&cfg.controls,&mut state,&ctx,epoch(),now);
+        crate::preferences::resume_with_audio(&e,&cfg.controls,&mut state,&ctx,epoch(),now,audio_sample.as_ref().filter(|_|audio_journal()==audio_revision));
         for (key,error) in &state.preference_errors { if previous_errors.get(key)!=Some(error) { event(&cfg,"preference-error",&format!("{key}: {error}")); } }
         let prior_app_errors=state.app_controls.errors.clone();
         crate::app_controls::reconcile(&e,&cfg,&mut state.app_controls,&ctx);
