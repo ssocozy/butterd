@@ -78,3 +78,36 @@ if preserve_identity "$scratch/control.prop"; then echo 'Control character accep
 printf 'MODEL=Pixel 8a\n' >> "$scratch/pixel8a.prop"
 if preserve_identity "$scratch/pixel8a.prop"; then echo 'Duplicate model accepted'; exit 1; fi
 echo 'Android-compatible model validation fixtures passed'
+
+# Managed metadata advances with the bundled catalogue, retaining switches and extras.
+sed -e 's|^FINGERPRINT=.*|FINGERPRINT=google/tegu_beta/tegu:CANARY/OLD.001/12345678:user/release-keys|' \
+    -e 's/^SECURITY_PATCH=.*/SECURITY_PATCH=2026-10-05/' \
+    -e 's/spoofBuild=true/spoofBuild=false/' \
+    -e 's/spoofProps=true/spoofProps=0/' \
+    "$MODDIR/compatibility/profiles/tegu.prop" > "$scratch/managed.prop"
+printf 'selectedModel=tegu\n# Keep my switches\nEXTRA_PROPERTY=keep-me\n' >> "$scratch/managed.prop"
+preserve_identity "$scratch/managed.prop"
+refresh_managed_identity "$scratch/managed.prop"
+grep -qx "$(grep '^FINGERPRINT=' "$MODDIR/compatibility/profiles/tegu.prop")" "$MODDIR/compatibility/pif.prop"
+grep -qx "$(grep '^SECURITY_PATCH=' "$MODDIR/compatibility/profiles/tegu.prop")" "$MODDIR/compatibility/pif.prop"
+grep -qx 'selectedModel=tegu' "$MODDIR/compatibility/pif.prop"
+grep -qx 'spoofBuild=false' "$MODDIR/compatibility/pif.prop"
+grep -qx 'spoofProps=0' "$MODDIR/compatibility/pif.prop"
+grep -qx '# Keep my switches' "$MODDIR/compatibility/pif.prop"
+grep -qx 'EXTRA_PROPERTY=keep-me' "$MODDIR/compatibility/pif.prop"
+cmp "$scratch/managed.prop" "$MODDIR/compatibility/pif.previous.prop"
+cp "$MODDIR/compatibility/pif.prop" "$scratch/refreshed.prop"
+if refresh_managed_identity "$scratch/refreshed.prop"; then echo 'Unchanged profile refreshed again'; exit 1; fi
+cmp "$scratch/refreshed.prop" "$MODDIR/compatibility/pif.prop"
+# No ownership marker, a custom identity, or a newer patch must not be replaced.
+sed '/^selectedModel=/d' "$scratch/managed.prop" > "$scratch/unmanaged.prop"
+sed 's|^FINGERPRINT=.*|FINGERPRINT=custom/device/device:17/BUILD/123:user/release-keys|' "$scratch/managed.prop" > "$scratch/custom.prop"
+sed 's/^SECURITY_PATCH=.*/SECURITY_PATCH=2099-12-05/' "$scratch/managed.prop" > "$scratch/newer.prop"
+sed 's/^DEVICE_INITIAL_SDK_INT=.*/DEVICE_INITIAL_SDK_INT=32/' "$scratch/managed.prop" > "$scratch/custom-sdk.prop"
+for profile in unmanaged custom newer custom-sdk; do
+  preserve_identity "$scratch/$profile.prop"
+  if refresh_managed_identity "$scratch/$profile.prop"; then echo 'Custom or newer identity replaced'; exit 1; fi
+  cmp "$scratch/$profile.prop" "$MODDIR/compatibility/pif.prop"
+done
+[ ! -e "$scratch/calls" ]
+echo 'Managed profile refresh and user-setting preservation fixtures passed'

@@ -48,6 +48,8 @@ In **Apps**, assign a preset, refresh rate, high touch sampling, or charging-pau
 - **Vulkan UI rendering:** Vulkan rendering enabled by default for app interfaces, SystemUI and SurfaceFlinger composition. Change it in Settings and reboot; turn it off and reboot to use ROM defaults. The choice survives module updates. The WebUI reports the sampled SystemUI and composition backends separately from the selected preference; a ROM may retain OpenGL composition. Games retain their own rendering engines.
 - **Recording assist:** optional higher clock requests during detected screen capture. Detection can take 15 seconds. Its SoC cutoff is 90°C; battery limits stay unchanged.
 
+Engine notifications show the preset and cooling or error status. While charging, they also show battery temperature, watts and percentage, updating silently about every 30 seconds. These readings disappear when charging stops.
+
 CPU/GPU requests, effective limits and current clocks are separate readings. Features depend on what your ROM and kernel expose. Battery history comes from Android; it isn’t an instantaneous per-app power measurement.
 
 ## Pixel compatibility
@@ -83,3 +85,5 @@ adb logcat -d -v threadtime -s butter:I > butter-logcat.txt
 [Encore](https://github.com/Rem01Gaming/encore) · [Duchamp Essential](https://github.com/Chandan977808/Duchamp-Essential) · [PlayIntegrityFix](https://github.com/KOWX712/PlayIntegrityFix)
 
 [GPL-3.0](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.txt)
+
+Module updates refresh managed Pixel compatibility metadata while retaining the selected model, spoof switches and extra properties. Custom identities and newer security patch dates are preserved. The previous active profile is backed up as `compatibility/pif.previous.prop` when refreshed.

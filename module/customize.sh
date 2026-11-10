@@ -29,7 +29,13 @@ if [ "$preserved" -eq 2 ]; then
   abort "Unable to preserve the existing Pixel profile; installation stopped."
 fi
 if [ "$preserved" -eq 0 ]; then
-  ui_print "- Keeping your existing Pixel identity and compatibility settings."
+  refreshed=0
+  refresh_managed_identity "$existing" || refreshed=$?
+  case "$refreshed" in
+    0) ui_print "- Updated your selected Pixel profile; kept your model and compatibility switches." ;;
+    1) ui_print "- Keeping your current or custom Pixel identity and compatibility settings." ;;
+    *) abort "Unable to refresh the selected Pixel profile; installation stopped." ;;
+  esac
 else
   if [ -f "$existing" ] && [ ! -L "$existing" ]; then
     existing_size=$(wc -c < "$existing")

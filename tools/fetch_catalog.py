@@ -24,27 +24,49 @@ def security_patch(bulletin, month):
         value = html.unescape(re.sub(r'<[^>]*>', '', cells[-1])).strip()
         if re.fullmatch(re.escape(month)+r'-(?:0[1-9]|[12][0-9]|3[01])', value): return value
     return None
+def platform_security_patch(bulletin, month):
+    # Read only the patch-level cell of the matching Android bulletin row.
+    # Publication dates and navigation links must never become patch metadata.
+    for row in re.findall(r'<tr\b[^>]*>.*?</tr>', bulletin, re.S | re.I):
+        if not re.search(r'/bulletin/\d{4}/' + re.escape(month) + r'-01(?:[".?/#])', row):
+            continue
+        cells = re.findall(r'<td\b[^>]*>(.*?)</td>', row, re.S | re.I)
+        if not cells:
+            continue
+        text = html.unescape(re.sub(r'<[^>]*>', ' ', cells[-1])).strip()
+        if re.fullmatch(r'(?:' + re.escape(month) + r'-(?:01|05)\s*)+', text):
+            return max(re.findall(re.escape(month) + r'-(?:01|05)', text))
+    return None
+def verified_build(builds, device, bulletin, platform_bulletin=""):
+    candidates = [build for build in builds if build.get('previewMetadata', {}).get('canary')
+                  and build.get('product') == device + '_beta' and build.get('buildId', '').isdigit()]
+    for build in sorted(candidates, key=lambda build: int(build['buildId']), reverse=True):
+        period = re.fullmatch(r'canary-(\d{4})(\d{2})', build['previewMetadata'].get('id', ''))
+        release = build.get('releaseCandidateName', '')
+        if not period or not re.fullmatch(r'[A-Za-z0-9._-]{1,64}', release):
+            continue
+        month = period[1] + '-' + period[2]
+        patch = security_patch(bulletin, month) or platform_security_patch(platform_bulletin, month)
+        if patch:
+            return build, patch
+    raise ValueError('No Canary build with a verified security patch')
 def run():
     page = html.unescape(get('https://flash.android.com'))
     key = re.search(r'AIza[0-9A-Za-z_-]{30,}', page).group()
     try: bulletin = get('https://source.android.com/docs/security/bulletin/pixel')
     except Exception: bulletin = ''
+    try: platform_bulletin = get('https://source.android.com/docs/security/bulletin/asb-overview')
+    except Exception: platform_bulletin = ''
     count = 0
     for device, model in MODELS.items():
         try:
             builds = json.loads(get('https://content-flashstation-pa.googleapis.com/v1/builds?product='+device+'_beta&key='+key))['flashstationBuild']
-            candidates = [b for b in builds if b.get('previewMetadata',{}).get('canary') and b.get('product') == device+'_beta' and b.get('buildId','').isdigit()]
-            build = max(candidates, key=lambda b:int(b['buildId']))
+            # Canary metadata can appear before its month's security bulletin.
+            # Select the newest verifiable build instead of inventing its patch.
+            build, patch = verified_build(builds, device, bulletin, platform_bulletin)
             release = build['releaseCandidateName']; incremental = build['buildId']
-            if not re.fullmatch(r'[A-Za-z0-9._-]{1,64}', release): raise ValueError('Invalid release identifier')
             content = f'FINGERPRINT=google/{device}_beta/{device}:CANARY/{release}/{incremental}:user/release-keys\nMANUFACTURER=Google\nMODEL={model}\n'
-            period = re.fullmatch(r'canary-(\d{4})(\d{2})',build['previewMetadata'].get('id',''))
-            if not period: raise ValueError('Unknown Canary month')
-            if period:
-                month = period[1]+'-'+period[2]
-                patch = security_patch(bulletin, month)
-                if not patch: raise ValueError('No verified security patch for Canary month')
-                content += 'SECURITY_PATCH='+patch+'\n'
+            content += 'SECURITY_PATCH='+patch+'\n'
             content += 'DEVICE_INITIAL_SDK_INT='+str(INITIAL_API[device])+'\n'
             content += 'spoofBuild=true\nspoofVendingBuild=true\nspoofProps=true\n'
             ROOT.mkdir(parents=True, exist_ok=True)

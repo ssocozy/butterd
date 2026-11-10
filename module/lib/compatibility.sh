@@ -78,3 +78,48 @@ preserve_identity() {
   fi
   return 0
 }
+
+# selectedModel marks an identity managed by Butterd. Refresh its metadata while
+# retaining user switches, comments and extra properties. Custom identities stay intact.
+refresh_managed_identity() {
+  refresh_source=$1
+  [ -f "$refresh_source" ] && [ ! -L "$refresh_source" ] || return 1
+  refresh_values=$(sed -e 's/#.*//' -e 's/\r$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*=[[:space:]]*/=/' -e 's/[[:space:]]*$//' "$refresh_source") || return 2
+  [ "$(printf '%s\n' "$refresh_values" | grep -c '^selectedModel=')" -eq 1 ] || return 1
+  refresh_model=$(printf '%s\n' "$refresh_values" | sed -n 's/^selectedModel=//p')
+  case "$refresh_model" in bluejay|panther|cheetah|lynx|shiba|husky|akita|tokay|caiman|komodo|tegu) ;; *) return 1 ;; esac
+  refresh_catalog=$MODDIR/compatibility/profiles/$refresh_model.prop
+  [ -f "$refresh_catalog" ] && [ ! -L "$refresh_catalog" ] || return 2
+  printf '%s\n' "$refresh_values" | grep -Eq "^FINGERPRINT=google/${refresh_model}_beta/${refresh_model}:CANARY/[A-Za-z0-9._-]+/[0-9]+:user/release-keys$" || return 1
+  grep -Eq "^FINGERPRINT=google/${refresh_model}_beta/${refresh_model}:CANARY/[A-Za-z0-9._-]+/[0-9]+:user/release-keys$" "$refresh_catalog" || return 2
+  refresh_keys='^(FINGERPRINT|MANUFACTURER|MODEL|SECURITY_PATCH|DEVICE_INITIAL_SDK_INT)='
+  for refresh_key in FINGERPRINT MANUFACTURER MODEL SECURITY_PATCH DEVICE_INITIAL_SDK_INT; do
+    [ "$(printf '%s\n' "$refresh_values" | grep -c "^$refresh_key=")" -eq 1 ] || return 1
+    [ "$(grep -c "^$refresh_key=" "$refresh_catalog")" -eq 1 ] || return 2
+  done
+  # A different model, manufacturer or initial SDK indicates a custom identity.
+  for refresh_key in MANUFACTURER MODEL DEVICE_INITIAL_SDK_INT; do
+    [ "$(printf '%s\n' "$refresh_values" | sed -n "s/^$refresh_key=//p")" = "$(sed -n "s/^$refresh_key=//p" "$refresh_catalog")" ] || return 1
+  done
+  refresh_old_patch=$(printf '%s\n' "$refresh_values" | sed -n 's/^SECURITY_PATCH=//p')
+  refresh_new_patch=$(sed -n 's/^SECURITY_PATCH=//p' "$refresh_catalog")
+  printf '%s\n' "$refresh_old_patch" | grep -Eq '^20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$' || return 1
+  printf '%s\n' "$refresh_new_patch" | grep -Eq '^20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$' || return 2
+  [ "$(printf '%s\n%s\n' "$refresh_old_patch" "$refresh_new_patch" | sort | head -n 1)" = "$refresh_old_patch" ] || return 1
+  refresh_old_metadata=$(printf '%s\n' "$refresh_values" | grep -E "$refresh_keys" | sort)
+  refresh_new_metadata=$(grep -E "$refresh_keys" "$refresh_catalog" | sort)
+  [ "$refresh_old_metadata" != "$refresh_new_metadata" ] || return 1
+  umask 077
+  refresh_temporary=$(mktemp "$MODDIR/compatibility/refreshed.XXXXXX") || return 2
+  if ! awk '
+    function metadata(key) { return key ~ /^(FINGERPRINT|MANUFACTURER|MODEL|SECURITY_PATCH|DEVICE_INITIAL_SDK_INT)$/ }
+    NR==FNR { split($0,fields,"="); if (metadata(fields[1])) replacement[fields[1]]=$0; next }
+    { key=$0; sub(/#.*/,"",key); sub(/=.*/,"",key); gsub(/^[ \t]+|[ \t\r]+$/,"",key)
+      if (key in replacement) print replacement[key]; else print $0 }
+  ' "$refresh_catalog" "$refresh_source" > "$refresh_temporary" ||
+    ! cp "$refresh_source" "$MODDIR/compatibility/pif.previous.prop" ||
+    ! mv -f "$refresh_temporary" "$MODDIR/compatibility/pif.prop"; then
+    rm -f "$refresh_temporary"; return 2
+  fi
+  return 0
+}

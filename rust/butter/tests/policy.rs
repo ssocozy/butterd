@@ -475,3 +475,56 @@ fn cooling_notice_reports_requested_app_preset_without_claiming_it_applied() {
     runtime.telemetry["requestedPreset"]=serde_json::json!("battery");
     assert_eq!(butter::notifications::message(&runtime).unwrap(),"Saver active. Cooling; power limits retained.");
 }
+
+#[test]
+fn charging_notification_metrics_refresh_silently_and_clear_immediately() {
+    use butter::notifications::Notices;
+    let mut notices=Notices::default();
+    let mut state=RuntimeState{active:Mode::Aggressive,reason:"Selected preset".into(),..Default::default()};
+    state.telemetry=serde_json::json!({"batteryStatus":"Charging","usbOnline":true,"batteryTempC":37.3,"batteryWatts":3.2,"batteryPercent":58});
+    assert_eq!(notices.update(&state,100).unwrap(),"37.3°C · 3.2 W · 58%\nAggressive preset active.");
+    state.telemetry["batteryWatts"]=serde_json::json!(4.1);
+    assert!(notices.update(&state,115).is_none());
+    assert_eq!(notices.update(&state,130).unwrap(),"37.3°C · 4.1 W · 58%\nAggressive preset active.");
+    // Unplug immediately after an update: do not leave charging figures visible.
+    state.telemetry["usbOnline"]=serde_json::json!(false);
+    state.telemetry["batteryStatus"]=serde_json::json!("Discharging");
+    assert_eq!(notices.update(&state,131).unwrap(),"Aggressive preset active.");
+    state.telemetry["batteryWatts"]=serde_json::json!(-5.0);
+    assert!(notices.update(&state,170).is_none());
+}
+#[test]
+fn charging_notifications_keep_cooling_and_errors_visible() {
+    use butter::notifications::{Notices,title};
+    let mut notices=Notices::default();
+    let mut state=RuntimeState{active:Mode::Aggressive,reason:"Cooling: Aggressive clock floors reduced".into(),..Default::default()};
+    state.telemetry=serde_json::json!({"requestedPreset":"aggressive","batteryStatus":"Charging","usbOnline":true,"batteryTempC":35.0,"batteryWatts":5.8,"batteryPercent":58});
+    assert_eq!(title(&state),"Butterd · Aggressive — Cooling");
+    assert_eq!(notices.update(&state,100).unwrap(),"35.0°C · 5.8 W · 58%\nAggressive requested. Cooling; boost reduced.");
+    state.active=Mode::Balanced;state.reason="Cooling down".into();
+    assert!(notices.update(&state,110).is_none());
+    assert!(notices.update(&state,115).unwrap().ends_with("Cooling; boost released."));
+    state.error=Some("fixture".into());state.blocked=true;
+    assert_eq!(title(&state),"Butterd · Aggressive — Paused");
+    assert!(notices.update(&state,130).unwrap().starts_with("Tuning paused. Open Butterd for details."));
+    state.error=None;state.blocked=false;state.gpu_profile_paused=true;state.app_controls.charging_owned=true;
+    assert!(notices.update(&state,145).unwrap().contains("GPU tuning paused"));
+}
+#[test]
+fn notification_readings_require_charging_and_missing_values_stay_unknown() {
+    use butter::notifications::{Notices,charging_metrics};
+    let mut state=RuntimeState{telemetry:serde_json::json!({"batteryStatus":"Charging","usbOnline":true}),..Default::default()};
+    assert_eq!(charging_metrics(&state).unwrap(),"— · — · —");
+    state.telemetry["batteryWatts"]=serde_json::json!(0.0);
+    assert_eq!(charging_metrics(&state).unwrap(),"— · 0.0 W · —");
+    state.telemetry["batteryTempC"]=serde_json::json!(999);state.telemetry["batteryWatts"]=serde_json::json!(-1);state.telemetry["batteryPercent"]=serde_json::json!(101);
+    assert_eq!(charging_metrics(&state).unwrap(),"— · — · —");
+    for status in ["Discharging","Not charging","Full","Unknown"] {
+        state.telemetry["batteryStatus"]=serde_json::json!(status);assert!(charging_metrics(&state).is_none());
+    }
+    // Charging readings continue with the display off, then disappear on pause.
+    state.reason="Screen off".into();state.telemetry["batteryStatus"]=serde_json::json!("Charging");
+    let mut notices=Notices::default();assert!(notices.update(&state,100).unwrap().starts_with("— · — · —"));
+    state.telemetry["batteryStatus"]=serde_json::json!("Not charging");
+    assert_eq!(notices.update(&state,101).unwrap(),"Screen off. Boost requests released.");
+}

@@ -618,7 +618,7 @@ pub fn daemon(boot: &str) -> Result<()> {
         drop(e);
         if cfg.notifications {
             if let Some(message)=notices.update(&state,now) {
-                if let Err(error)=crate::notifications::post(&message) { event(&cfg,"notification-error",&error.to_string()); }
+                if let Err(error)=crate::notifications::post_status(&state,&message) { event(&cfg,"notification-error",&error.to_string()); }
             }
         } else { notices=crate::notifications::Notices::default(); }
         wake_events.wait(next_wait(&state, ctx.awake == Some(true), now));

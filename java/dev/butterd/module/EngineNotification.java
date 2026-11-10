@@ -11,7 +11,8 @@ import android.system.Os;
 /** One silent notification on a dedicated Butterd channel. */
 public final class EngineNotification {
     public static void main(String[] args) throws Exception {
-        if(args.length!=1 || args[0].length()>512)throw new IllegalArgumentException("Invalid notification text");
+        if((args.length!=1 && args.length!=2) || args[args.length-1].length()>512 || (args.length==2 && args[0].length()>128))throw new IllegalArgumentException("Invalid notification text");
+        String title=args.length==2?args[0]:"Butterd", text=args[args.length-1];
         // Load the helper as root, then use the same Binder identity as cmd notification.
         if(android.os.Process.myUid()!=0)throw new SecurityException("Root required");
         Os.setgid(2000);Os.setuid(2000);
@@ -22,9 +23,9 @@ public final class EngineNotification {
         Context context=system.createPackageContext("com.android.shell",Context.CONTEXT_IGNORE_SECURITY);
         Notification notification=new Notification.Builder(context,"butterd_engine")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Butterd").setContentText(args[0])
-            .setStyle(new Notification.BigTextStyle().bigText(args[0]))
-            .setSound(null).setVibrate(null).setDefaults(0).setOnlyAlertOnce(true).build();
+            .setContentTitle(title).setContentText(text)
+            .setStyle(new Notification.BigTextStyle().bigText(text))
+            .setSound(null).setVibrate(null).setDefaults(0).setOnlyAlertOnce(true).setShowWhen(false).build();
         Class<?> services=Class.forName("android.os.ServiceManager");
         IBinder binder=(IBinder)services.getMethod("getService",String.class).invoke(null,"notification");
         Class<?> api=Class.forName("android.app.INotificationManager");
