@@ -1153,3 +1153,27 @@ fn cached_audio_probe_checks_ownership_without_binder_reads_under_control_lock()
     assert_eq!(engine.hardware.read("audio-capture:7").unwrap(),external);
     assert_eq!(engine.hardware.read("audio-capture:1").unwrap(),"[]");
 }
+
+#[test]
+fn microphone_probe_timeout_preserves_requests_and_recovers_after_backoff() {
+    use butter::{preferences::{SavedControl,resume_with_audio,audio_probe_due},runtime::{RuntimeState,Context}};
+    let engine=audio_fixture();engine.apply(Feature::PhoneMic,"",false,false).unwrap();
+    let controls=BTreeMap::from([("phone-mic".into(),SavedControl{setting:String::new(),expires_utc:None})]);
+    let mut state=RuntimeState::default();state.resumed_controls.insert("phone-mic".into());
+    let timeout=serde_json::json!({"error":"Android service timed out"});
+    let writes=engine.hardware.writes.get();
+    resume_with_audio(&engine,&controls,&mut state,&Context::default(),1800000000,100,Some(&timeout));
+    assert_eq!(engine.hardware.writes.get(),writes);assert!(engine.session(&Feature::PhoneMic).unwrap().is_some());
+    assert_eq!(state.audio_retry_at,115);assert!(!audio_probe_due(&state,114));assert!(audio_probe_due(&state,115));
+    resume_with_audio(&engine,&controls,&mut state,&Context::default(),1800000000,115,Some(&timeout));
+    assert_eq!(state.audio_retry_at,145);assert_eq!(state.audio_failures,2);
+    let success:serde_json::Value=serde_json::from_str(&engine.hardware.read(butter::audio::STATUS).unwrap()).unwrap();
+    resume_with_audio(&engine,&controls,&mut state,&Context::default(),1800000000,145,Some(&success));
+    assert!(!state.preference_errors.contains_key("phone-mic"));assert_eq!(state.audio_failures,0);assert_eq!(state.audio_retry_at,0);
+    assert_eq!(engine.hardware.writes.get(),writes);
+    // A legacy boot timeout also recovers; a genuine external-change error does not.
+    state.preference_errors.insert("phone-mic".into(),"Android service timed out".into());
+    assert!(audio_probe_due(&state,151));
+    state.preference_errors.insert("phone-mic".into(),"Microphone preferences changed externally; enable again to retry".into());
+    assert!(!audio_probe_due(&state,200));
+}

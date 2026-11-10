@@ -35,6 +35,7 @@ impl Notices {
 pub fn message(state:&RuntimeState)->Option<String> {
     if state.error.is_some() || state.blocked { return Some("Tuning paused. Open Butterd for details.".into()); }
     if !state.app_controls.errors.is_empty() { return Some("App controls need attention. Open Butterd for details.".into()); }
+    if state.preference_errors.len()==1 && crate::preferences::audio_retrying(state) {return Some("Microphone check delayed. Retrying automatically.".into());}
     if !state.preference_errors.is_empty() { return Some("Some saved settings need attention. Open Butterd for details.".into()); }
     if state.gpu_profile_paused { return Some("GPU tuning paused after a ROM conflict. Other controls continue.".into()); }
     if state.reason=="Screen off" { return None; }

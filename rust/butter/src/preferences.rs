@@ -31,6 +31,15 @@ fn ready(feature: &Feature, ctx: &Context) -> bool {
     if matches!(feature,Feature::ChargingPause|Feature::ChargingThermal|Feature::Bypass) { ctx.online==Some(true) }
     else { ctx.awake==Some(true) && ctx.soc_millic.is_some_and(|value| value<75000) }
 }
+const AUDIO_TIMEOUT:&str="Android service timed out";
+const AUDIO_RETRY:&str="Audio check timed out; retrying automatically";
+pub fn audio_retrying(state:&RuntimeState)->bool {
+    state.preference_errors.get("phone-mic").is_some_and(|error|matches!(error.as_str(),AUDIO_TIMEOUT|AUDIO_RETRY))
+}
+pub fn audio_probe_due(state:&RuntimeState,now:u64)->bool {
+    now.saturating_sub(state.audio_checked_at)>=5
+        && (!state.preference_errors.contains_key("phone-mic") || (audio_retrying(state) && now>=state.audio_retry_at))
+}
 pub fn resume<H:Hardware,S:Store>(engine: &Engine<H,S>, controls: &BTreeMap<String,SavedControl>, state: &mut RuntimeState, ctx: &Context, epoch: u64, now: u64) {
     resume_with_audio(engine,controls,state,ctx,epoch,now,None)
 }
@@ -45,13 +54,26 @@ pub fn resume_with_audio<H:Hardware,S:Store>(engine: &Engine<H,S>, controls: &BT
                 engine.apply(feature.clone(),"",true,false)?;
                 state.advanced_deadlines.remove(key); state.resumed_controls.insert(key.clone()); return Ok(());
             }
-            if feature == Feature::PhoneMic && !state.preference_errors.contains_key(key) {
-                if now.saturating_sub(state.audio_checked_at)<5 { return Ok(()); }
+            if feature == Feature::PhoneMic {
+                if !audio_probe_due(state,now) {return Ok(());}
                 state.audio_checked_at=now;
-                let audio = if let Some(sample)=audio {
-                    if let Some(error)=sample.get("error").and_then(serde_json::Value::as_str) { return Err(error.into()); }
-                    sample.clone()
-                } else {crate::audio::status(&engine.hardware)?};
+                let probe=if let Some(sample)=audio {
+                    if let Some(error)=sample.get("error").and_then(serde_json::Value::as_str) {Err(error.into())}else{Ok(sample.clone())}
+                } else {crate::audio::status(&engine.hardware)};
+                let audio=match probe {
+                    Ok(audio)=>audio,
+                    Err(error) if error.to_string()==AUDIO_TIMEOUT=>{
+                        state.audio_failures=state.audio_failures.saturating_add(1).min(4);
+                        state.audio_retry_at=now.saturating_add(15u64 << (state.audio_failures-1));
+                        state.preference_errors.insert(key.clone(),AUDIO_RETRY.into());
+                        // A timed-out read does not prove our existing preferences changed.
+                        // Keep the journal and retry outside the control lock after backoff.
+                        return Ok(());
+                    },
+                    Err(error)=>return Err(error),
+                };
+                if audio_retrying(state) {state.preference_errors.remove(key);}
+                state.audio_failures=0;state.audio_retry_at=0;
                 if audio["bluetoothConnected"] != true {
                     engine.apply(feature,"",true,false)?; state.resumed_controls.remove(key); return Ok(());
                 }

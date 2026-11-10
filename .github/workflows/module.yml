@@ -8,6 +8,7 @@ on:
         options:
           - development
           - draft
+          - prerelease
           - production
         default: development
 permissions:
@@ -35,10 +36,11 @@ jobs:
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           echo "MODULE_VERSION=$version" >> "$GITHUB_ENV"
           if [ "$RELEASE_CHANNEL" != development ]; then
-            if gh release view "v$version" >/dev/null 2>&1; then
-              echo "Release v$version already exists. Increment the module version."
-              exit 1
-            fi
+            existing_kind=$(gh release view "v$version" --json isDraft,isPrerelease --jq 'if .isDraft then "draft" elif .isPrerelease then "prerelease" else "published" end' 2>/dev/null) || existing_kind=missing
+            case "$RELEASE_CHANNEL:$existing_kind" in
+              draft:draft|prerelease:draft|prerelease:prerelease|*:missing) ;;
+              *) echo "Release v$version already exists and cannot be replaced by this channel."; exit 1 ;;
+            esac
           fi
       - name: Locate dependency caches
         id: cache-paths
@@ -171,8 +173,19 @@ jobs:
           if [ "$RELEASE_CHANNEL" != development ]; then
             cp build/release-notes.txt dist/changelog.txt
             python3 tools/update_manifest.py --repository "$GITHUB_REPOSITORY" --output dist/update.json
-            if [ "$RELEASE_CHANNEL" = draft ]; then
-              gh release create "v$MODULE_VERSION" dist/*.zip dist/SHA256SUMS dist/update.json dist/changelog.txt --target "$GITHUB_SHA" --title "Butterd $MODULE_VERSION" --notes-file build/release-notes.txt --draft --latest=false
+            if [ "$RELEASE_CHANNEL" = draft ] || [ "$RELEASE_CHANNEL" = prerelease ]; then
+              existing_kind=$(gh release view "v$MODULE_VERSION" --json isDraft,isPrerelease --jq 'if .isDraft then "draft" elif .isPrerelease then "prerelease" else "published" end' 2>/dev/null) || existing_kind=missing
+              case "$RELEASE_CHANNEL:$existing_kind" in
+                draft:draft|prerelease:draft|prerelease:prerelease|*:missing) ;;
+                *) echo "Refusing to replace a published stable release."; exit 1 ;;
+              esac
+              if [ "$RELEASE_CHANNEL" = draft ]; then flags=(--draft); else flags=(--draft=false --prerelease); fi
+              if [ "$existing_kind" = missing ]; then
+                gh release create "v$MODULE_VERSION" dist/*.zip dist/SHA256SUMS dist/update.json dist/changelog.txt --target "$GITHUB_SHA" --title "Butterd $MODULE_VERSION" --notes-file build/release-notes.txt "${flags[@]}" --latest=false
+              else
+                gh release upload "v$MODULE_VERSION" dist/*.zip dist/SHA256SUMS dist/update.json dist/changelog.txt --clobber
+                gh release edit "v$MODULE_VERSION" --target "$GITHUB_SHA" --title "Butterd $MODULE_VERSION" --notes-file build/release-notes.txt "${flags[@]}" --latest=false
+              fi
             else
               gh release create "v$MODULE_VERSION" dist/*.zip dist/SHA256SUMS dist/update.json dist/changelog.txt --target "$GITHUB_SHA" --title "Butterd $MODULE_VERSION" --notes-file build/release-notes.txt --latest
             fi

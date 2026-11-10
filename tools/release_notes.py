@@ -14,7 +14,7 @@ def git(*args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', required=True)
-    parser.add_argument('--channel', choices=['production', 'development', 'draft'], required=True)
+    parser.add_argument('--channel', choices=['production', 'development', 'draft', 'prerelease'], required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', args.version):

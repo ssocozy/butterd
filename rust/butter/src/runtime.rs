@@ -35,7 +35,7 @@ pub struct RuntimeState {
     pub telemetry: Value, pub error: Option<String>, pub pending_preset: Option<Mode>,
     pub gpu_satisfied_by_rom: bool, pub gpu_profile_paused: bool, pub gpu_profile_retries: u8, pub gpu_profile_error: Option<String>, pub gpu_scope: Option<String>,
     pub refresh_error: Option<String>, pub refresh_blocked: bool, pub profile_retries: u8,
-    pub preferences_loaded: bool, pub resumed_controls: std::collections::BTreeSet<String>, pub preference_errors: BTreeMap<String,String>, pub audio_checked_at: u64,
+    pub preferences_loaded: bool, pub resumed_controls: std::collections::BTreeSet<String>, pub preference_errors: BTreeMap<String,String>, pub audio_checked_at: u64, pub audio_retry_at:u64, pub audio_failures:u8,
 }
 pub fn uptime() -> Result<u64> {
     let text = read_bounded(Path::new("/proc/uptime"), 128)?;
@@ -70,6 +70,7 @@ pub fn config() -> Result<Config> { let value: Config = load("config.json")?; va
 pub fn state(boot: &str) -> Result<RuntimeState> {
     let value: RuntimeState = load("runtime.json")?;
     if value.boot != boot { return Ok(RuntimeState { boot: boot.into(), ..Default::default() }); }
+    if value.audio_failures>4 || value.audio_retry_at>value.audio_checked_at.saturating_add(120) { return Err("Invalid audio retry state".into()); }
     if value.gpu_profile_retries>3 || value.gpu_scope.as_ref().is_some_and(|scope|scope.len()>256) { return Err("Invalid GPU retry state".into()); }
     if value.thermal_stage > 3 { return Err("Invalid cooling stage".into()); }
     if value.app_controls.key.as_ref().is_some_and(|key|key.len()>512) || value.app_controls.errors.len()>4 { return Err("Invalid app control state".into()); }
@@ -137,7 +138,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
         let mut cfg = match config() { Ok(cfg) => cfg, Err(_) if resetting => Config::default(), Err(error) => return Err(error) };
         let mut state = match state(boot) { Ok(state) => state, Err(_) if resetting => RuntimeState {boot:boot.into(), ..Default::default()}, Err(error) => return Err(error) };
         match args {
-            [command] if command == "monitor" => { state.preference_errors.clear(); state.resumed_controls.clear(); },
+            [command] if command == "monitor" => { state.preference_errors.clear(); state.resumed_controls.clear(); state.audio_retry_at=0; state.audio_failures=0; state.audio_checked_at=0; },
             [command, choice] if command == "auto" && matches!(choice.as_str(), "on" | "off") => { state.refresh_blocked = false; state.refresh_error = None; cfg.automatic = choice == "on"; state.tuning_requested = cfg.automatic || cfg.preset != Mode::Balanced; state.blocked = false; state.leases.clear(); state.selected = cfg.preset; state.pending_preset = Some(cfg.preset); }
             [command, choice] if command == "compositor" && matches!(choice.as_str(), "on" | "off") => cfg.compositor_disabled = choice == "off",
             [command, choice] if command == "recording" && matches!(choice.as_str(), "on" | "off") => cfg.recording_assist = choice == "on",
@@ -500,7 +501,7 @@ pub fn daemon(boot: &str) -> Result<()> {
         let audio_journal=||read_bounded(&Path::new(DIRECTORY).join("phone-mic.json"),16384).ok();
         let audio_revision=audio_journal();
         let audio_sample=if config().is_ok_and(|config|config.controls.contains_key("phone-mic"))
-            && state(boot).is_ok_and(|state|now.saturating_sub(state.audio_checked_at)>=5 && !state.preference_errors.contains_key("phone-mic")) {
+            && state(boot).is_ok_and(|state|crate::preferences::audio_probe_due(&state,now)) {
             Some(crate::audio::status(&SystemHardware).unwrap_or_else(|error|json!({"error":error.to_string()})))
         } else { None };
         let e = match engine(boot) { Ok(e) => e, Err(_) => { std::thread::sleep(Duration::from_secs(1)); continue; } };
@@ -809,7 +810,9 @@ pub fn remember_applied(boot: &str, feature: &Feature, setting: &str, restoring:
     crate::preferences::feature(&key)?;
     if restoring { cfg.controls.remove(&key); state.resumed_controls.remove(&key); }
     else { cfg.controls.insert(key.clone(),crate::preferences::SavedControl{setting:setting.into(),expires_utc}); state.resumed_controls.insert(key.clone()); }
-    state.preference_errors.remove(&key); cfg.validate()?;
+    state.preference_errors.remove(&key);
+    if *feature==Feature::PhoneMic {state.audio_retry_at=0;state.audio_failures=0;}
+    cfg.validate()?;
     save("config.json",&cfg)?; save("runtime.json",&state)?;
     Ok(())
 }
