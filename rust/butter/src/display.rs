@@ -36,7 +36,7 @@ pub fn node(path: &str) -> Option<(u32,&str,&str)> {
     let user = parts.get(1)?.parse::<u32>().ok().filter(|user| *user <= 99999)?;
     match parts.as_slice() {
         ["display",_,"preferred"] => Some((user,"mode","preferred")),
-        ["rom-refresh",_,table,key] if matches!(*table,"system"|"secure") && matches!(*key,"user_refresh_rate"|"miui_refresh_rate"|"is_smart_fps") => Some((user,table,key)),
+        ["rom-refresh",_,table,key] if matches!(*table,"system"|"secure") && matches!(*key,"user_refresh_rate"|"miui_refresh_rate"|"is_smart_fps"|"thermal_limit_refresh_rate") => Some((user,table,key)),
         _ => None,
     }
 }
@@ -126,6 +126,10 @@ pub fn targets(hardware: &impl Hardware, user: u32, hz: u32, dump: &str) -> Resu
     }
     let smart = format!("rom-refresh:{user}:system:is_smart_fps");
     if miui && hardware.read(&smart).is_ok_and(|value| matches!(value.as_str(),"0"|"1")) { targets.push((smart,"0".into())); }
+    let thermal = format!("rom-refresh:{user}:system:thermal_limit_refresh_rate");
+    if miui && hardware.read(&thermal).is_ok_and(|raw| raw.parse::<u32>().is_ok_and(|value| value <= 144)) {
+        targets.push((thermal,"0".into()));
+    }
     Ok(targets)
 }
 
