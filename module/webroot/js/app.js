@@ -46,6 +46,7 @@ function render(state) {
   const renderers=telemetry.renderers;
   const actualRenderers=renderers ? 'SystemUI: '+(renderers.systemUi || 'unverified')+'. Composition: '+(renderers.composition || 'unverified')+'. ' : '';
   $('graphics-status').textContent = graphics?.error || actualRenderers+(graphics?.enabled ? 'Vulkan selected; reboot after changing this setting.' : 'ROM defaults selected; reboot after changing this setting.');
+  $('hyperos-fast-charge').checked = config.hyperos_fast_charge === true;
   $('recording-assist').checked = config.recording_assist === true;
   $('automatic').checked = config.automatic === true; $('logging').checked = config.logcat === true; $('notifications').checked = config.notifications === true;
   $('watts').textContent = Number.isFinite(telemetry.batteryWatts) ? (telemetry.batteryWatts > 0 ? '+' : '')+telemetry.batteryWatts.toFixed(1) : '—';
@@ -217,3 +218,5 @@ setPage(); updateSelectors();
   } catch (error) { $('engine-state').textContent='Root connection needed'; $('engine-reason').textContent=error.message; notify(error.message,true); }
 })();
 setInterval(()=>{ if (!document.hidden && !busy && !document.querySelector('dialog[open]')) refresh(false,false,true); },5000);
+
+$('hyperos-fast-charge').addEventListener('change',event=>run('hyperos-fast-charge '+(event.target.checked ? 'on' : 'off')));

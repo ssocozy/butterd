@@ -533,3 +533,14 @@ fn notification_readings_require_charging_and_missing_values_stay_unknown() {
     state.telemetry["batteryStatus"]=serde_json::json!("Not charging");
     assert_eq!(notices.update(&state,101).unwrap(),"Screen off. Boost requests released.");
 }
+
+#[test]
+fn hyperos_charge_restores_at_cutoff_and_resumes_only_below_hysteresis() {
+    use butter::runtime::hyperos_charge_paused;
+    assert!(!hyperos_charge_paused(false,Some(419)));
+    assert!(hyperos_charge_paused(false,Some(420)));
+    assert!(hyperos_charge_paused(true,Some(400)));
+    assert!(!hyperos_charge_paused(true,Some(399)));
+    assert!(hyperos_charge_paused(false,None));
+    assert!(hyperos_charge_paused(false,Some(-1)));
+}

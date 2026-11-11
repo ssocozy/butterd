@@ -87,3 +87,5 @@ adb logcat -d -v threadtime -s butter:I > butter-logcat.txt
 [GPL-3.0](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.txt)
 
 Module updates refresh managed Pixel compatibility metadata while retaining the selected model, spoof switches and extra properties. Custom identities and newer security patch dates are preserved. The previous active profile is backed up as `compatibility/pif.previous.prop` when refreshed.
+
+**HyperOS Fast Charge** is off by default. On supported Duchamp devices it removes the extra charging thermal-level restriction below 42°C, restores the journaled value at 42°C or on disconnect/missing temperature, and resumes below 40°C after cooling. It has no fixed duration. JEITA and charger negotiation remain driver-managed. The previous ROM charging control remains available and cannot run concurrently. Temperature checks use supervisor samples, not a hardware cutoff.

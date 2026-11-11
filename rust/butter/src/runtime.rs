@@ -10,7 +10,7 @@ const MODULE: &str = "/data/adb/modules/butterd";
 pub struct AppRule { pub package: String, pub preset: Mode, pub hz: Option<u32>, #[serde(default)] pub high_touch:bool, #[serde(default)] pub charging_pause_at:Option<u8> }
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Config { pub compositor_disabled: bool, pub recording_assist: bool, pub automatic: bool, pub preset: Mode, pub logcat: bool, pub notifications: bool, pub rules: Vec<AppRule>, pub controls: BTreeMap<String,crate::preferences::SavedControl> }
+pub struct Config { pub hyperos_fast_charge: bool, pub compositor_disabled: bool, pub recording_assist: bool, pub automatic: bool, pub preset: Mode, pub logcat: bool, pub notifications: bool, pub rules: Vec<AppRule>, pub controls: BTreeMap<String,crate::preferences::SavedControl> }
 impl Config {
     pub fn validate(&self) -> Result<()> {
         crate::preferences::validate(&self.controls)?;
@@ -29,6 +29,7 @@ pub struct Lease { pub source: String, pub expires: u64 }
 #[serde(default, deny_unknown_fields)]
 pub struct RuntimeState {
     pub app_controls:crate::app_controls::State,
+    pub hyperos_charge_paused: bool,
     pub thermal_stage: u8,
     pub boot: String, pub active: Mode, pub reason: String, pub foreground: Option<String>,
     pub tuning_requested: bool, pub selected: Mode, pub advanced_deadlines: BTreeMap<String, u64>, pub leases: Vec<Lease>, pub blocked: bool, pub refresh_user: Option<u32>, pub refresh_hz: Option<u32>, pub idle_samples: u8, pub sampled_at: u64,
@@ -141,6 +142,14 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
             [command] if command == "monitor" => { state.preference_errors.clear(); state.resumed_controls.clear(); state.audio_retry_at=0; state.audio_failures=0; state.audio_checked_at=0; },
             [command, choice] if command == "auto" && matches!(choice.as_str(), "on" | "off") => { state.refresh_blocked = false; state.refresh_error = None; cfg.automatic = choice == "on"; state.tuning_requested = cfg.automatic || cfg.preset != Mode::Balanced; state.blocked = false; state.leases.clear(); state.selected = cfg.preset; state.pending_preset = Some(cfg.preset); }
             [command, choice] if command == "compositor" && matches!(choice.as_str(), "on" | "off") => cfg.compositor_disabled = choice == "off",
+            [command, choice] if command == "hyperos-fast-charge" && matches!(choice.as_str(), "on" | "off") => {
+                if choice == "on" {
+                    if cfg.controls.contains_key("charging-thermal") || e.session(&Feature::ChargingThermal)?.is_some() { return Err("Restore the existing charging thermal control first".into()); }
+                    if e.hardware.read(crate::hardware::CHARGE)? != "0" { return Err("Charging thermal override is already active outside Butterd".into()); }
+                    if !e.hardware.read("/sys/class/power_supply/battery/model_name")?.contains("N11A") { return Err("HyperOS charging adapter is not supported on this device".into()); }
+                } else { e.apply_targets(Feature::ChargingThermal,Vec::new(),true)?; }
+                cfg.hyperos_fast_charge=choice == "on"; state.hyperos_charge_paused=false;
+            }
             [command, choice] if command == "recording" && matches!(choice.as_str(), "on" | "off") => cfg.recording_assist = choice == "on",
             [command, choice] if command == "notifications" && matches!(choice.as_str(), "on" | "off") => cfg.notifications = choice == "on",
             [command, choice] if command == "logging" && matches!(choice.as_str(), "on" | "off") => cfg.logcat = choice == "on",
@@ -169,7 +178,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
             }
             [command] if command == "reset" => {
                 cfg.controls.clear(); state.resumed_controls.clear(); state.preference_errors.clear();
-                cfg.automatic = false; cfg.recording_assist = false; state.refresh_blocked = false; state.refresh_error = None; state.tuning_requested = false; cfg.preset = Mode::Balanced; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = Some(Mode::Balanced); state.blocked = false;
+                cfg.hyperos_fast_charge=false; cfg.automatic = false; cfg.recording_assist = false; state.refresh_blocked = false; state.refresh_error = None; state.tuning_requested = false; cfg.preset = Mode::Balanced; state.leases.clear(); state.selected = Mode::Balanced; state.pending_preset = Some(Mode::Balanced); state.blocked = false;
                 save("config.json", &cfg)?; save("runtime.json", &state)?;
                 cleanup_all(&e, &mut state)?;
             }
@@ -357,6 +366,7 @@ pub fn override_temperature_allowed(feature: &Feature, ctx: &Context, starting: 
 fn thermal_cleanup(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &mut RuntimeState, ctx: &Context, now: u64) -> Result<()> {
     let mut errors = Vec::new();
     for feature in [Feature::ChargingPause, Feature::ChargingThermal, Feature::GpuThermal, Feature::CpuLock, Feature::GpuLock, Feature::Bypass] {
+        if feature==Feature::ChargingThermal && cfg.hyperos_fast_charge { continue; }
         if feature==Feature::ChargingPause && state.app_controls.charging_owned { continue; }
         let charging = matches!(feature, Feature::ChargingPause | Feature::ChargingThermal | Feature::Bypass);
         let should_restore = state.advanced_deadlines.get(&feature.key()).is_none_or(|expires| *expires <= now || *expires > now.saturating_add(1800)) || !override_temperature_allowed(&feature,ctx,false) || ctx.battery.is_none_or(|level| level <= 20) || ctx.saver != Some(false) || (charging && ctx.online != Some(true)) || (!charging && (ctx.awake != Some(true) || ctx.soc_millic.is_none()));
@@ -533,6 +543,15 @@ pub fn daemon(boot: &str) -> Result<()> {
         for (key,error) in &state.preference_errors { if previous_errors.get(key)!=Some(error) { event(&cfg,"preference-error",&format!("{key}: {error}")); } }
         let prior_app_errors=state.app_controls.errors.clone();
         crate::app_controls::reconcile(&e,&cfg,&mut state.app_controls,&ctx);
+        if cfg.hyperos_fast_charge {
+            let feature=Feature::ChargingThermal;
+            state.hyperos_charge_paused=hyperos_charge_paused(state.hyperos_charge_paused,ctx.temperature);
+            let active=ctx.online==Some(true) && !state.hyperos_charge_paused;
+            let result=if active {
+                e.apply(feature,"",false,true)
+            } else { e.apply_targets(feature,Vec::new(),true) };
+            match result { Ok(_) => { state.preference_errors.remove("hyperos-fast-charge"); }, Err(error) => { state.preference_errors.insert("hyperos-fast-charge".into(),error.to_string()); } }
+        }
         for (key,error) in &state.app_controls.errors { if prior_app_errors.get(key)!=Some(error) { event(&cfg,"app-control-error",&format!("{key}: {error}")); } }
         if state.foreground != ctx.app { state.profile_retries = 0; }
         // A ROM/driver can return touch to its original state; no write is needed to release that session.
@@ -624,7 +643,8 @@ pub fn daemon(boot: &str) -> Result<()> {
                 if let Err(error)=crate::notifications::post_status(&state,&message) { event(&cfg,"notification-error",&error.to_string()); }
             }
         } else { notices=crate::notifications::Notices::default(); }
-        wake_events.wait(next_wait(&state, ctx.awake == Some(true), now));
+        let wait=next_wait(&state, ctx.awake == Some(true), now);
+        wake_events.wait(if cfg.hyperos_fast_charge { wait.min(Duration::from_secs(1)) } else { wait });
     }
 }
 pub fn next_wait(state: &RuntimeState, awake: bool, now: u64) -> Duration {
@@ -686,6 +706,7 @@ pub fn launch_if_requested(boot: &str) -> Result<()> {
 }
 
 pub fn guarded_apply(boot: &str, feature: Feature) -> Result<String> {
+    if feature==Feature::ChargingThermal && config()?.hyperos_fast_charge { return Err("Turn off HyperOS Fast Charge first".into()); }
     let ctx = context();
     if ctx.battery.is_none_or(|value| value <= 20) || ctx.saver != Some(false) { return Err("Controls require battery above 20% and battery saver off".into()); }
     let charging = matches!(feature, Feature::ChargingPause | Feature::ChargingThermal | Feature::Bypass);
@@ -825,4 +846,9 @@ pub fn record_notification(result:&Result<()>) {
 }
 pub fn notification_status()->Value {
     load::<Value>("notification.json").unwrap_or_else(|error|json!({"error":error.to_string()}))
+}
+
+/// Missing or invalid temperature always releases the charging override.
+pub fn hyperos_charge_paused(paused:bool,temperature:Option<i64>)->bool {
+    match temperature { Some(value) if (0..420).contains(&value) => paused && value>=400, _=>true }
 }
