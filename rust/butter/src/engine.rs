@@ -395,6 +395,23 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         self.store.save(&journal)?;
         self.preset_cooled(mode,stage)
     }
+    /// Maintain only this user's scoped display preferences. Preserve a ROM/user
+    /// edit as the new release baseline before reapplying the selected app request.
+    pub fn reconcile_refresh(&self,user:u32)->Result<String> {
+        let feature=Feature::Refresh(user);
+        let mut journal=self.session(&feature)?.ok_or("No display request to reconcile")?;
+        let targets=journal.entries.iter().map(|entry|(entry.path.clone(),entry.expected.clone())).collect();
+        let mut adopted=false;
+        for entry in &mut journal.entries {
+            let current=hardware::value(&self.hardware,&entry.path)?;
+            if !entry.owned(&current) {
+                hardware::validate_path_value(&feature,&entry.path,&current)?;
+                entry.original=current.clone();entry.expected=current;entry.before=None;adopted=true;
+            }
+        }
+        if adopted {self.store.save(&journal)?;}
+        self.apply_targets(feature,targets,false)
+    }
     pub fn reconcile_vendor_profile(&self, mode: crate::presets::Mode) -> Result<String> {
         self.reconcile_vendor_profile_cooled(mode, 0)
     }

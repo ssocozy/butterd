@@ -29,6 +29,15 @@ public final class RefreshRateBridgeTest {
         for (String descriptor : new String[]{"android.app.IActivityManager", "../../display.IRefreshRateManagerService", "com.voltage.display.IRefreshRateManagerService$Stub"}) {
             if (RefreshRateBridge.validDescriptor(descriptor)) throw new AssertionError("Invalid descriptor accepted");
         }
+        if (!PowerKeeperRefresh.parse(null).isEmpty()) throw new AssertionError("Missing priority list must be empty");
+        java.util.Map<String, Integer> entries = PowerKeeperRefresh.parse("com.other.game:90,com.mobile.legends:120");
+        if (entries.size() != 2 || entries.get("com.other.game") != 90 || entries.get("com.mobile.legends") != 120)
+            throw new AssertionError("PowerKeeper priority list parsed incorrectly");
+        for (String raw : new String[]{"com.game:120,com.game:60", "com.game:0", "com.game:241", "com.game:NaN", "com.game:120,", "bad:120"}) {
+            boolean rejected = false;
+            try { PowerKeeperRefresh.parse(raw); } catch (IllegalArgumentException expected) { rejected = true; }
+            if (!rejected) throw new AssertionError("Malformed priority list accepted: " + raw);
+        }
         System.out.println("ROM refresh bridge contract fixtures passed");
     }
 }

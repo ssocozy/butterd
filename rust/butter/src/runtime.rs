@@ -34,7 +34,7 @@ pub struct RuntimeState {
     pub tuning_requested: bool, pub selected: Mode, pub advanced_deadlines: BTreeMap<String, u64>, pub leases: Vec<Lease>, pub blocked: bool, pub refresh_user: Option<u32>, pub refresh_hz: Option<u32>, pub idle_samples: u8, pub sampled_at: u64,
     pub telemetry: Value, pub error: Option<String>, pub pending_preset: Option<Mode>,
     pub gpu_satisfied_by_rom: bool, pub gpu_profile_paused: bool, pub gpu_profile_retries: u8, pub gpu_profile_error: Option<String>, pub gpu_scope: Option<String>,
-    pub refresh_error: Option<String>, pub refresh_blocked: bool, pub profile_retries: u8,
+    pub refresh_error: Option<String>, pub refresh_blocked: bool, pub refresh_checked_at:u64, pub profile_retries: u8,
     pub preferences_loaded: bool, pub resumed_controls: std::collections::BTreeSet<String>, pub preference_errors: BTreeMap<String,String>, pub audio_checked_at: u64, pub audio_retry_at:u64, pub audio_failures:u8,
 }
 pub fn uptime() -> Result<u64> {
@@ -305,31 +305,33 @@ pub fn active_hz(text: &str) -> Option<f64> {
 fn restore_refresh(e: &Engine<SystemHardware, DiskStore>, state: &mut RuntimeState) -> Result<()> {
     if let Some(user) = state.refresh_user {
         e.apply_targets(Feature::Refresh(user), Vec::new(), true)?;
-        state.refresh_user = None; state.refresh_hz = None;
+        state.refresh_user = None; state.refresh_hz = None; state.refresh_checked_at=0;
     }
     Ok(())
 }
-/// Low refresh caps remain useful during heat/saver; CPU conflicts do not disable display rules.
+/// App display choices are independent of CPU/GPU cooling and power-saving policy.
 pub fn requested_refresh(cfg: &Config, state: &RuntimeState, ctx: &Context) -> Option<u32> {
     if state.refresh_blocked || !cfg.automatic || ctx.awake != Some(true) { return None; }
-    let hz = cfg.rules.iter().find(|rule| Some(&rule.package) == ctx.app.as_ref())?.hz?;
-    if hz == 60 { return Some(hz); }
-    if ctx.saver == Some(false) && ctx.battery.is_some_and(|level| level > 20)
-        && ctx.temperature.is_some_and(|temp| temp < 420) && ctx.soc_millic.is_none_or(|temp| temp < 85000) { Some(hz) } else { None }
+    cfg.rules.iter().find(|rule| Some(&rule.package) == ctx.app.as_ref())?.hz
 }
-fn refresh(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &mut RuntimeState, ctx: &Context) -> Result<()> {
+fn refresh(e: &Engine<SystemHardware, DiskStore>, cfg: &Config, state: &mut RuntimeState, ctx: &Context, now:u64) -> Result<()> {
     let rule = requested_refresh(cfg, state, ctx);
     if state.foreground != ctx.app || state.refresh_user != ctx.user || state.refresh_hz != rule || rule.is_none() { restore_refresh(e, state)?; }
     let (Some(hz), Some(user)) = (rule, ctx.user) else { return Ok(()); };
     if !ctx.rates.contains(&hz) { return Err("Requested refresh mode is not advertised by the internal display".into()); }
     let feature = Feature::Refresh(user);
     if state.refresh_user.is_some() {
-        if e.state(&feature)? != "Request active" { return Err("ROM changed refresh settings; automatic display control paused".into()); }
+        if now.saturating_sub(state.refresh_checked_at)<5 {return Ok(());}
+        state.refresh_checked_at=now;
+        if e.state(&feature)? != "Request active" {
+            e.reconcile_refresh(user)?;
+            event(cfg,"display-request",&format!("Reapplied the selected {hz} Hz display preferences after a ROM change"));
+        }
         return Ok(());
     }
     // Never seize an existing refresh lease left by an interrupted process.
     if e.session(&feature)?.is_some() { e.apply_targets(feature.clone(), Vec::new(), true)?; }
-    state.refresh_user = Some(user); state.refresh_hz = Some(hz);
+    state.refresh_user = Some(user); state.refresh_hz = Some(hz); state.refresh_checked_at=now;
     // Save ownership before the first Android settings write.
     save("runtime.json", state)?;
     let dump = android::command("/system/bin/dumpsys", &["display"])?;
@@ -589,7 +591,7 @@ pub fn daemon(boot: &str) -> Result<()> {
         sampled_telemetry["gpuControl"]=json!({"state":if state.gpu_profile_paused {"ROM managed after conflict"}else if state.gpu_satisfied_by_rom {"ROM already satisfies GPU floor request"}else{"Preset requests available"},"error":state.gpu_profile_error,"retries":state.gpu_profile_retries});
         sampled_telemetry["compositorScheduling"] = compositor_sample.clone();
         // Display failures and CPU failures have independent state and ownership.
-        match refresh(&e, &cfg, &mut state, &ctx) {
+        match refresh(&e, &cfg, &mut state, &ctx, now) {
             Ok(()) => { if !state.refresh_blocked { state.refresh_error = None; } },
             Err(error) => {
                 let message = error.to_string();

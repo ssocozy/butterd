@@ -496,6 +496,24 @@ fn unified_governor_preserves_external_changes_and_checks_original_support() {
 }
 
 #[test]
+fn powerkeeper_refresh_journals_and_removes_only_the_owned_app_rule() {
+    let engine = fixture();
+    let path = "rom-app:0:powerkeeper:com.miui.powerkeeper.priorityList:com.mobile.legends";
+    let other = "rom-app:0:powerkeeper:com.miui.powerkeeper.priorityList:com.other.game";
+    let adapter = serde_json::json!({"available":true,"service":"powerkeeper","descriptor":"com.miui.powerkeeper.priorityList"});
+    engine.hardware.put(path,"-1"); engine.hardware.put(other,"90");
+    let targets = butter::display::app_targets(&engine.hardware,0,"com.mobile.legends",120,&adapter).unwrap();
+    engine.apply_targets(Feature::Refresh(0),targets,false).unwrap();
+    assert_eq!(engine.hardware.read(path).unwrap(),"120");
+    engine.hardware.put(other,"60");
+    engine.apply_targets(Feature::Refresh(0),Vec::new(),true).unwrap();
+    assert_eq!(engine.hardware.read(path).unwrap(),"-1");
+    assert_eq!(engine.hardware.read(other).unwrap(),"60");
+    assert!(butter::display::app_node(&path.replacen(":0:",":10:",1)).is_none());
+    assert!(butter::display::app_node(&path.replace("priorityList","unknown")).is_none());
+}
+
+#[test]
 fn rom_app_refresh_restores_only_its_rule_and_keeps_other_apps() {
     let engine = fixture();
     let app = "com.mobile.legends";
@@ -1176,4 +1194,26 @@ fn microphone_probe_timeout_preserves_requests_and_recovers_after_backoff() {
     assert!(audio_probe_due(&state,151));
     state.preference_errors.insert("phone-mic".into(),"Microphone preferences changed externally; enable again to retry".into());
     assert!(!audio_probe_due(&state,200));
+}
+
+#[test]
+fn selected_refresh_reapplies_rom_changes_and_restores_latest_external_baseline() {
+    let engine=fixture();let minimum="android:0:min_refresh_rate";let maximum="android:0:peak_refresh_rate";
+    engine.hardware.put(minimum,"0");engine.hardware.put(maximum,"Infinity");
+    engine.apply_targets(Feature::Refresh(0),vec![(minimum.into(),"120".into()),(maximum.into(),"120".into())],false).unwrap();
+    engine.hardware.put(minimum,"60");engine.hardware.put(maximum,"90");
+    engine.reconcile_refresh(0).unwrap();
+    assert_eq!(engine.hardware.read(minimum).unwrap(),"120");assert_eq!(engine.hardware.read(maximum).unwrap(),"120");
+    let writes=engine.hardware.writes.get();assert!(engine.reconcile_refresh(10).is_err());assert_eq!(engine.hardware.writes.get(),writes);
+    engine.apply_targets(Feature::Refresh(0),vec![],true).unwrap();
+    assert_eq!(engine.hardware.read(minimum).unwrap(),"60");assert_eq!(engine.hardware.read(maximum).unwrap(),"90");
+}
+#[test]
+fn refresh_reconciliation_finishes_interrupted_writes_without_losing_originals() {
+    let engine=fixture();let path="android:0:peak_refresh_rate";engine.hardware.put(path,"60");
+    engine.apply_targets(Feature::Refresh(0),vec![(path.into(),"120".into())],false).unwrap();
+    let mut journal=engine.session(&Feature::Refresh(0)).unwrap().unwrap();
+    journal.entries[0].before=Some("60".into());engine.store.save(&journal).unwrap();engine.hardware.put(path,"60");
+    engine.reconcile_refresh(0).unwrap();assert_eq!(engine.hardware.read(path).unwrap(),"120");
+    engine.apply_targets(Feature::Refresh(0),vec![],true).unwrap();assert_eq!(engine.hardware.read(path).unwrap(),"60");
 }

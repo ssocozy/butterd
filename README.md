@@ -35,7 +35,7 @@ Settings and app profiles survive reboot. Stable updates appear through the modu
 
 For clock-floor controls, Performance starts near the middle of supported frequency steps; Aggressive starts around three-quarters. HyperOS CPU scheduling requests are described below. These are table positions, not percentages of GHz or performance. Both reduce requests in stages and release them at **42°C battery or 85°C SoC**, recovering after cooling. ROM/kernel limits always take priority.
 
-In **Apps**, assign a preset, refresh rate, high touch sampling, or charging-pause threshold to individual apps. Their rules take priority over the overall preset while the app is open. Performance app profiles include a five-second launch boost.
+In **Apps**, assign a preset, refresh rate, high touch sampling, or charging-pause threshold to individual apps. Their rules take priority over the overall preset while the app is open. The selected display refresh rate stays requested during cooling, charging and power saving; Butterd reapplies replaced display preferences and restores them when the app loses focus or the screen turns off. On compatible HyperOS owner-user sessions, it also sets PowerKeeper's per-app priority rate and restores the app's previous entry on release. PowerKeeper's list protocol rebuilds the priority map, merging other saved app entries at each write; concurrent ROM list updates can still race with that operation. Separate thermal limits and hardware constraints can still reduce actual display Hz. Performance app profiles include a five-second launch boost.
 
 ## What else is included?
 

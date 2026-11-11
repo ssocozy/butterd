@@ -98,13 +98,18 @@ fn display_modes_survive_nested_hdr_and_alternative_rate_arrays() {
 }
 
 #[test]
-fn low_refresh_cap_survives_cpu_conflicts_heat_and_saver() {
+fn selected_refresh_survives_cpu_conflicts_heat_and_saver() {
     let mut cfg = Config { automatic:true, rules:vec![AppRule { package:"com.example.game".into(), preset:Mode::Performance, hz:Some(60),high_touch:false,charging_pause_at:None}], ..Default::default() };
     let mut state = state(); state.blocked = true;
     let mut ctx = context(); ctx.soc_millic = Some(90000); ctx.saver = Some(true);
     assert_eq!(butter::runtime::requested_refresh(&cfg, &state, &ctx), Some(60));
-    cfg.rules[0].hz = Some(120);
+    for hz in [90,120] {
+        cfg.rules[0].hz = Some(hz);ctx.temperature=Some(450);ctx.battery=Some(10);ctx.online=Some(true);
+        assert_eq!(butter::runtime::requested_refresh(&cfg, &state, &ctx), Some(hz));
+    }
+    ctx.awake=Some(false);
     assert_eq!(butter::runtime::requested_refresh(&cfg, &state, &ctx), None);
+    ctx.awake=Some(true);
     cfg.rules[0].hz = Some(60); state.refresh_blocked = true;
     assert_eq!(butter::runtime::requested_refresh(&cfg, &state, &ctx), None);
     state.refresh_blocked = false; ctx.app = Some("com.other.app".into());

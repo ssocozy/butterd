@@ -69,6 +69,10 @@ public final class RefreshRateBridge {
                 System.out.println(new JSONObject().put("available", true).put("service", service).put("descriptor", descriptor));
                 return;
             }
+            if (PowerKeeperRefresh.available(user(args[1]))) {
+                System.out.println(new JSONObject().put("available", true).put("service", PowerKeeperRefresh.SERVICE).put("descriptor", PowerKeeperRefresh.DESCRIPTOR));
+                return;
+            }
             System.out.println(new JSONObject().put("available", false));
             return;
         }
@@ -78,6 +82,12 @@ public final class RefreshRateBridge {
         currentUser(requestedUser);
         String service = args[2], descriptor = args[3], app = args[4];
         if (app.length() > 180 || !app.contains(".") || !app.matches("[a-zA-Z0-9_]+(\\.[a-zA-Z0-9_]+)+")) throw new IllegalArgumentException("Invalid app package");
+        if (service.equals(PowerKeeperRefresh.SERVICE) && descriptor.equals(PowerKeeperRefresh.DESCRIPTOR)) {
+            Integer target = args[0].equals("write") ? rate(Integer.parseInt(args[5])) : null;
+            currentUser(requestedUser);
+            System.out.println(PowerKeeperRefresh.run(requestedUser, app, target));
+            return;
+        }
         Object proxy = connect(binder(service), descriptor);
         Class<?> contract = Class.forName(descriptor);
         Method get = contract.getMethod("getRefreshRateForPackage", String.class);

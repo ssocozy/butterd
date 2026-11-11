@@ -3,8 +3,9 @@ use crate::{android, hardware::Hardware, Result};
 pub fn app_node(path: &str) -> Option<(u32,&str,&str,&str)> {
     let parts: Vec<_> = path.split(':').collect();
     match parts.as_slice() {
-        ["rom-app",user,service,descriptor,app] if matches!(*service,"refresh_rate_ext"|"refresh_rate")
-            && valid_descriptor(descriptor) && android::valid_package(app) => Some((user.parse::<u32>().ok().filter(|user| *user <= 99999)?,service,descriptor,app)),
+        ["rom-app",user,service,descriptor,app] if ((matches!(*service,"refresh_rate_ext"|"refresh_rate")
+            && valid_descriptor(descriptor)) || (*user == "0" && *service == "powerkeeper" && *descriptor == "com.miui.powerkeeper.priorityList"))
+            && android::valid_package(app) => Some((user.parse::<u32>().ok().filter(|user| *user <= 99999)?,service,descriptor,app)),
         _ => None,
     }
 }
@@ -15,7 +16,8 @@ pub fn valid_descriptor(value: &str) -> bool {
 fn bridge(args: &[&str]) -> Result<String> {
     let mut command = vec!["/system/bin","dev.butterd.module.RefreshRateBridge"];
     command.extend_from_slice(args);
-    android::execute("/system/bin/app_process", &command, &[("CLASSPATH","/data/adb/modules/butterd/bin/catalog.dex")], 5)
+    let timeout = if args.get(2) == Some(&"powerkeeper") { 12 } else { 5 };
+    android::execute("/system/bin/app_process", &command, &[("CLASSPATH","/data/adb/modules/butterd/bin/catalog.dex")], timeout)
 }
 pub fn probe(user: u32) -> Result<serde_json::Value> {
     let result: serde_json::Value = serde_json::from_str(&bridge(&["probe",&user.to_string()])?)?;
@@ -127,7 +129,7 @@ pub fn targets(hardware: &impl Hardware, user: u32, hz: u32, dump: &str) -> Resu
     Ok(targets)
 }
 
-/// Add only the active package's ROM rule, never rewrite the entire per-app settings table.
+/// Journal only the active package's ROM rule. Adapters preserve other packages on writes.
 pub fn app_targets(hardware: &impl Hardware, user: u32, app: &str, hz: u32, adapter: &serde_json::Value) -> Result<Vec<(String,String)>> {
     if !android::valid_package(app) || user > 99999 || !matches!(hz,60|90|120) { return Err("Invalid per-app refresh request".into()); }
     if adapter.get("available").and_then(serde_json::Value::as_bool) == Some(false) { return Ok(Vec::new()); }
