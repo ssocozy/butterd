@@ -819,7 +819,7 @@ pub fn compatibility_status() -> Value {
         Ok(text) => text, Err(error) => return json!({"error":error.to_string()}),
     };
     let fields: BTreeMap<_,_> = text.lines().filter_map(|line| line.split_once('=' )).collect();
-    json!({"enabled":!Path::new("/data/adb/modules/butterd/compatibility/spoof.disabled").exists(),"selectedModel":fields.get("selectedModel"),"model":fields.get("MODEL"),"fingerprint":fields.get("FINGERPRINT"),"securityPatch":fields.get("SECURITY_PATCH"),"initialApi":fields.get("DEVICE_INITIAL_SDK_INT"),"spoofBuild":fields.get("spoofBuild").map(|value| *value == "true" || *value == "1"),"spoofVendingBuild":fields.get("spoofVendingBuild").map(|value| *value == "true" || *value == "1"),"spoofProps":fields.get("spoofProps").map(|value| *value == "true" || *value == "1"),"scope":"GMS unstable and Play Store","injectionVerified":false})
+    json!({"enabled":!Path::new("/data/adb/modules/butterd/compatibility/spoof.disabled").exists(),"selectedModel":fields.get("selectedModel"),"model":fields.get("MODEL"),"fingerprint":fields.get("FINGERPRINT"),"securityPatch":fields.get("SECURITY_PATCH"),"initialApi":fields.get("DEVICE_INITIAL_SDK_INT"),"spoofBuild":fields.get("spoofBuild").map(|value| *value == "true" || *value == "1"),"spoofVendingBuild":Path::new("/data/adb/modules/butterd/compatibility/vending.enabled").exists() && fields.get("spoofVendingBuild").is_some_and(|value| *value == "true" || *value == "1"),"spoofProps":fields.get("spoofProps").map(|value| *value == "true" || *value == "1"),"scope":"GMS unstable and Play Store","injectionVerified":false})
 }
 
 fn epoch() -> u64 { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|time| time.as_secs()).unwrap_or(0) }

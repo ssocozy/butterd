@@ -43,6 +43,10 @@ void companion(int fd) {
         if (transfer(file, text.data(), text.size(), false)) size = static_cast<uint32_t>(text.size());
     }
     if (file >= 0) close(file);
+    if (size && access("/data/adb/modules/butterd/compatibility/vending.enabled", F_OK) != 0) {
+        text += "\nspoofVendingBuild=false\n";
+        size = static_cast<uint32_t>(text.size());
+    }
     if (transfer(fd, &size, sizeof(size), true) && size) transfer(fd, text.data(), size, true);
 }
 size_t updateBuild(JNIEnv* env, const pif::Config& config) {

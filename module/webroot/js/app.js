@@ -67,6 +67,7 @@ function render(state) {
   updateClockReadings(state);
   renderHardware(state);
   const compatibility = state.compatibility || {};
+  $('play-store-spoof').checked = compatibility.spoofVendingBuild === true;
   $('pixel-spoof').checked = compatibility.enabled !== false;
   if (models[compatibility.selectedModel]) { if (!$('choice-dialog')?.open) $('identity').value = compatibility.selectedModel; $('identity-summary').textContent = models[compatibility.selectedModel]+' · configured'; }
   const spoofs = $('spoof-options'); spoofs.replaceChildren();
@@ -223,3 +224,5 @@ setInterval(()=>{ if (!document.hidden && !busy && !document.querySelector('dial
 $('hyperos-fast-charge').addEventListener('change',event=>run('hyperos-fast-charge '+(event.target.checked ? 'on' : 'off')));
 
 $('pixel-spoof').addEventListener('change',event=>run('pixel-spoof '+(event.target.checked ? 'on' : 'off')));
+
+$('play-store-spoof').addEventListener('change',event=>run('play-store-spoof '+(event.target.checked ? 'on' : 'off')));

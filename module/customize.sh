@@ -51,6 +51,9 @@ else
     ui_print "- Pixel spoofing enabled."
   fi
 fi
+if [ -f "$previous_module/compatibility/vending.enabled" ]; then
+  : > "$MODPATH/compatibility/vending.enabled" || abort "Unable to preserve Play Store spoof preference."
+fi
 # Fetch metadata during installation; an offline install keeps bundled profiles.
 MODDIR=$MODPATH
 . "$MODPATH/lib/compatibility.sh"

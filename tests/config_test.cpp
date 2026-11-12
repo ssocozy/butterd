@@ -3,6 +3,7 @@
 #include <string>
 int main() {
     auto defaults = pif::parseConfig("");
+    assert(!pif::parseConfig("spoofVendingBuild=true\nspoofVendingBuild=false\n").spoofVendingBuild);
     assert(defaults.spoofBuild && defaults.spoofProps && defaults.spoofVendingBuild);
     auto config = pif::parseConfig("spoofBuild=false\nspoofProps=0\nspoofVendingBuild=false\nspoofSignature=true\nSDK_INT=25\nDEVICE_INITIAL_SDK_INT=25\n");
     assert(!config.spoofBuild && !config.spoofProps && !config.spoofVendingBuild);

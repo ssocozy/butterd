@@ -1,6 +1,16 @@
 #!/system/bin/sh
 MODDIR=${0%/bin/*}
 umask 077
+if [ "${1:-}" = play-store-spoof ]; then
+  [ "$(id -u)" = 0 ] || exit 1
+  case "${2:-}" in
+    on) : > "$MODDIR/compatibility/vending.enabled" || exit 1; chmod 600 "$MODDIR/compatibility/vending.enabled" ;;
+    off) rm -f "$MODDIR/compatibility/vending.enabled" || exit 1 ;;
+    *) echo "Usage: play-store-spoof on|off"; exit 2 ;;
+  esac
+  echo "Play Store build spoof preference saved. Reboot required."
+  exit 0
+fi
 if [ "${1:-}" = pixel-spoof ]; then
   [ "$(id -u)" = 0 ] || exit 1
   case "${2:-}" in
