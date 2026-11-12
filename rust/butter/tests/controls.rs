@@ -1217,3 +1217,18 @@ fn refresh_reconciliation_finishes_interrupted_writes_without_losing_originals()
     engine.reconcile_refresh(0).unwrap();assert_eq!(engine.hardware.read(path).unwrap(),"120");
     engine.apply_targets(Feature::Refresh(0),vec![],true).unwrap();assert_eq!(engine.hardware.read(path).unwrap(),"60");
 }
+
+#[test]
+fn vendor_reconcile_accepts_supported_gpu_changes_in_mixed_profiles() {
+    use butter::presets::Mode;
+    let engine=ged_fixture();
+    engine.hardware.put(butter::vendor::POWERHAL,"-1 -1 -1 -1 -1 -1");
+    for (field,value) in [("scaling_min_freq","480000"),("scaling_max_freq","1600000"),("scaling_available_frequencies","480000 800000 1200000 1600000")] {
+        engine.hardware.put(&format!("{CPU}/policy7/{field}"),value);
+    }
+    engine.preset(Mode::Performance).unwrap();
+    engine.hardware.put(butter::gpu::GED_FLOOR,"4");
+    engine.reconcile_vendor_profile(Mode::Performance).unwrap();
+    engine.preset(Mode::Balanced).unwrap();
+    assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"4");
+}

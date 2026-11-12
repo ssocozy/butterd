@@ -421,7 +421,10 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         for entry in &mut journal.entries {
             let current = hardware::value(&self.hardware, &entry.path)?;
             if !entry.owned(&current) {
-                if entry.path != crate::vendor::POWERHAL { return Err("Non-vendor profile setting changed; no override made".into()); }
+                let gpu = matches!(entry.path.as_str(),crate::gpu::GED_FLOOR|crate::gpu::APIBOOST_FLOOR)
+                    || hardware::allowed(&self.hardware,&Feature::GpuRange,&entry.path);
+                if entry.path != crate::vendor::POWERHAL && !gpu { return Err(format!("Non-vendor profile setting changed at {}; no override made",entry.path).into()); }
+                hardware::validate_path_value(&Feature::Profile,&entry.path,&current)?;
                 entry.original = current.clone(); entry.expected = current; entry.before = None;
             }
         }
