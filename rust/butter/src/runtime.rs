@@ -35,7 +35,7 @@ pub struct RuntimeState {
     pub tuning_requested: bool, pub selected: Mode, pub advanced_deadlines: BTreeMap<String, u64>, pub leases: Vec<Lease>, pub blocked: bool, pub refresh_user: Option<u32>, pub refresh_hz: Option<u32>, pub idle_samples: u8, pub sampled_at: u64,
     pub telemetry: Value, pub error: Option<String>, pub pending_preset: Option<Mode>,
     pub gpu_satisfied_by_rom: bool, pub gpu_profile_paused: bool, pub gpu_profile_retries: u8, pub gpu_profile_error: Option<String>, pub gpu_scope: Option<String>,
-    pub refresh_error: Option<String>, pub refresh_blocked: bool, pub refresh_checked_at:u64, pub profile_retries: u8,
+    pub refresh_error: Option<String>, pub refresh_blocked: bool, pub refresh_checked_at:u64, pub profile_retries: u8, pub profile_retry_at:u64, pub gpu_retry_at:u64,
     pub preferences_loaded: bool, pub resumed_controls: std::collections::BTreeSet<String>, pub preference_errors: BTreeMap<String,String>, pub audio_checked_at: u64, pub audio_retry_at:u64, pub audio_failures:u8,
 }
 pub fn uptime() -> Result<u64> {
@@ -153,7 +153,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
             [command, choice] if command == "recording" && matches!(choice.as_str(), "on" | "off") => cfg.recording_assist = choice == "on",
             [command, choice] if command == "notifications" && matches!(choice.as_str(), "on" | "off") => cfg.notifications = choice == "on",
             [command, choice] if command == "logging" && matches!(choice.as_str(), "on" | "off") => cfg.logcat = choice == "on",
-            [command, mode] if command == "preset" => { let mode = Mode::parse(mode)?; if mode == Mode::Boost { return Err("Use boost SECONDS".into()); } state.tuning_requested = true; cfg.preset = mode; state.selected = mode; state.pending_preset = Some(mode); state.blocked = false; state.profile_retries = 0; state.leases.clear(); }
+            [command, mode] if command == "preset" => { let mode = Mode::parse(mode)?; if mode == Mode::Boost { return Err("Use boost SECONDS".into()); } state.tuning_requested = true; cfg.preset = mode; state.selected = mode; state.pending_preset = Some(mode); state.blocked = false; state.profile_retries = 0; state.profile_retry_at=0; state.leases.clear(); }
             [command, seconds] if command == "boost" => {
                 let seconds = number(seconds)?;
                 if !(1..=30).contains(&seconds) { return Err("Boost duration must be 1–30 seconds".into()); }
@@ -174,7 +174,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
                     cfg.rules.push(AppRule { package: package.clone(), preset, hz, high_touch,charging_pause_at });
                     cfg.automatic = true; state.tuning_requested = true;
                 }
-                state.profile_retries = 0; state.blocked = false; state.refresh_blocked = false; state.refresh_error = None;
+                state.profile_retries = 0; state.profile_retry_at=0; state.blocked = false; state.refresh_blocked = false; state.refresh_error = None;
             }
             [command] if command == "reset" => {
                 cfg.controls.clear(); state.resumed_controls.clear(); state.preference_errors.clear();
@@ -186,7 +186,7 @@ pub fn configure(boot: &str, args: &[String]) -> Result<String> {
         }
         cfg.validate()?;
         if args.first().is_some_and(|command|matches!(command.as_str(),"preset"|"auto"|"app"|"boost"|"monitor"|"reset")) {
-            state.gpu_satisfied_by_rom=false;state.gpu_profile_paused=false;state.gpu_profile_retries=0;state.gpu_profile_error=None;state.gpu_scope=None;
+            state.gpu_satisfied_by_rom=false;state.gpu_profile_paused=false;state.gpu_profile_retries=0;state.gpu_retry_at=0;state.gpu_profile_error=None;state.gpu_scope=None;
         }
         save("config.json", &cfg)?; save("runtime.json", &state)?;
         event(&cfg, "configuration", &args.join(" "));
@@ -415,13 +415,22 @@ pub fn busy(previous: (u64, u64), next: (u64, u64)) -> Option<f64> {
 /// while the selected preset remains available to CPU scheduling.
 pub fn maintain_profile<H: Hardware,S: crate::journal::Store>(e: &Engine<H,S>, state: &mut RuntimeState, desired: Mode, stage_changed: bool) -> Result<Option<&'static str>> {
     let gpu_backend=crate::vendor::dynamic_policy(&e.hardware) || e.gpu_only_profile()?;
+    let now=state.sampled_at;
+    if desired!=state.active || stage_changed {
+        state.profile_retries=0;state.profile_retry_at=0;
+        state.gpu_profile_retries=0;state.gpu_retry_at=0;state.gpu_profile_paused=false;
+    }
+    let retry_gpu=state.gpu_profile_paused && gpu_backend && now>=state.gpu_retry_at && state.gpu_retry_at>0;
+    if retry_gpu {
+        state.gpu_profile_paused=false;state.gpu_profile_retries=0;state.gpu_profile_error=None;
+    }
     if state.gpu_profile_paused && gpu_backend {
         if e.session(&Feature::Profile)?.is_some() {
             if let Err(error)=e.preset(Mode::Balanced) { state.gpu_profile_error=Some(format!("GPU release pending: {error}")); }
         }
         return Ok(None);
     }
-    let mut resume_gpu=false;
+    let mut resume_gpu=retry_gpu;
     if state.gpu_satisfied_by_rom {
         if desired!=Mode::Balanced && e.rom_gpu_floor_satisfies(desired,state.thermal_stage)? { return Ok(None); }
         state.gpu_satisfied_by_rom=false;resume_gpu=desired!=Mode::Balanced;
@@ -443,7 +452,8 @@ pub fn maintain_profile<H: Hardware,S: crate::journal::Store>(e: &Engine<H,S>, s
                 }
                 if state.gpu_profile_retries>=3 {
                     state.gpu_profile_paused=true;
-                    state.gpu_profile_error=Some("ROM repeatedly replaced the GPU request; select a preset to retry".into());
+                    state.gpu_retry_at=now.saturating_add(30);
+                    state.gpu_profile_error=Some("ROM replaced the GPU request; retrying automatically after 30 seconds".into());
                     e.preset(Mode::Balanced)?;
                     return Ok(Some("gpu-paused"));
                 }
@@ -451,11 +461,20 @@ pub fn maintain_profile<H: Hardware,S: crate::journal::Store>(e: &Engine<H,S>, s
                 e.reconcile_gpu_profile_cooled(desired,state.thermal_stage)?;
                 event=Some("gpu-request");
             } else if e.vendor_cpu_profile()? {
-                if state.profile_retries>=3 { return Err("Vendor CPU request changed repeatedly; profile paused after three retries".into()); }
-                state.profile_retries+=1;
+                let cpu_changed=e.vendor_cpu_request_changed()?;
+                if cpu_changed && now<state.profile_retry_at && !stage_changed && desired==state.active {
+                    return Ok(Some("vendor-wait"));
+                }
                 e.reconcile_vendor_profile_cooled(desired,state.thermal_stage)?;
-                event=Some("vendor-request");
+                if cpu_changed {
+                    state.profile_retries=state.profile_retries.saturating_add(1).min(5);
+                    state.profile_retry_at=now.saturating_add(1u64 << state.profile_retries);
+                }
+                event=Some(if cpu_changed {"vendor-request"} else {"gpu-request"});
             } else { return Err("A profile request changed externally; no shared vendor CPU request is available to reconcile".into()); }
+        }
+        if e.session(&Feature::Profile)?.is_some() && e.state(&Feature::Profile)?=="Request active" && now>=state.profile_retry_at {
+            state.profile_retries=0;state.profile_retry_at=0;
         }
         if resume_gpu || stricter || desired!=state.active || stage_changed || (desired==Mode::Balanced && e.session(&Feature::Profile)?.is_some()) {
             e.preset_cooled(desired,state.thermal_stage)?;
@@ -464,7 +483,8 @@ pub fn maintain_profile<H: Hardware,S: crate::journal::Store>(e: &Engine<H,S>, s
     })();
     match result {
         Err(error) if gpu_backend => {
-            state.gpu_profile_paused=true;state.gpu_profile_error=Some(error.to_string());
+            state.gpu_retry_at=now.saturating_add(30);
+            state.gpu_profile_paused=true;state.gpu_profile_error=Some(format!("{error}; retrying automatically after 30 seconds"));
             if let Err(cleanup)=e.preset(Mode::Balanced) { state.gpu_profile_error=Some(format!("{error}; GPU release pending: {cleanup}")); }
             Ok(Some("gpu-paused"))
         }
@@ -553,7 +573,7 @@ pub fn daemon(boot: &str) -> Result<()> {
             match result { Ok(_) => { state.preference_errors.remove("hyperos-fast-charge"); }, Err(error) => { state.preference_errors.insert("hyperos-fast-charge".into(),error.to_string()); } }
         }
         for (key,error) in &state.app_controls.errors { if prior_app_errors.get(key)!=Some(error) { event(&cfg,"app-control-error",&format!("{key}: {error}")); } }
-        if state.foreground != ctx.app { state.profile_retries = 0; }
+        if state.foreground != ctx.app { state.profile_retries = 0; state.profile_retry_at=0; }
         // A ROM/driver can return touch to its original state; no write is needed to release that session.
         if matches!(e.state(&Feature::Touch), Ok("Original values active; release session")) && e.apply_targets(Feature::Touch, Vec::new(), true).is_ok() {
             event(&cfg, "touch", "Touch returned to its original value; session released without a write");
@@ -575,6 +595,7 @@ pub fn daemon(boot: &str) -> Result<()> {
             let stage_changed=prior_thermal_stage!=state.thermal_stage;
             if let Some(kind)=maintain_profile(&e,&mut state,desired,stage_changed)? {
                 let detail=match kind {
+                    "vendor-wait"=>"ROM CPU request is active; Butterd will retry automatically with backoff",
                     "gpu-request"=>"Reapplied the selected GPU request after a ROM change; effective limits remain in control",
                     "gpu-satisfied"=>"ROM GPU floor already satisfies the preset; stronger external request preserved",
                     "gpu-paused"=>"GPU requests delegated to the ROM after a conflict; independent CPU scheduling continues",

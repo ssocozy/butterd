@@ -412,6 +412,13 @@ impl<H: Hardware, S: Store> Engine<H, S> {
         if adopted {self.store.save(&journal)?;}
         self.apply_targets(feature,targets,false)
     }
+    pub fn vendor_cpu_request_changed(&self)->Result<bool> {
+        let Some(journal)=self.session(&Feature::Profile)? else { return Ok(false); };
+        for entry in journal.entries.iter().filter(|entry|entry.path==crate::vendor::POWERHAL) {
+            if !entry.owned(&hardware::value(&self.hardware,&entry.path)?) { return Ok(true); }
+        }
+        Ok(false)
+    }
     pub fn reconcile_vendor_profile(&self, mode: crate::presets::Mode) -> Result<String> {
         self.reconcile_vendor_profile_cooled(mode, 0)
     }

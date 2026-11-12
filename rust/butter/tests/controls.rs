@@ -1044,8 +1044,13 @@ fn gpu_only_conflicts_retry_then_yield_without_blocking_cpu_scheduling() {
     assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"2");
     assert!(engine.session(&Feature::Profile).unwrap().is_none());
     let writes=engine.hardware.writes.get();
-    maintain_profile(&engine,&mut state,Mode::Aggressive,true).unwrap();
-    assert_eq!(engine.hardware.writes.get(),writes,"A cooling-stage change restarted a yielded GPU override");
+    state.sampled_at=29;
+    maintain_profile(&engine,&mut state,Mode::Aggressive,false).unwrap();
+    assert_eq!(engine.hardware.writes.get(),writes,"GPU backoff must avoid repeated writes");
+    state.sampled_at=30;
+    maintain_profile(&engine,&mut state,Mode::Aggressive,false).unwrap();
+    assert!(!state.gpu_profile_paused,"GPU retries must resume automatically");
+    assert!(engine.session(&Feature::Profile).unwrap().is_some());
 }
 
 #[test]
@@ -1231,4 +1236,22 @@ fn vendor_reconcile_accepts_supported_gpu_changes_in_mixed_profiles() {
     engine.reconcile_vendor_profile(Mode::Performance).unwrap();
     engine.preset(Mode::Balanced).unwrap();
     assert_eq!(engine.hardware.read(butter::gpu::GED_FLOOR).unwrap(),"4");
+}
+
+#[test]
+fn vendor_conflicts_back_off_and_resume_without_blocking_the_preset() {
+    use butter::{presets::Mode,runtime::{RuntimeState,maintain_profile}};
+    let engine=vendor_fixture();engine.preset(Mode::Performance).unwrap();
+    let mut state=RuntimeState{active:Mode::Performance,sampled_at:100,..Default::default()};
+    for attempt in 0..8 {
+        state.sampled_at=100+attempt*40;
+        engine.hardware.put(butter::vendor::POWERHAL,"-1 -1 -1 -1 -1 -1");
+        assert_eq!(maintain_profile(&engine,&mut state,Mode::Performance,false).unwrap(),Some("vendor-request"));
+        assert!(!state.blocked);
+        engine.hardware.put(butter::vendor::POWERHAL,"-1 -1 -1 -1 -1 -1");
+        assert_eq!(maintain_profile(&engine,&mut state,Mode::Performance,false).unwrap(),Some("vendor-wait"));
+    }
+    state.thermal_stage=1;
+    assert_eq!(maintain_profile(&engine,&mut state,Mode::Performance,true).unwrap(),Some("vendor-request"));
+    assert_eq!(state.profile_retries,1);
 }
