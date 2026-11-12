@@ -32,7 +32,8 @@ void deadline(int fd) {
 }
 void companion(int fd) {
     deadline(fd);
-    int file = open(configPath, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    const bool disabled = access("/data/adb/modules/butterd/compatibility/spoof.disabled", F_OK) == 0;
+    int file = disabled ? -1 : open(configPath, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     struct stat info{};
     uint32_t size = 0;
     std::string text;

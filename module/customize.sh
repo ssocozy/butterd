@@ -19,6 +19,38 @@ done
 [ -f "$MODPATH/bin/butter-scheduler" ] || abort "The compositor scheduling helper is missing."
 [ -f "$MODPATH/bin/butter-engine" ] || abort "The compiled Rust engine is missing."
 [ -f "$MODPATH/zygisk/arm64-v8a.so" ] || abort "The compiled compatibility library is missing."
+# Persist the master switch separately from the selected identity.
+previous_module=/data/adb/modules/butterd
+if [ -d "$previous_module" ]; then
+  if [ -f "$previous_module/compatibility/spoof.disabled" ]; then
+    : > "$MODPATH/compatibility/spoof.disabled" || abort "Unable to preserve Pixel spoof preference."
+  fi
+  ui_print "- Keeping your Pixel spoof preference."
+else
+  ui_print "- Enable Pixel spoofing?"
+  ui_print "  Volume Up: Yes / Volume Down: No"
+  ui_print "  No selection within 30 seconds: disabled."
+  key_log=$(mktemp "$MODPATH/pixel-key.XXXXXX") || abort "Unable to read volume choice."
+  /system/bin/getevent -ql > "$key_log" 2>/dev/null &
+  key_pid=$!
+  choice=no
+  key_wait=0
+  while [ "$key_wait" -lt 30 ]; do
+    if grep -q 'KEY_VOLUMEUP.*DOWN' "$key_log"; then choice=yes; break; fi
+    if grep -q 'KEY_VOLUMEDOWN.*DOWN' "$key_log"; then break; fi
+    sleep 1
+    key_wait=$((key_wait + 1))
+  done
+  kill "$key_pid" 2>/dev/null
+  wait "$key_pid" 2>/dev/null
+  rm -f "$key_log"
+  if [ "$choice" = no ]; then
+    : > "$MODPATH/compatibility/spoof.disabled" || abort "Unable to save Pixel spoof preference."
+    ui_print "- Pixel spoofing disabled; enable it later in Settings."
+  else
+    ui_print "- Pixel spoofing enabled."
+  fi
+fi
 # Fetch metadata during installation; an offline install keeps bundled profiles.
 MODDIR=$MODPATH
 . "$MODPATH/lib/compatibility.sh"

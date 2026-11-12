@@ -67,6 +67,7 @@ function render(state) {
   updateClockReadings(state);
   renderHardware(state);
   const compatibility = state.compatibility || {};
+  $('pixel-spoof').checked = compatibility.enabled !== false;
   if (models[compatibility.selectedModel]) { if (!$('choice-dialog')?.open) $('identity').value = compatibility.selectedModel; $('identity-summary').textContent = models[compatibility.selectedModel]+' · configured'; }
   const spoofs = $('spoof-options'); spoofs.replaceChildren();
   for (const [key,name] of [['spoofBuild','Build spoofing'],['spoofVendingBuild','Play Store build spoofing'],['spoofProps','Scoped property spoofing']]) detailsRow(spoofs,name,compatibility[key] == null ? 'Cannot read configuration' : compatibility[key] ? 'Enabled' : 'Disabled');
@@ -220,3 +221,5 @@ setPage(); updateSelectors();
 setInterval(()=>{ if (!document.hidden && !busy && !document.querySelector('dialog[open]')) refresh(false,false,true); },5000);
 
 $('hyperos-fast-charge').addEventListener('change',event=>run('hyperos-fast-charge '+(event.target.checked ? 'on' : 'off')));
+
+$('pixel-spoof').addEventListener('change',event=>run('pixel-spoof '+(event.target.checked ? 'on' : 'off')));

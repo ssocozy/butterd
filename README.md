@@ -89,3 +89,5 @@ adb logcat -d -v threadtime -s butter:I > butter-logcat.txt
 Module updates refresh managed Pixel compatibility metadata while retaining the selected model, spoof switches and extra properties. Custom identities and newer security patch dates are preserved. The previous active profile is backed up as `compatibility/pif.previous.prop` when refreshed.
 
 **HyperOS Fast Charge** is off by default. On supported Duchamp devices it removes the extra charging thermal-level restriction below 42°C, restores the journaled value at 42°C or on disconnect/missing temperature, and resumes below 40°C after cooling. It has no fixed duration. JEITA and charger negotiation remain driver-managed. The previous ROM charging control remains available and cannot run concurrently. Temperature checks use supervisor samples, not a hardware cutoff.
+
+**Pixel Spoof** can be disabled in Settings without deleting the selected identity. Reboot after changing it. Fresh installations offer Volume Up to enable or Volume Down to disable; no key selection within 30 seconds leaves it disabled. Updates preserve this choice. The switch affects only Butterd’s compatibility injection.
