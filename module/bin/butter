@@ -8,7 +8,9 @@ if [ "${1:-}" = play-store-spoof ]; then
     off) rm -f "$MODDIR/compatibility/vending.enabled" || exit 1 ;;
     *) echo "Usage: play-store-spoof on|off"; exit 2 ;;
   esac
-  echo "Play Store build spoof preference saved. Reboot required."
+  . "$MODDIR/lib/compatibility.sh"
+  restart_compatibility || { echo "Preference saved, but a Google process could not be restarted. Retry after closing Play Store."; exit 1; }
+  echo "Play Store build spoofing updated. Google integrity and Play Store processes will reload it; no reboot needed."
   exit 0
 fi
 if [ "${1:-}" = pixel-spoof ]; then

@@ -67,11 +67,12 @@ function render(state) {
   updateClockReadings(state);
   renderHardware(state);
   const compatibility = state.compatibility || {};
+  $('play-store-spoof-option').hidden = compatibility.enabled !== true;
   $('play-store-spoof').checked = compatibility.spoofVendingBuild === true;
   $('pixel-spoof').checked = compatibility.enabled !== false;
   if (models[compatibility.selectedModel]) { if (!$('choice-dialog')?.open) $('identity').value = compatibility.selectedModel; $('identity-summary').textContent = models[compatibility.selectedModel]+' · configured'; }
   const spoofs = $('spoof-options'); spoofs.replaceChildren();
-  for (const [key,name] of [['spoofBuild','Build spoofing'],['spoofVendingBuild','Play Store build spoofing'],['spoofProps','Scoped property spoofing']]) detailsRow(spoofs,name,compatibility[key] == null ? 'Cannot read configuration' : compatibility[key] ? 'Enabled' : 'Disabled');
+  for (const [key,name] of [['spoofBuild','Build spoofing'],['spoofProps','Scoped property spoofing']]) detailsRow(spoofs,name,compatibility[key] == null ? 'Cannot read configuration' : compatibility[key] ? 'Enabled' : 'Disabled');
   $('version').textContent = 'Duchamp · butter '+(state.engine?.version || 'Rust');
   const rulesSignature = JSON.stringify(config.rules || []);
   if (appsLoaded && rulesSignature !== appRulesSignature) { appRulesSignature = rulesSignature; renderApps(); }

@@ -92,4 +92,4 @@ Module updates refresh managed Pixel compatibility metadata while retaining the 
 
 **Pixel Spoof** can be disabled in Settings without deleting the selected identity. Reboot after changing it. Fresh installations offer Volume Up to enable or Volume Down to disable; no key selection within 30 seconds leaves it disabled. Updates preserve this choice. The switch affects only Butterd’s compatibility injection.
 
-**Play Store build spoofing** is a separate opt-in switch, off by default even for existing profiles. It requires Pixel Spoof to be enabled. Both switches preserve their choices on module updates; reboot after changing either.
+**Play Store build spoofing** is a separate opt-in switch, off by default even for existing profiles. It requires Pixel Spoof to be enabled. Both switches preserve their choices on module updates. The Play Store option is shown only when Pixel Spoof is enabled and restarts the Google integrity and Play Store processes when changed; it does not require a reboot.

@@ -49,7 +49,7 @@ try {
     gpuRange:{frequencies:'300000000 600000000 1000000000',min:'300000000',max:'1000000000',active:false},
     audio:{available:true,bluetoothConnected:true,active:false,activeInputs:[]},
     touch:{available:true,state:'Off',driverHz:240},tcp:{available:true,current:'cubic',choices:['cubic','bbr'],original:false},
-    compatibility:{selectedModel:'bluejay',spoofBuild:true,spoofVendingBuild:true,spoofProps:true},
+    compatibility:{enabled:true,selectedModel:'bluejay',spoofBuild:true,spoofVendingBuild:true,spoofProps:true},
     supervisor:{health:{running:false,sampleAgeSeconds:null},uptime:102,config:{automatic:false,logcat:false,rules:[]},runtime:{sampled_at:0,active:'balanced',reason:'',telemetry:{}}}
   };
   for(const name of ['cpu-lock','gpu-lock','gpu-thermal','charging-thermal','bypass','charging-pause'])fixture[name]={available:name!=='bypass',state:'Off',reason:'Kernel does not advertise observable battery bypass'};
@@ -99,7 +99,7 @@ try {
   await until(`!document.getElementById('refresh').disabled`);
 
   assert.equal(await evaluate(`document.getElementById('boost')`),null,'Manual launch boost should not be in the interface');
-  assert.equal(await evaluate(`document.querySelectorAll('#spoof-options dd').length`),3);
+  assert.equal(await evaluate(`document.querySelectorAll('#spoof-options dd').length`),2);
   assert.equal(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),true,'Mobile overview overflows horizontally');
   const screenshot=async name=>{await evaluate(`window.scrollTo(0,0)`);await delay(300);const image=await send('Page.captureScreenshot',{format:'png'});await fs.writeFile(path.join(output,name),Buffer.from(image.data,'base64'));};
   await screenshot('webui-overview.png');
